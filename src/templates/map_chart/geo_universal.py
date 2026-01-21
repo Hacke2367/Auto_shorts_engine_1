@@ -16,7 +16,7 @@ from src.utils import IntroManager, get_safe_frame, make_floating_particles
 from src.data.map_coords import COORDINATES
 
 # ===========================
-# MAP CALIBRATION (DO NOT TOUCH)
+# MAP CALIBRATION
 # ===========================
 MAP_Y_SCALE = 1.40
 MAP_Y_OFFSET = -0.20
@@ -129,6 +129,7 @@ class GeoUniversalMap(Scene):
 
         if "Country" not in df.columns:
             raise ValueError("CSV must have column: Country")
+
         if "Group" not in df.columns:
             df["Group"] = "Global"
         if "Value" not in df.columns:
@@ -143,13 +144,15 @@ class GeoUniversalMap(Scene):
         # limit MAX
         df = df.head(max_items).reset_index(drop=True)
 
-        unique_groups = list(df["Group"].unique()) if len(df) else ["Global"]
+        unique_groups = list(df["Group"].unique())
         group_color_map = {}
         for i, g in enumerate(unique_groups):
             group_color_map[g] = GROUP_FALLBACK[i % len(GROUP_FALLBACK)]
 
+        is_alliance_mode = len(unique_groups) > 1
+
         # ===========================
-        # HEADER (SAFE) — DESIGN SAME
+        # HEADER (safe)  (STATIC)
         # ===========================
         title = Text(
             meta.get("TITLE", "GLOBAL ALLIANCE MAP"),
@@ -175,7 +178,8 @@ class GeoUniversalMap(Scene):
         self.add(title, underline, sub)
 
         # ===========================
-        # LEGEND — DESIGN SAME (only animation added later)
+        # LEGEND (compact rectangle HUD)  (DESIGN SAME)
+        # NOTE: We do NOT self.add(legend) yet. We'll reveal via animation safely.
         # ===========================
         legend_w = 3.15
         legend_h = 1.55
@@ -189,11 +193,12 @@ class GeoUniversalMap(Scene):
             font="Montserrat",
             weight=BOLD,
             font_size=16,
-            color=Theme.NEON_YELLOW
+            color=Theme.NEON_YELLOW,
         ).set_z_index(86)
 
         t_mode = Text(f"MODE : {mode}", font="Consolas", font_size=12, color=Theme.TEXT_MAIN).set_z_index(86)
         t_metric = Text(f"METRIC : {metric_name}", font="Consolas", font_size=12, color=Theme.TEXT_MAIN).set_z_index(86)
+
         t_unit = None
         if unit:
             t_unit = Text(f"UNIT : {unit}", font="Consolas", font_size=12, color=Theme.TEXT_MAIN).set_z_index(86)
@@ -209,8 +214,10 @@ class GeoUniversalMap(Scene):
             bullets.add(row)
         bullets.arrange(DOWN, aligned_edge=LEFT, buff=0.08)
 
+        # layout inside legend
         legend_left = legend_bg.get_left()[0]
         legend_top = legend_bg.get_top()[1]
+
         legend_title.move_to([legend_left + 0.70, legend_top - 0.22, 0])
 
         info_col = VGroup(t_mode, t_metric).arrange(DOWN, aligned_edge=LEFT, buff=0.06)
@@ -227,7 +234,8 @@ class GeoUniversalMap(Scene):
         legend.move_to([sf["right"] - legend_w / 2 - 0.05, sub.get_bottom()[1] - legend_h / 2 - 0.15, 0])
 
         # ===========================
-        # MAP — DESIGN SAME
+        # MAP (fit between lanes)  (DESIGN SAME)
+        # NOTE: We do NOT self.add(world) yet. We'll reveal via animation safely.
         # ===========================
         svg_path = os.path.join(ASSETS_DIR, "svgs", "world.svg")
         if not os.path.exists(svg_path):
@@ -262,7 +270,7 @@ class GeoUniversalMap(Scene):
             return np.array([x, y, 0])
 
         # ===========================
-        # SLOT LANES — DESIGN SAME
+        # SLOT LANES (DESIGN SAME)
         # ===========================
         slots_per_side = 5
         span = max(1.0, lane_top - lane_bottom)
@@ -301,8 +309,12 @@ class GeoUniversalMap(Scene):
             placed.append((it, "R", np.array([0, right_slots_y[i], 0])))
 
         # ===========================
-        # CARD FACTORY — DESIGN SAME (only meter animation support added)
+        # CARD FACTORY (DESIGN SAME) + store meter final width for animation
         # ===========================
+        vals_numeric = pd.to_numeric(df["Value"], errors="coerce")
+        vmax = float(np.nanmax(vals_numeric.values)) if np.isfinite(np.nanmax(vals_numeric.values)) else 100.0
+        vmax = max(1.0, vmax)
+
         def make_card(country, group, value, col, side):
             name = Text(str(country).upper(), font="Montserrat", weight=BOLD, font_size=18, color=WHITE)
             grp = Text(str(group), font="Montserrat", font_size=12, color=Theme.TEXT_SUB)
@@ -356,31 +368,32 @@ class GeoUniversalMap(Scene):
             if iv is None:
                 frac = 0.08
             else:
-                vals = df["Value"].copy()
-                vals = pd.to_numeric(vals, errors="coerce")
-                vmax = float(np.nanmax(vals.values)) if len(vals) and np.isfinite(np.nanmax(vals.values)) else 100.0
-                vmax = max(1.0, vmax)
                 frac = float(np.clip(iv / vmax, 0.08, 1.0))
 
-            meter_fill.stretch_to_fit_width(meter_w * frac)
+            final_w = meter_w * frac
+
+            # Start tiny (safe), animate later to final_w
+            meter_fill.stretch_to_fit_width(0.01)
             meter_fill.align_to(meter_bg, LEFT)
 
             meter = VGroup(meter_bg, meter_fill)
             meter.next_to(bg, DOWN, buff=0.10)
 
             card = VGroup(glow, bg, strip, row, meter).set_z_index(90)
-
             max_w = 3.65
             if card.width > max_w:
                 card.scale_to_fit_width(max_w)
 
-            # store meter final width for animation (safe)
-            card.meter_final_width = float(meter_fill.width)
+            # store final meter width (after potential scaling)
+            # (meter_fill already scaled with card if card scaled)
+            # compute final in current scale:
+            scale_factor = meter_bg.width / meter_w if meter_w != 0 else 1.0
+            card.meter_final_width = max(0.01, float(final_w * scale_factor))
 
             return card
 
         # ===========================
-        # DOTS + U-TURN LINES — DESIGN SAME (extra safety: fill off)
+        # DOTS + U-TURN LINES (DESIGN SAME) but animate safely (Create core only)
         # ===========================
         def make_dot(col, p):
             glow = Circle(radius=0.20).move_to(p)
@@ -391,12 +404,14 @@ class GeoUniversalMap(Scene):
 
             core = Dot(point=p, radius=0.05, color=WHITE).set_opacity(0.95)
 
-            g = VGroup(glow, ring, core).set_z_index(70)
-            return g
+            return VGroup(glow, ring, core).set_z_index(70)
 
         def uturn_route(p_pin, p_card_edge, side):
             dirx = 1 if side == "R" else -1
-            out_dx = 0.85 + 0.25
+
+            base_out = 0.85
+            extra = 0.25
+            out_dx = base_out + extra
 
             p1 = p_pin
             p2 = np.array([p1[0] + dirx * out_dx, p1[1], 0])
@@ -415,28 +430,29 @@ class GeoUniversalMap(Scene):
         def make_line(points, col):
             core = VMobject()
             core.set_points_as_corners(points)
-            core.set_fill(opacity=0)  # ✅ prevents any white fills
+            core.set_fill(opacity=0)
             core.set_stroke(color=col, width=3, opacity=0.72)
 
             glow = core.copy()
-            glow.set_fill(opacity=0)  # ✅ prevents any white fills
             glow.set_stroke(color=col, width=10, opacity=0.12)
 
             return VGroup(glow, core).set_z_index(75)
 
         # ===========================
-        # BUILD ALL (cards + dots + lines) — POSITIONS SAME
+        # BUILD ALL (cards + dots + lines)
         # ===========================
-        all_cards = VGroup()
-        all_lines = VGroup()
-        all_dots = VGroup()
+        all_cards = []
+        all_lines = []
+        all_dots = []
+        meta_items = []  # (country, group, col)
+
+        group_dots_map = {g: [] for g in unique_groups}  # for STEP 3 (alliance traffic)
 
         for (country, group, value, lat, lon), side, slot_anchor in placed:
             col = group_color_map.get(group, Theme.NEON_BLUE)
 
             p_pin = lat_lon_to_point(lat, lon)
             dot = make_dot(col, p_pin)
-            all_dots.add(dot)
 
             card = make_card(country, group, value, col, side)
 
@@ -450,164 +466,200 @@ class GeoUniversalMap(Scene):
                 card.move_to([x, y, 0])
                 card_edge = card.get_left() + RIGHT * 0.05
 
-            all_cards.add(card)
-
             pts = uturn_route(p_pin, card_edge, side)
             ln = make_line(pts, col)
-            all_lines.add(ln)
 
-        # ===========================
-        # ✅ STEP 2 — MISSION CONTROL SCAN (IDEA #1)
-        # ===========================
+            all_dots.append(dot)
+            all_cards.append(card)
+            all_lines.append(ln)
+            meta_items.append((country, group, col))
 
-        # Add base objects (keep design, only control visibility)
-        # legend.set_opacity(0)
-        # world.set_opacity(0)
-        self.add(legend, world)
-
-        # Add data layers hidden first (so nothing jumps position)
-        self.add(all_lines, all_cards, all_dots)
-
-        for ln in all_lines:
-            ln.set_opacity(0)
-        for c in all_cards:
-            c.set_opacity(0)
-            # meter fill starts tiny, but we keep final width stored
+            # store core dot for alliance arcs
             try:
-                meter_bg = c[4][0]
-                meter_fill = c[4][1]
-                meter_fill.stretch_to_fit_width(0.01)
-                meter_fill.align_to(meter_bg, LEFT)
+                group_dots_map[group].append(dot[2])
             except Exception:
                 pass
-        for d in all_dots:
-            d.set_opacity(0)
 
-        # 0) Boot: Map + Legend appear (no position change)
+        # =====================================================
+        # ✅ STEP 1: BOOT (legend + map reveal)  — NO opacity hacks
+        # =====================================================
+        # map scan line (temporary)
+        scan = Line(LEFT * 6, RIGHT * 6).set_z_index(60)
+        scan.set_stroke(color=Theme.NEON_BLUE, width=4, opacity=0.85)
+        scan.scale_to_fit_width(sf["w"] * 0.80)
+        scan.move_to([sf["cx"], world.get_top()[1] + 0.25, 0])
+
         self.play(
-            FadeIn(world, run_time=0.85, rate_func=rf.ease_out_cubic),
-            FadeIn(legend, shift=UP * 0.10, scale=0.98, run_time=0.65, rate_func=rf.ease_out_back),
-        )
-        # legend border micro-pulse
-        self.play(
-            legend_bg.animate.set_stroke(width=2.6, opacity=0.70),
+            FadeIn(legend, shift=UP * 0.12, scale=0.98),
             run_time=0.55,
+            rate_func=rf.ease_out_back,
+        )
+        self.play(
+            FadeIn(world, scale=1.02),
+            scan.animate.move_to([sf["cx"], world.get_bottom()[1] - 0.25, 0]).set_opacity(0),
+            run_time=1.10,
+            rate_func=rf.ease_out_cubic,
+        )
+        self.remove(scan)
+
+        # legend tiny pulse
+        self.play(
+            legend_bg.animate.set_stroke(width=2.4, opacity=0.60),
+            run_time=0.45,
             rate_func=rf.there_and_back,
         )
 
-        # 1) Scanline sweep over map (safe, no weird fills)
-        scan = Line(world.get_left(), world.get_right()).set_z_index(60)
-        scan.set_stroke(color=Theme.NEON_BLUE, width=3, opacity=0.55)
-        scan.move_to(world.get_top() + DOWN * 0.05)
-        scan_glow = scan.copy().set_z_index(59)
-        scan_glow.set_stroke(color=Theme.NEON_BLUE, width=12, opacity=0.10)
-        self.add(scan_glow, scan)
+        # =====================================================
+        # ✅ STEP 2: DATA REVEAL (dot ping → line core draw → glow → card lock)
+        # =====================================================
+        # A) Dots appear (lagged)
         self.play(
-            scan.animate.move_to(world.get_bottom() + UP * 0.05).set_opacity(0),
-            scan_glow.animate.move_to(world.get_bottom() + UP * 0.05).set_opacity(0),
-            run_time=1.10,
-            rate_func=rf.linear,
-        )
-        self.remove(scan_glow, scan)
-
-        # If no data, settle and exit clean
-        if len(all_cards) == 0:
-            self.wait(2.0)
-            return
-
-        # 2) Detections: pins appear with slight lag (premium)
-        self.play(
-            LaggedStart(
-                *[FadeIn(d, scale=0.65, rate_func=rf.ease_out_back) for d in all_dots],
-                lag_ratio=0.07,
-            ),
-            run_time=0.95,
+            LaggedStart(*[FadeIn(d, scale=0.70) for d in all_dots], lag_ratio=0.08),
+            run_time=1.05,
         )
 
-        # 3) Per item: ping -> packet travel -> connector locks -> card reveal -> meter fills
-        for i in range(len(all_cards)):
-            dot = all_dots[i]
-            line = all_lines[i]   # VGroup(glow, core)
-            path = line[1]        # core path
-            card = all_cards[i]
+        # B) Each item sequence
+        for dot, ln, card, (country, group, col) in zip(all_dots, all_lines, all_cards, meta_items):
+            glow, core = ln[0], ln[1]
 
-            col = path.get_stroke_color()
-
-            # A) lock-on ping at dot
-            ping = Circle(radius=0.12).move_to(dot[2].get_center()).set_z_index(95)
-            ping.set_fill(opacity=0)
+            # dot ping ring
+            ping = Circle(radius=0.12).move_to(dot[2].get_center()).set_z_index(72)
             ping.set_stroke(color=col, width=6, opacity=0.35)
-            self.add(ping)
 
+            self.add(ping)
             self.play(
-                Flash(dot[2].get_center(), color=col, flash_radius=0.22, time_width=0.28),
+                Flash(dot[2].get_center(), color=col, flash_radius=0.22, time_width=0.25),
+                dot.animate.scale(1.12),
                 ping.animate.scale(2.4).set_opacity(0),
-                run_time=0.32,
+                run_time=0.30,
                 rate_func=rf.ease_out_cubic,
             )
             self.remove(ping)
+            self.play(dot.animate.scale(1.00), run_time=0.12, rate_func=rf.ease_out_cubic)
 
-            # B) packet travel (NO line create)
-            tracer = Dot(radius=0.055, color=WHITE).set_z_index(96)
-            tracer.set_opacity(0.90)
-            try:
-                tracer.move_to(path.get_start())
-            except Exception:
-                tracer.move_to(dot[2].get_center())
-            self.add(tracer)
+            # line: CREATE ONLY CORE (prevents wedges/white spikes), then fade glow
+            self.play(Create(core, rate_func=rf.linear), run_time=0.55)
+            self.play(FadeIn(glow), run_time=0.12)
 
-            # tiny halo for tracer
-            halo = Circle(radius=0.10).set_z_index(95).move_to(tracer.get_center())
-            halo.set_fill(opacity=0)
-            halo.set_stroke(color=col, width=8, opacity=0.15)
-            self.add(halo)
-
+            # card lock (slide in)
             self.play(
-                MoveAlongPath(tracer, path, run_time=0.60, rate_func=rf.linear),
-                MoveAlongPath(halo, path, run_time=0.60, rate_func=rf.linear),
-            )
-            self.remove(tracer, halo)
-
-            # C) connector appears (fade-in only, stable)
-            self.play(FadeIn(line, run_time=0.20), run_time=0.20)
-
-            # D) card reveal (lock)
-            self.play(
-                FadeIn(card, shift=UP * 0.08, scale=0.99),
-                run_time=0.34,
+                FadeIn(card, shift=UP * 0.12, scale=0.985),
+                run_time=0.45,
                 rate_func=rf.ease_out_back,
             )
 
-            # E) meter fill to final width
+            # meter fill animate to final width (only fill)
             try:
                 meter_bg = card[4][0]
                 meter_fill = card[4][1]
-                final_w = float(getattr(card, "meter_final_width", meter_fill.width))
+                final_w = getattr(card, "meter_final_width", meter_fill.width)
                 self.play(
                     meter_fill.animate.stretch_to_fit_width(max(0.01, final_w)).align_to(meter_bg, LEFT),
-                    run_time=0.30,
+                    run_time=0.32,
                     rate_func=rf.ease_out_cubic,
                 )
             except Exception:
                 pass
 
-            # micro card pulse (premium)
+            # subtle card border pulse
             try:
                 bg = card[1]
                 self.play(
-                    bg.animate.set_stroke(width=3.2, opacity=0.95),
+                    bg.animate.set_stroke(width=3.0, opacity=0.95),
                     run_time=0.22,
                     rate_func=rf.there_and_back,
                 )
             except Exception:
                 pass
 
-            self.wait(0.06)
+            self.wait(0.05)
 
-        # 4) Settle: subtle HUD breathe (no layout change)
+        # =====================================================
+        # ✅ STEP 3: ALLIANCE TRAFFIC / ENDING (no timepass)
+        # =====================================================
+        if is_alliance_mode:
+            connections = VGroup().set_z_index(65)
+            travel_paths = []  # (base_arc, color)
+
+            for gname, dots in group_dots_map.items():
+                if len(dots) < 2:
+                    continue
+                color = group_color_map.get(gname, Theme.NEON_BLUE)
+
+                # stable order left->right
+                dots_sorted = sorted(dots, key=lambda d: d.get_center()[0])
+
+                for k in range(len(dots_sorted) - 1):
+                    p1 = dots_sorted[k].get_center()
+                    p2 = dots_sorted[k + 1].get_center()
+
+                    base_arc = ArcBetweenPoints(p1, p2, angle=PI / 6)
+                    base_arc.set_stroke(color=color, width=2, opacity=0)  # invisible helper
+                    dashed = DashedVMobject(base_arc.copy(), num_dashes=14)
+                    dashed.set_stroke(color=color, width=2, opacity=0.55)
+
+                    connections.add(dashed)
+                    travel_paths.append((base_arc, color))
+
+            if len(connections) > 0:
+                self.play(Create(connections), run_time=1.2, rate_func=rf.ease_in_out_sine)
+
+                # tracer packets
+                tracers = []
+                anims = []
+                for path, c in travel_paths:
+                    tracer = Dot(radius=0.06, color=WHITE).set_opacity(0.85).set_z_index(95)
+                    tracer.move_to(path.get_start())
+                    tracers.append(tracer)
+                    anims.append(MoveAlongPath(tracer, path, run_time=2.2, rate_func=linear))
+
+                if len(tracers) > 0:
+                    self.add(*tracers)
+
+                    # flash cards subtly during traffic
+                    flashes = []
+                    for card in all_cards:
+                        try:
+                            flashes.append(Flash(card[1].get_center(), color=Theme.TEXT_MAIN, flash_radius=0.55))
+                        except Exception:
+                            pass
+
+                    self.play(
+                        *anims,
+                        *flashes,
+                        run_time=2.2,
+                    )
+                    self.play(*[FadeOut(t) for t in tracers], run_time=0.4)
+
+                # settle
+                self.play(
+                    connections.animate.set_opacity(0.35),
+                    run_time=0.6,
+                    rate_func=rf.ease_out_cubic,
+                )
+
+        else:
+            # metric-style ending: highlight max
+            vals = pd.to_numeric(df["Value"], errors="coerce")
+            if len(vals.dropna()) > 0:
+                winner_idx = int(np.nanargmax(vals.values))
+                winner = all_cards[winner_idx]
+                self.play(winner.animate.scale(1.04), run_time=0.25, rate_func=rf.ease_out_cubic)
+                try:
+                    self.play(
+                        winner[1].animate.set_stroke(color=Theme.NEON_YELLOW, width=4.0, opacity=1.0),
+                        run_time=0.35,
+                        rate_func=rf.there_and_back,
+                    )
+                except Exception:
+                    pass
+                self.play(winner.animate.scale(1.00), run_time=0.15)
+
+        # legend final micro pulse (premium)
         self.play(
             legend_bg.animate.set_stroke(width=2.2, opacity=0.55),
-            run_time=0.65,
+            run_time=0.55,
             rate_func=rf.there_and_back,
         )
+
         self.wait(2.0)
