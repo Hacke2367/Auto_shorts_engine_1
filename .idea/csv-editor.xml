@@ -31,13 +31,6 @@
             </Attribute>
           </value>
         </entry>
-        <entry key="\Data\map_loactions.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
         <entry key="\Data\market_share.csv">
           <value>
             <Attribute>

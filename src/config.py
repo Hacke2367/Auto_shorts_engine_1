@@ -90,6 +90,25 @@ ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 FONTS_DIR = os.path.join(ASSETS_DIR, "fonts")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
+# -----------------------------------------
+# map setting
+
+MAP_DEFAULT_METRIC = "VALUE"
+MAP_DEFAULT_UNIT = ""   # if missing -> show only number
+MAP_MAX_CARDS = 10
+
+# --- MAP / GEO TEMPLATE SETTINGS ---
+GROUP_COLORS = {
+    "West": Theme.NEON_BLUE,
+    "Asia": Theme.NEON_PINK,
+    "East": Theme.NEON_GREEN,
+    "Europe": Theme.NEON_PURPLE,
+    "Africa": Theme.NEON_YELLOW,
+    "LatAm": Theme.NEON_ORANGE,
+}
+
+
+
 # ----------------------------------------
 # 4. FONT SETTINGS
 # ----------------------------------------

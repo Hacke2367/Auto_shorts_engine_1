@@ -1,7 +1,8 @@
-Category,Value
-Apple,35
-Samsung,25
-Xiaomi,15
-Oppo,10
-Vivo,8
-Others,7
+# TITLE=MARKET SHARE 2025, SUB=Global smartphone shipments, UNIT=%, TOP=8, PANEL_TOP=6, OTHERS_MIN_PCT=2, MODE=DONUT
+Category,Value,Color,Group,Order,Note
+Apple,35,#2DD4FF,Premium,1,Leader in shipments
+Samsung,25,#A78BFA,Premium,2,Strong global presence
+Xiaomi,15,#FB7185,Value,3,Fast growth
+Oppo,10,#FBBF24,Value,4,High Asia share
+Vivo,8,#34D399,Value,5,Offline strength
+Others,7,#FDE047,Other,99,Combined smaller brands

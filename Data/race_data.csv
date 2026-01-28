@@ -1,3 +1,10 @@
+#TITLE=GDP GROWTH RACE
+#SUB=Live trajectory + ranking HUD
+#FEED=FEED_RACE // LIVE
+#FOOTER=CONFIDENTIAL // VERIFIED
+#TOPK=5
+#MAX_SERIES=10
+#UNIT=T
 Year, United States, China, Japan, Germany, United Kingdom, India, France, Brazil, Italy, Russia
 2000, 10.2, 1.2, 4.9, 1.9, 1.6, 0.4, 1.3, 0.6, 1.1, 0.2
 2002, 10.9, 1.4, 4.1, 2.0, 1.7, 0.5, 1.5, 0.5, 1.2, 0.3

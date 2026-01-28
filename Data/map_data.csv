@@ -1,7 +1,12 @@
+#TITLE=GLOBAL ALLIANCE MAP,SUB=Live alliances + metric overlay,MODE=ALLIANCE,METRIC=POWER INDEX,UNIT=pts,TOPK=10
 Country,Group,Value
-USA,West,0
-UK,West,0
-China,Asia,0
-Japan,Asia,0
-Russia,East,0
-India,East,0
+USA,West,92
+UK,West,74
+France,West,70
+Germany,West,72
+China,Asia,95
+Japan,Asia,78
+India,East,80
+Russia,East,76
+Brazil,East,62
+Australia,West,68

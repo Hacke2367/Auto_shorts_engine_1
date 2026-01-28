@@ -358,7 +358,7 @@ class GeoUniversalMap(Scene):
         map_center_y = (lane_top + lane_bottom) / 2 + 0.25
         world.move_to([sf["cx"], map_center_y, 0])
 
-        # ✅ map HUD panel (unchanged from your last code)
+        # ✅ map HUD panel (unchanged)
         map_panel = RoundedRectangle(
             width=world.width * 1.10,
             height=world.height * 1.35,
@@ -392,9 +392,11 @@ class GeoUniversalMap(Scene):
             return np.array([x, y, 0])
 
         # ===========================
-        # SLOT LANES (UNCHANGED)
+        # SLOT LANES (ONLY change: slots_per_side dynamic)
         # ===========================
-        slots_per_side = 5
+        n_items = int(len(df))
+        slots_per_side = int(np.ceil(max(1, n_items) / 2.0))  # ✅ dynamic (1..5 for up to 10 items)
+
         span = max(1.0, lane_top - lane_bottom)
         step = span / slots_per_side
 
@@ -587,11 +589,10 @@ class GeoUniversalMap(Scene):
                 pass
 
         # =====================================================
-        # ✅ STEP 1: BOOT (ticker + map reveal)  (legend removed)
+        # ✅ STEP 1: BOOT (ticker + map reveal)
         # =====================================================
         self.play(FadeIn(ticker, shift=UP * 0.06, scale=0.99), run_time=0.55, rate_func=rf.ease_out_back)
 
-        # sweep + dot micro pulse (alive)
         self.add(ticker_sweep)
         self.play(ticker_sweep.animate.set_opacity(1.0), run_time=0.08)
         self.play(
@@ -605,7 +606,6 @@ class GeoUniversalMap(Scene):
         self.play(live_dot.animate.scale(1.35), run_time=0.12, rate_func=rf.ease_out_cubic)
         self.play(live_dot.animate.scale(1.00), run_time=0.18, rate_func=rf.ease_in_out_sine)
 
-        # optional: update feed message once after ticker appears
         ticker_set("Boot complete: acquiring world map…", animate=True)
 
         scan = Line(LEFT * 6, RIGHT * 6).set_z_index(60)
@@ -623,7 +623,6 @@ class GeoUniversalMap(Scene):
         )
         self.remove(scan)
 
-        # ticker border micro-pulse (strong)
         self.play(
             ticker_bg.animate.set_stroke(width=3.0, opacity=0.95),
             run_time=0.35,
@@ -765,7 +764,6 @@ class GeoUniversalMap(Scene):
 
                 self.play(connections.animate.set_opacity(0.35), run_time=0.6, rate_func=rf.ease_out_cubic)
 
-            # WINNER (Alliance): winning group -> leader card (kept same)
             win_g = _winner_alliance_group()
             winner_idx = None
 
@@ -838,7 +836,6 @@ class GeoUniversalMap(Scene):
                     pass
                 self.play(winner.animate.scale(1.00), run_time=0.15)
 
-        # ticker final micro pulse
         self.play(
             ticker_bg.animate.set_stroke(width=2.6, opacity=0.90),
             run_time=0.45,
@@ -847,7 +844,6 @@ class GeoUniversalMap(Scene):
 
         self.wait(2.0)
 
-        # cleanup: remove updater (safe)
         try:
             live_dot.remove_updater(_pulse)
         except Exception:
