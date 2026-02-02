@@ -1,13 +1,15 @@
-# sort_card_tribunal_final.py
-# FINAL "SORT CARD TRIBUNAL" — GOD-TIER PREMIUM (robust + no random NameError)
-# Manim Community v0.19.x
+# sort_card.py  (FINAL GOD POLISH - clean background, scanner ALWAYS ON, NO flash, route-lines glow, 6s/card, 1-line logs ">>")
+# Manim Community v0.19.x compatible
 #
 # Run:
-#   manim -pqh sort_card_tribunal_final.py SortCardTribunalFinal --disable_caching
+#   manim -pqh sort_card.py SortCardTribunalFinal
 #
-# CSV (first line meta):
-#   # TITLE=TIER 1 vs TIER 2, SUB=AI TRIBUNAL SORT TEST, FEED=FEED_SORT // TRIBUNAL
+# CSV format (meta in first line):
+#   # TITLE=TIER 1 vs TIER 2, SUB=AI TRIBUNAL SORT TEST
 #   Image,Category,Reason
+#
+# Images:
+#   assets/images/<Image>
 
 import os
 import sys
@@ -21,24 +23,86 @@ import pandas as pd
 from manim import *
 from manim import rate_functions as rf
 
-# -------------------------
-# PATH SETUP
-# -------------------------
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-sys.path.append(project_root)
+# ============================================================
+# PROJECT IMPORTS (preferred) + FALLBACK
+# ============================================================
+try:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    sys.path.append(project_root)
 
-# project imports (utils.py is LOCKED)
-from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme
-from src.utils import IntroManager, get_safe_frame, make_floating_particles
+    from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme  # type: ignore
+    from src.utils import IntroManager, get_branding_border  # type: ignore
+except Exception:
+    project_root = os.getcwd()
+    DATA_DIR = os.path.join(project_root, "data")
+    ASSETS_DIR = os.path.join(project_root, "assets")
+    BACKGROUND_COLOR = "#050505"
 
-# -------------------------
-# DATA
-# -------------------------
+    class Theme:
+        NEON_BLUE = "#2DD4FF"
+        NEON_PINK = "#FF4D8D"
+        NEON_GREEN = "#00FF66"
+        NEON_YELLOW = "#FFE86B"
+        TEXT_MAIN = "#FFFFFF"
+        TEXT_SUB = "#A9B1BC"
+
+    def get_branding_border():
+        border = Rectangle(height=config.frame_height, width=config.frame_width)
+        border.set_stroke(width=8, color=[Theme.NEON_BLUE, Theme.NEON_PINK], opacity=0.55)
+        border.set_fill(opacity=0)
+        return border
+
+    class IntroManager:
+        @staticmethod
+        def play_intro(
+            scene,
+            brand_title="BIGDATA LEAK",
+            brand_sub="SYSTEM BREACH DETECTED",
+            feed_text="FEED_SORT // TRIBUNAL",
+            footer_text="CONFIDENTIAL // VERIFIED",
+        ):
+            rec = Text("● REC", font="Consolas", font_size=16, color=RED).to_corner(UL).shift(
+                DOWN * 0.2 + RIGHT * 0.2
+            )
+            hdr = Text(feed_text, font="Consolas", font_size=14, color=Theme.TEXT_SUB).to_corner(UR).shift(
+                DOWN * 0.2 + LEFT * 0.2
+            )
+            t1 = Text(brand_title, font="Montserrat", font_size=42, weight=BOLD, color=Theme.TEXT_MAIN).move_to(UP * 0.6)
+            t2 = Text(brand_sub, font="Montserrat", font_size=18, color=Theme.TEXT_SUB).next_to(t1, DOWN, buff=0.2)
+            foot = Text(footer_text, font="Consolas", font_size=12, color=Theme.TEXT_SUB).to_edge(DOWN, buff=0.35)
+            scene.play(
+                FadeIn(rec),
+                FadeIn(hdr),
+                FadeIn(t1, shift=UP * 0.15),
+                FadeIn(t2, shift=UP * 0.12),
+                FadeIn(foot),
+                run_time=0.85,
+                rate_func=rf.ease_out_cubic,
+            )
+            scene.play(
+                FadeOut(t1, shift=UP * 0.10),
+                FadeOut(t2, shift=UP * 0.10),
+                FadeOut(foot),
+                run_time=0.45,
+                rate_func=rf.ease_in_out_sine,
+            )
+            return rec, hdr
+
+
+# ============================================================
+# HELPERS
+# ============================================================
 _META_RE = re.compile(r"([A-Za-z_]+)\s*=\s*([^,]+)")
 
 
-def _safe_text(s: str, font="Montserrat", font_size=24, color=WHITE, weight=None) -> Text:
+def safe_text(
+    s: str,
+    font: str = "Montserrat",
+    font_size: int = 24,
+    color=WHITE,
+    weight=None,
+) -> Text:
     try:
         if weight is None:
             return Text(str(s), font=font, font_size=font_size, color=color)
@@ -47,13 +111,17 @@ def _safe_text(s: str, font="Montserrat", font_size=24, color=WHITE, weight=None
         return Text(str(s), font_size=font_size, color=color)
 
 
-def ellipsize(s: str, n: int = 18) -> str:
+def ellipsize(s: str, n: int = 28) -> str:
     s = str(s)
     return s if len(s) <= n else s[: max(1, n - 1)] + "…"
 
 
+def clamp(x: float, a: float, b: float) -> float:
+    return float(max(a, min(b, x)))
+
+
 def load_csv_with_meta(csv_path: str) -> Tuple[Dict[str, str], pd.DataFrame]:
-    meta = {"TITLE": "TIER 1 vs TIER 2", "SUB": "AI TRIBUNAL SORT TEST", "FEED": "FEED_SORT // TRIBUNAL"}
+    meta = {"TITLE": "TIER 1 vs TIER 2", "SUB": "AI TRIBUNAL SORT TEST"}
     if not os.path.exists(csv_path):
         df = pd.DataFrame(
             {
@@ -92,354 +160,485 @@ def load_csv_with_meta(csv_path: str) -> Tuple[Dict[str, str], pd.DataFrame]:
     df["Category"] = df["Category"].apply(_cat)
     df["Reason"] = df["Reason"].astype(str).fillna("UNKNOWN")
     df["Image"] = df["Image"].astype(str).fillna("")
-    df = df.head(10).reset_index(drop=True)  # max 10
     return meta, df
 
 
-# -------------------------
-# FIT HELPERS
-# -------------------------
-def fit_mobject_to_box(m: Mobject, max_w: float, max_h: float):
+# ============================================================
+# BACKGROUND (CLEAN - NO RANDOM DOTS)
+# ============================================================
+def build_god_background() -> VGroup:
+    W = float(config.frame_width)
+    H = float(config.frame_height)
+
+    g = VGroup()
     try:
-        w = float(m.width)
-        h = float(m.height)
-        if w <= 1e-6 or h <= 1e-6:
-            return
-        s = min(max_w / w, max_h / h)
-        if s < 0.999 or s > 1.001:
-            m.scale(s)
+        g.set_z_index(1)
     except Exception:
         pass
 
+    nebula1 = Circle(radius=max(W, H) * 0.58).set_fill(Theme.NEON_BLUE, 0.06).set_stroke(width=0)
+    nebula1.move_to([0.0, 0.5, 0])
+    nebula2 = Circle(radius=max(W, H) * 0.45).set_fill(Theme.NEON_PINK, 0.035).set_stroke(width=0)
+    nebula2.move_to([1.2, -0.2, 0])
+    nebula3 = Circle(radius=max(W, H) * 0.40).set_fill(Theme.NEON_BLUE, 0.025).set_stroke(width=0)
+    nebula3.move_to([-1.4, -0.6, 0])
 
-# -------------------------
-# PREMIUM PANEL STYLE HELPERS
-# -------------------------
-def _apply_sheen(m: VMobject, sheen: float = 0.25):
-    # Safe: if method not available, ignore
-    try:
-        m.set_sheen_factor(sheen)
-        m.set_sheen_direction(RIGHT + UP)
-    except Exception:
-        pass
+    t = ValueTracker(0.0)
 
+    def shimmer_updater(_, dt: float):
+        t.increment_value(dt)
+        v = float(t.get_value())
+        nebula1.set_fill(opacity=0.055 + 0.012 * (0.5 + 0.5 * math.sin(v * 0.8)))
+        nebula2.set_fill(opacity=0.030 + 0.010 * (0.5 + 0.5 * math.sin(v * 0.6 + 1.7)))
+        nebula3.set_fill(opacity=0.022 + 0.008 * (0.5 + 0.5 * math.sin(v * 0.7 + 2.6)))
 
-def premium_box_layers(base_rect: RoundedRectangle, accent: str, fill_hex="#05070B", fill_op=0.52):
-    """
-    Returns (glow, main, glass, highlight_strip) as separate mobjects.
-    Keeps it robust: all are plain VMobjects, no gradients required.
-    """
-    # Glow outline
-    glow = base_rect.copy()
-    glow.set_fill(opacity=0)
-    glow.set_stroke(color=accent, width=16, opacity=0.09)
+    g.add(nebula1, nebula2, nebula3)
+    g.add_updater(shimmer_updater)
 
-    # Main outline
-    main = base_rect.copy()
-    main.set_fill(color=fill_hex, opacity=fill_op)
-    main.set_stroke(color=accent, width=2.6, opacity=0.62)
-    _apply_sheen(main, 0.22)
-
-    # Inner glass panel
-    glass = base_rect.copy()
-    glass.scale(0.88)
-    glass.set_fill(color=BLACK, opacity=0.18)
-    glass.set_stroke(color=WHITE, width=1.2, opacity=0.08)
-    _apply_sheen(glass, 0.18)
-
-    # Highlight strip (fake gradient hint)
-    strip = RoundedRectangle(
-        width=main.width * 0.86,
-        height=max(0.10, main.height * 0.08),
-        corner_radius=0.10,
-    )
-    strip.set_fill(color=accent, opacity=0.10)
-    strip.set_stroke(width=0)
-    strip.move_to(main.get_top() + DOWN * (strip.height * 0.7))
-    strip.set_z_index(main.z_index + 1 if hasattr(main, "z_index") else 0)
-
-    # Align
-    glass.move_to(main.get_center())
-    glow.move_to(main.get_center())
-
-    return glow, main, glass, strip
-
-
-# -------------------------
-# BACKGROUND (god-tier alive but subtle)
-# -------------------------
-def build_background(sf) -> VGroup:
-    bg = VGroup().set_z_index(1)
-
-    # base wash
-    base = Rectangle(width=sf["w"] + 2.5, height=sf["h"] + 2.5)
-    base.set_fill(color="#05070B", opacity=1.0)
-    base.set_stroke(width=0)
-    base.move_to([sf["cx"], sf["cy"], 0]).set_z_index(0)
-    bg.add(base)
-
-    # subtle grid
-    grid = VGroup().set_z_index(1)
-    step = 0.85
-    x = sf["left"]
-    while x <= sf["right"] + 1e-6:
-        ln = Line([x, sf["bottom"], 0], [x, sf["top"], 0])
-        ln.set_stroke(color=Theme.NEON_BLUE, width=1, opacity=0.018)
+    grid = VGroup()
+    step = 0.75
+    x = -W / 2
+    while x <= W / 2 + 1e-6:
+        ln = Line([x, -H / 2, 0], [x, H / 2, 0]).set_stroke(Theme.NEON_BLUE, 1, 0.018)
         grid.add(ln)
         x += step
-
-    y = sf["bottom"]
-    while y <= sf["top"] + 1e-6:
-        ln = Line([sf["left"], y, 0], [sf["right"], y, 0])
-        ln.set_stroke(color=Theme.NEON_BLUE, width=1, opacity=0.014)
+    y = -H / 2
+    while y <= H / 2 + 1e-6:
+        ln = Line([-W / 2, y, 0], [W / 2, y, 0]).set_stroke(Theme.NEON_BLUE, 1, 0.016)
         grid.add(ln)
         y += step
+    g.add(grid)
 
-    # vignette edges (cinematic)
-    vignette = VGroup(
-        Rectangle(width=sf["w"] + 2.4, height=1.7)
-        .set_fill(color=BLACK, opacity=0.24)
-        .set_stroke(width=0)
-        .move_to([sf["cx"], sf["top"] + 0.55, 0]),
-        Rectangle(width=sf["w"] + 2.4, height=1.7)
-        .set_fill(color=BLACK, opacity=0.24)
-        .set_stroke(width=0)
-        .move_to([sf["cx"], sf["bottom"] - 0.55, 0]),
-        Rectangle(width=2.0, height=sf["h"] + 2.4)
-        .set_fill(color=BLACK, opacity=0.22)
-        .set_stroke(width=0)
-        .move_to([sf["left"] - 0.60, sf["cy"], 0]),
-        Rectangle(width=2.0, height=sf["h"] + 2.4)
-        .set_fill(color=BLACK, opacity=0.22)
-        .set_stroke(width=0)
-        .move_to([sf["right"] + 0.60, sf["cy"], 0]),
-    ).set_z_index(3)
-
-    # soft diagonal beams
-    beams = VGroup().set_z_index(0)
-    for ang, op, yoff in [(-12, 0.016, -0.25), (-12, 0.012, -0.75), (-12, 0.010, 0.35)]:
-        b = Rectangle(width=sf["w"] * 0.98, height=sf["h"] * 0.22)
-        b.set_fill(color=Theme.NEON_BLUE, opacity=op)
-        b.set_stroke(width=0)
-        b.rotate(ang * DEGREES)
-        b.move_to([sf["cx"], sf["cy"] + yoff, 0])
-        beams.add(b)
-
-    # soft radial glows
-    glow1 = Circle(radius=3.25).set_fill(Theme.NEON_BLUE, 0.030).set_stroke(width=0).set_z_index(0)
-    glow1.move_to([sf["cx"], sf["cy"] - 0.3, 0])
-
-    glow2 = Circle(radius=2.70).set_fill(Theme.NEON_PINK, 0.018).set_stroke(width=0).set_z_index(0)
-    glow2.move_to([sf["cx"], sf["cy"] - 0.9, 0])
-
-    bg.add(beams, glow1, glow2, grid, vignette)
-    return bg
-
-
-# -------------------------
-# HEADER (comparison vibe)
-# -------------------------
-def build_header(sf, title_text: str, sub_text: str) -> Dict[str, Mobject]:
-    left = _safe_text("TIER 1", font_size=46, color=WHITE, weight=BOLD)
-    right = _safe_text("TIER 2", font_size=46, color=WHITE, weight=BOLD)
-    vs = _safe_text("vs", font_size=30, color=GREY_B, weight=BOLD)
-
-    try:
-        left.set_stroke(Theme.NEON_BLUE, width=2.0, opacity=0.72)
-        right.set_stroke(Theme.NEON_PINK, width=2.0, opacity=0.72)
-    except Exception:
-        pass
-
-    title = VGroup(left, vs, right).arrange(RIGHT, buff=0.24).set_z_index(220)
-    title.move_to([sf["cx"], sf["top"] - 1.05, 0])
-
-    sub = _safe_text(sub_text, font_size=18, color=Theme.TEXT_SUB, weight=BOLD).set_z_index(220)
-    sub.next_to(title, DOWN, buff=0.12)
-
-    line_w = min(sf["w"] * 0.82, title.width + 1.0)
-    uL = Line(LEFT * line_w / 2, ORIGIN).set_stroke(color=Theme.NEON_BLUE, width=4, opacity=0.70)
-    uR = Line(ORIGIN, RIGHT * line_w / 2).set_stroke(color=Theme.NEON_PINK, width=4, opacity=0.70)
-    underline = VGroup(uL, uR).arrange(RIGHT, buff=0).next_to(sub, DOWN, buff=0.16).set_z_index(220)
-
-    return {"title": title, "sub": sub, "underline": underline}
-
-
-# -------------------------
-# EVIDENCE BOX (premium, no harsh flash)
-# -------------------------
-def build_evidence_box(center: np.ndarray, accent=Theme.NEON_BLUE) -> Dict[str, Mobject]:
-    w, h = 3.20, 1.70
-    base = RoundedRectangle(width=w, height=h, corner_radius=0.22)
-
-    glow, outer, inner, hi = premium_box_layers(base, accent, fill_hex="#05070B", fill_op=0.60)
-    # inner returned by premium_box_layers is a scaled copy of base (glass). We'll use it as "inner"
-    inner.set_fill(color=BLACK, opacity=0.16)
-    inner.set_stroke(color=WHITE, width=1.2, opacity=0.07)
-
-    # bottom micro label
-    label = _safe_text("EVIDENCE INTAKE", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD)
-    label.set_opacity(0.82)
-    label.move_to(outer.get_bottom() + UP * 0.22)
-
-    grp = VGroup(glow, outer, inner, hi, label).move_to(center).set_z_index(140)
-
-    return {"group": grp, "outer": outer, "inner": inner, "glow": glow, "hi": hi, "label": label, "accent": accent}
-
-
-# -------------------------
-# SCANNER (old design back, more alive, halo fixed)
-# -------------------------
-def build_scanner(center: np.ndarray, radius: float = 1.15, accent=Theme.NEON_BLUE) -> Dict[str, Mobject]:
-    # halo just slightly bigger than scanner (NOT huge)
-    halo = Circle(radius=radius * 1.10).set_fill(accent, 0.035).set_stroke(width=0)
-    _apply_sheen(halo, 0.10)
-
-    ring1 = Circle(radius=radius * 1.00).set_stroke(color=Theme.TEXT_SUB, width=2, opacity=0.14).set_fill(opacity=0)
-    ring2 = Circle(radius=radius * 1.18).set_stroke(color=Theme.TEXT_SUB, width=2, opacity=0.11).set_fill(opacity=0)
-    ring3 = Circle(radius=radius * 1.36).set_stroke(color=Theme.TEXT_SUB, width=2, opacity=0.09).set_fill(opacity=0)
-
-    dash_base = Circle(radius=radius * 1.48).set_stroke(color=accent, width=2.6, opacity=0.34).set_fill(opacity=0)
-    dash_ring = DashedVMobject(dash_base, num_dashes=22).set_z_index(1)
-
-    ticks = VGroup()
-    tick_r = radius * 1.52
-    for ang in np.linspace(0, TAU, 44, endpoint=False):
-        p1 = np.array([math.cos(ang) * (tick_r - 0.10), math.sin(ang) * (tick_r - 0.10), 0])
-        p2 = np.array([math.cos(ang) * tick_r, math.sin(ang) * tick_r, 0])
-        ln = Line(p1, p2).set_stroke(color=Theme.TEXT_SUB, width=2, opacity=0.08)
-        ticks.add(ln)
-
-    core = RegularPolygon(n=6, radius=radius * 0.62)
-    core.set_fill(color="#05070B", opacity=0.92)
-    core.set_stroke(color=accent, width=2.6, opacity=0.34)
-    _apply_sheen(core, 0.22)
-
-    glass = Circle(radius=radius * 0.52).set_fill(color=WHITE, opacity=0.012).set_stroke(color=WHITE, width=2, opacity=0.05)
-
-    chevs = VGroup()
-    for sx, sy in [(-1, 1), (1, 1), (-1, -1), (1, -1)]:
-        a = np.array([sx * radius * 0.78, sy * radius * 0.78, 0])
-        b = np.array([sx * radius * 0.92, sy * radius * 0.78, 0])
-        c = np.array([sx * radius * 0.78, sy * radius * 0.92, 0])
-        ch1 = Line(a, b).set_stroke(color=accent, width=3, opacity=0.22)
-        ch2 = Line(a, c).set_stroke(color=accent, width=3, opacity=0.22)
-        chevs.add(ch1, ch2)
-
-    grp = VGroup(halo, ring1, ring2, ring3, dash_ring, ticks, core, glass, chevs).move_to(center).set_z_index(120)
-
-    # center text ALWAYS visible (NO extra line/plate)
-    top = _safe_text("AI TRIBUNAL", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD).set_opacity(0.90)
-    mid = _safe_text("SCAN CORE", font_size=18, color=WHITE, weight=BOLD)
-    bot = _safe_text("ready", font="Consolas", font_size=11, color=Theme.TEXT_SUB)
-    label = VGroup(top, mid, bot).arrange(DOWN, buff=0.06).move_to(center + DOWN * 0.02).set_z_index(230)
-
-    return {
-        "group": grp,
-        "halo": halo,
-        "rings": VGroup(ring1, ring2, ring3),
-        "dash": dash_ring,
-        "ticks": ticks,
-        "core": core,
-        "label": label,
-        "center": center,
-        "radius": radius,
-        "accent": accent,
-    }
-
-
-def scanner_set_accent(scanner: Dict[str, Mobject], accent: str):
-    scanner["accent"] = accent
-    scanner["dash"].set_stroke(color=accent, opacity=0.38)
-    scanner["core"].set_stroke(color=accent, opacity=0.38)
-    scanner["halo"].set_fill(color=accent, opacity=0.035)
-
-
-# -------------------------
-# COUNTERS (premium, no harsh colors)
-# -------------------------
-def build_border_counter(pos: np.ndarray, accent: str) -> Dict[str, Mobject]:
-    base = RoundedRectangle(width=0.92, height=0.60, corner_radius=0.18)
-    glow, outer, glass, strip = premium_box_layers(base, accent, fill_hex="#05070B", fill_op=0.55)
-
-    txt = _safe_text("0", font="Consolas", font_size=28, color=WHITE, weight=BOLD)
-    txt.move_to(outer.get_center())
-
-    grp = VGroup(glow, outer, glass, strip, txt).move_to(pos).set_z_index(240)
-    return {"group": grp, "outer": outer, "glass": glass, "txt": txt, "accent": accent, "value": 0}
-
-
-# -------------------------
-# CARDS (Group, safe for ImageMobject)
-# -------------------------
-def build_sprite(img_path: str, accent: str) -> Group:
-    if img_path and os.path.exists(img_path):
-        im = ImageMobject(img_path)
-        im.set_z_index(3)
-    else:
-        im = _safe_text("?", font_size=72, color=WHITE, weight=BOLD)
-
-    aura = Circle(radius=0.55)
-    aura.set_fill(color=accent, opacity=0.09)
-    aura.set_stroke(color=accent, width=10, opacity=0.10)
-    aura.set_z_index(2)
-
-    core_glow = Circle(radius=0.42)
-    core_glow.set_fill(color=accent, opacity=0.05)
-    core_glow.set_stroke(width=0)
-    core_glow.set_z_index(2)
-
-    g = Group(aura, core_glow, im)
-    g.set_z_index(160)
-    g.move_to(ORIGIN)
+    vign = VGroup(
+        Rectangle(width=W * 1.30, height=H * 0.22).set_fill(BLACK, 0.22).set_stroke(width=0).move_to([0, H * 0.42, 0]),
+        Rectangle(width=W * 1.30, height=H * 0.22).set_fill(BLACK, 0.24).set_stroke(width=0).move_to([0, -H * 0.42, 0]),
+        Rectangle(width=W * 0.22, height=H * 1.30).set_fill(BLACK, 0.18).set_stroke(width=0).move_to([W * 0.46, 0, 0]),
+        Rectangle(width=W * 0.22, height=H * 1.30).set_fill(BLACK, 0.18).set_stroke(width=0).move_to([-W * 0.46, 0, 0]),
+    )
+    g.add(vign)
     return g
 
 
-# -------------------------
-# CONTAINERS (Vault Bay, premium)
-# -------------------------
-def build_vault_bay(center: np.ndarray, accent: str, label: str) -> Dict[str, Mobject]:
-    w, h = 3.55, 2.55
-    base = RoundedRectangle(width=w, height=h, corner_radius=0.26)
+# ============================================================
+# HEADER (vs never disappears)
+# ============================================================
+def build_header(meta_title: str, meta_sub: str) -> Dict[str, Mobject]:
+    blue = Theme.NEON_BLUE
+    pink = Theme.NEON_PINK
 
-    glow, body, inner_glass, strip = premium_box_layers(base, accent, fill_hex="#05070B", fill_op=0.40)
+    raw = (meta_title or "TIER 1 vs TIER 2").strip()
+    parts = re.split(r"\s+vs\s+", raw, flags=re.IGNORECASE)
 
-    # inner area where items pack
-    inner = RoundedRectangle(width=w * 0.86, height=h * 0.70, corner_radius=0.20)
-    inner.set_fill(color=BLACK, opacity=0.20)
-    inner.set_stroke(color=WHITE, width=1.2, opacity=0.07)
-    inner.move_to(body.get_center() + UP * 0.08)
-    _apply_sheen(inner, 0.18)
+    left_txt = "TIER 1"
+    right_txt = "TIER 2"
+    if len(parts) == 2:
+        left_txt = parts[0].strip() or "TIER 1"
+        right_txt = parts[1].strip() or "TIER 2"
 
-    mouth = RoundedRectangle(width=w * 0.62, height=0.18, corner_radius=0.09)
-    mouth.set_fill(color=accent, opacity=0.08)
-    mouth.set_stroke(color=accent, width=1.8, opacity=0.26)
-    mouth.move_to(body.get_top() + DOWN * 0.22)
+    left = safe_text(left_txt.upper(), font_size=46, color=blue, weight=BOLD)
+    vs = safe_text("vs", font_size=30, color=GREY_B, weight=BOLD)
+    right = safe_text(right_txt.upper(), font_size=46, color=pink, weight=BOLD)
+    title = VGroup(left, vs, right).arrange(RIGHT, buff=0.22)
 
-    locks = VGroup()
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            p = body.get_center() + np.array([sx * (w / 2 - 0.35), sy * (h / 2 - 0.35), 0])
-            r = RoundedRectangle(width=0.40, height=0.28, corner_radius=0.10)
-            r.set_fill(color=accent, opacity=0.06)
-            r.set_stroke(color=accent, width=2.0, opacity=0.18)
-            r.move_to(p)
-            locks.add(r)
+    try:
+        title.set_z_index(500)
+    except Exception:
+        pass
+    title.to_edge(UP, buff=0.78).shift(DOWN * 0.12)
 
-    chevs = VGroup()
-    for dy, op in [(0.22, 0.07), (-0.10, 0.05), (-0.42, 0.07)]:
-        ln = Line(inner.get_left() + RIGHT * 0.18, inner.get_right() + LEFT * 0.18)
-        ln.move_to(inner.get_center() + UP * dy)
-        ln.set_stroke(color=accent, width=2.5, opacity=op)
-        chevs.add(ln)
+    sub = safe_text(meta_sub, font_size=18, color=Theme.TEXT_SUB, weight=BOLD)
+    try:
+        sub.set_z_index(500)
+    except Exception:
+        pass
+    sub.next_to(title, DOWN, buff=0.12)
 
-    lbl = _safe_text(label.upper(), font_size=20, color=WHITE, weight=BOLD).set_z_index(230)
-    lbl.move_to(center + DOWN * (h / 2 + 0.55))
+    line_w = min(float(config.frame_width) * 0.76, 7.0)
+    uL = Line(LEFT * line_w / 2, ORIGIN).set_stroke(color=blue, width=4, opacity=0.95)
+    uR = Line(ORIGIN, RIGHT * line_w / 2).set_stroke(color=pink, width=4, opacity=0.95)
+    underline = VGroup(uL, uR).arrange(RIGHT, buff=0)
+    try:
+        underline.set_z_index(500)
+    except Exception:
+        pass
+    underline.next_to(sub, DOWN, buff=0.18)
 
-    back = VGroup(glow, body, inner, strip, mouth, locks, chevs).move_to(center).set_z_index(90)
+    path = Line(underline.get_left(), underline.get_right()).set_stroke(width=0, opacity=0)
+    dot = Dot(radius=0.045, color=blue).move_to(path.get_start())
+    try:
+        dot.set_z_index(520)
+    except Exception:
+        pass
 
-    return {"group": back, "body": body, "inner": inner, "mouth": mouth, "label": lbl, "accent": accent, "items": []}
+    return {"title": title, "sub": sub, "underline": underline, "path": path, "dot": dot}
 
 
+# ============================================================
+# EVIDENCE INTAKE BOX
+# ============================================================
+def build_evidence_box(center: np.ndarray) -> Dict[str, Mobject]:
+    blue = Theme.NEON_BLUE
+    W = float(config.frame_width)
+
+    w = min(W * 0.78, 6.3)
+    h = 1.58
+
+    outer = RoundedRectangle(width=w, height=h, corner_radius=0.22)
+    outer.set_fill("#05080B", 0.48)
+    outer.set_stroke(blue, 2.8, 0.74)
+    outer.move_to(center)
+
+    glow = outer.copy().set_fill(opacity=0).set_stroke(blue, 16, 0.10)
+
+    inner = RoundedRectangle(width=w * 0.92, height=h * 0.70, corner_radius=0.18)
+    inner.set_fill("#05080B", 0.55)
+    inner.set_stroke(blue, 2.0, 0.28)
+    inner.move_to(center + UP * 0.06)
+
+    label = safe_text("evidence intake", font="Consolas", font_size=12, color=Theme.TEXT_SUB)
+    label.set_opacity(0.9)
+    label.next_to(outer, DOWN, buff=0.12)
+
+    grp = VGroup(glow, outer, inner, label)
+    try:
+        grp.set_z_index(260)
+        glow.set_z_index(258)
+        outer.set_z_index(259)
+        inner.set_z_index(260)
+        label.set_z_index(261)
+    except Exception:
+        pass
+
+    return {"group": grp, "outer": outer, "inner": inner, "glow": glow, "label": label}
+
+
+# ============================================================
+# SCANNER (ALWAYS-ON + SINGLE LOG LINE ">>")
+# ============================================================
+def build_scanner(center: np.ndarray) -> Dict[str, Mobject]:
+    neutral = "#9FE9FF"
+    neutral2 = "#78D8FF"
+    r = 1.62
+
+    halo_outer = Circle(radius=r * 1.62).set_fill(neutral2, 0.045).set_stroke(width=0).move_to(center)
+    halo_inner = Circle(radius=r * 1.18).set_fill(neutral, 0.032).set_stroke(width=0).move_to(center)
+
+    plate = Circle(radius=r * 0.80).set_fill("#05080B", 0.92).set_stroke(neutral, 2.2, 0.18).move_to(center)
+    glass = Circle(radius=r * 0.84).set_fill(WHITE, 0.010).set_stroke(WHITE, 2.0, 0.085).move_to(center)
+
+    ring1 = Circle(radius=r * 0.94).set_stroke(Theme.TEXT_SUB, 2, 0.13).set_fill(opacity=0).move_to(center)
+    ring2 = Circle(radius=r * 1.08).set_stroke(Theme.TEXT_SUB, 2, 0.11).set_fill(opacity=0).move_to(center)
+    ring3 = Circle(radius=r * 1.22).set_stroke(Theme.TEXT_SUB, 2, 0.095).set_fill(opacity=0).move_to(center)
+    ring4 = Circle(radius=r * 1.36).set_stroke(Theme.TEXT_SUB, 2, 0.080).set_fill(opacity=0).move_to(center)
+
+    dash = VGroup()
+    dash_r = r * 1.44
+    segs = 72
+    for k in range(segs):
+        a0 = (k / segs) * TAU
+        a1 = a0 + TAU / segs * 0.38
+        arc = Arc(radius=dash_r, start_angle=a0, angle=(a1 - a0), arc_center=center)
+        arc.set_stroke(Theme.TEXT_SUB, 2, 0.075)
+        dash.add(arc)
+
+    sweep = AnnularSector(
+        inner_radius=r * 0.92,
+        outer_radius=r * 1.44,
+        start_angle=0.0,
+        angle=0.36,
+        fill_color=neutral,
+        fill_opacity=0.0,
+        stroke_width=0,
+    ).move_to(center)
+
+    panel = RoundedRectangle(width=3.30, height=1.10, corner_radius=0.20)
+    panel.set_fill("#05080B", 0.84)
+    panel.set_stroke(neutral, 1.9, 0.32)
+    panel.move_to(center + DOWN * 0.02)
+
+    panel_glow = panel.copy().set_fill(opacity=0).set_stroke(neutral, 12, 0.075)
+
+    highlight = RoundedRectangle(width=3.00, height=0.22, corner_radius=0.10)
+    highlight.set_fill(WHITE, 0.0)
+    highlight.set_stroke(width=0)
+    highlight.rotate(-18 * DEGREES)
+    highlight.move_to(panel.get_center() + UP * 0.12)
+
+    sparks = VGroup()
+    rng = np.random.default_rng(11)
+    for _ in range(12):
+        ang = float(rng.uniform(0, TAU))
+        rr = float(rng.uniform(r * 0.90, r * 1.52))
+        p = np.array([math.cos(ang) * rr, math.sin(ang) * rr, 0]) + center
+        d = Dot(p, radius=float(rng.uniform(0.016, 0.030)), color=neutral)
+        d.set_opacity(float(rng.uniform(0.03, 0.08)))
+        sparks.add(d)
+
+    t_top = safe_text("AI TRIBUNAL", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD)
+    t_main = safe_text("SCANNING", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD)
+
+    d1 = safe_text(".", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD).set_opacity(0.0)
+    d2 = safe_text(".", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD).set_opacity(0.0)
+    d3 = safe_text(".", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD).set_opacity(0.0)
+    dots = VGroup(d1, d2, d3).arrange(RIGHT, buff=0.04).next_to(t_main, RIGHT, buff=0.06)
+    scan_line = VGroup(t_main, dots).arrange(RIGHT, buff=0.06)
+
+    # Single readable log line (fits inside panel)
+    log1 = safe_text(">> awaiting evidence…", font="Consolas", font_size=11, color=Theme.TEXT_SUB, weight=BOLD)
+    log1.set_opacity(0.95)
+
+    text_group = VGroup(t_top, scan_line, log1).arrange(DOWN, buff=0.07)
+    text_group.move_to(panel.get_center() + DOWN * 0.01)
+
+    time_t = ValueTracker(0.0)
+    scan_strength = ValueTracker(0.0)
+    sweep_ang = ValueTracker(0.0)
+
+    base = VGroup(
+        halo_outer, halo_inner,
+        ring4, dash, sweep, ring3, ring2, ring1,
+        plate, glass, sparks,
+        panel_glow, panel, highlight,
+    )
+
+    try:
+        base.set_z_index(320)
+        text_group.set_z_index(560)
+    except Exception:
+        pass
+
+    dot_t = ValueTracker(0.0)
+
+    def dots_updater(_, dt):
+        dot_t.increment_value(dt)
+        v = float(dot_t.get_value())
+        phase = int((v * 2.25) % 4)
+        d1.set_opacity(1.0 if phase >= 1 else 0.0)
+        d2.set_opacity(1.0 if phase >= 2 else 0.0)
+        d3.set_opacity(1.0 if phase >= 3 else 0.0)
+
+    text_group.add_updater(dots_updater)
+
+    def tick(_, dt):
+        time_t.increment_value(dt)
+        if float(scan_strength.get_value()) > 0.001:
+            sweep_ang.increment_value(dt * (2.0 + 2.6 * float(scan_strength.get_value())))
+
+    base.add_updater(tick)
+
+    def ring_breathe(base_op, freq, phase):
+        def up(m: VMobject, dt):
+            t = float(time_t.get_value())
+            s = float(scan_strength.get_value())
+            op = base_op + 0.05 * (0.5 + 0.5 * math.sin(t * freq + phase)) + 0.10 * s
+            m.set_stroke(opacity=float(np.clip(op, 0.06, 0.32)))
+        return up
+
+    ring1.add_updater(ring_breathe(0.13, 1.8, 0.0))
+    ring2.add_updater(ring_breathe(0.11, 1.5, 1.2))
+    ring3.add_updater(ring_breathe(0.095, 1.2, 2.0))
+    ring4.add_updater(ring_breathe(0.080, 1.0, 2.7))
+
+    def dash_fx(m: VGroup, dt):
+        t = float(time_t.get_value())
+        s = float(scan_strength.get_value())
+        n = max(1, len(m))
+        m.rotate((0.05 + 0.14 * s) * dt, about_point=center)
+        for i, a in enumerate(m):
+            ph = (i / n) * TAU
+            window = 0.5 + 0.5 * math.sin(t * 1.15 + ph)
+            op = 0.05 + 0.06 * window + 0.15 * s * (0.35 + 0.65 * window)
+            a.set_stroke(opacity=float(np.clip(op, 0.045, 0.36)))
+
+    dash.add_updater(dash_fx)
+
+    prev = {"a": 0.0}
+
+    def sweep_fx(m: Mobject, dt):
+        s = float(scan_strength.get_value())
+        ang = float(sweep_ang.get_value()) % TAU
+        m.set_fill(opacity=clamp(0.055 * s, 0.0, 0.085))
+        da = ang - prev["a"]
+        prev["a"] = ang
+        m.rotate(da, about_point=center)
+
+    sweep.add_updater(sweep_fx)
+
+    def panel_fx(_, dt):
+        s = float(scan_strength.get_value())
+        t = float(time_t.get_value())
+
+        panel_glow.set_stroke(opacity=0.07 + 0.14 * s)
+        panel.set_stroke(neutral, 1.9 + 0.7 * s, 0.32 + 0.18 * s)
+
+        highlight.set_fill(WHITE, 0.00 + 0.10 * s * (0.5 + 0.5 * math.sin(t * 2.2)))
+        highlight.move_to(
+            panel.get_center()
+            + UP * (0.10 + 0.05 * math.sin(t * 1.45))
+            + RIGHT * (0.15 * math.sin(t * 1.10))
+        )
+
+        halo_outer.set_fill(opacity=0.040 + 0.028 * s)
+        halo_inner.set_fill(opacity=0.028 + 0.020 * s)
+
+        for k, d in enumerate(sparks):
+            base_op = 0.03 + 0.04 * (0.5 + 0.5 * math.sin(t * 1.6 + k))
+            d.set_opacity(float(np.clip(base_op + 0.22 * s, 0.02, 0.40)))
+
+    panel.add_updater(panel_fx)
+
+    return {
+        "group": base,
+        "text_group": text_group,
+        "panel": panel,
+        "panel_glow": panel_glow,
+        "ring1": ring1,
+        "ring2": ring2,
+        "ring3": ring3,
+        "ring4": ring4,
+        "scan_strength": scan_strength,
+        "log1": log1,
+        "center": np.array(center),
+        "radius": r,
+        "neutral": neutral,
+    }
+
+
+# ============================================================
+# COUNTER
+# ============================================================
+def build_counter(center: np.ndarray, accent: str) -> Dict[str, Mobject]:
+    bg = RoundedRectangle(width=1.70, height=0.72, corner_radius=0.20)
+    bg.set_fill("#05080B", 0.78)
+    bg.set_stroke(accent, 2.2, 0.72)
+    bg.move_to(center)
+
+    glow = bg.copy().set_fill(opacity=0).set_stroke(accent, 16, 0.10)
+
+    dot = Dot(radius=0.07, color=accent).set_opacity(0.9)
+    dot.move_to(bg.get_left() + RIGHT * 0.28)
+
+    num = safe_text("0", font="Consolas", font_size=34, color=WHITE, weight=BOLD).move_to(center + RIGHT * 0.18)
+
+    grp = VGroup(glow, bg, dot, num)
+    try:
+        grp.set_z_index(430)
+        glow.set_z_index(425)
+        bg.set_z_index(426)
+        dot.set_z_index(427)
+        num.set_z_index(428)
+    except Exception:
+        pass
+
+    return {"group": grp, "num": num, "glow": glow, "bg": bg, "dot": dot}
+
+
+# ============================================================
+# CONTAINER
+# ============================================================
+def build_container(center: np.ndarray, accent: str, label: str) -> Dict[str, Mobject]:
+    w, h = 3.85, 2.28
+
+    outer = RoundedRectangle(width=w, height=h, corner_radius=0.22)
+    outer.set_fill("#05080B", 0.28)
+    outer.set_stroke(accent, 3.3, 0.82)
+    outer.move_to(center)
+
+    glow = outer.copy().set_fill(opacity=0).set_stroke(accent, 18, 0.12)
+
+    inner = RoundedRectangle(width=w * 0.90, height=h * 0.70, corner_radius=0.18)
+    inner.set_fill("#05080B", 0.54)
+    inner.set_stroke(accent, 2.0, 0.25)
+    inner.move_to(center + UP * 0.03)
+
+    brackets = VGroup()
+    b = 0.35
+    lw = 2.3
+    op = 0.45
+    corners = [
+        (outer.get_left() + RIGHT * 0.18 + UP * (h / 2 - 0.18), RIGHT, DOWN),
+        (outer.get_right() + LEFT * 0.18 + UP * (h / 2 - 0.18), LEFT, DOWN),
+        (outer.get_left() + RIGHT * 0.18 + DOWN * (h / 2 - 0.18), RIGHT, UP),
+        (outer.get_right() + LEFT * 0.18 + DOWN * (h / 2 - 0.18), LEFT, UP),
+    ]
+    for p, dir1, dir2 in corners:
+        l1 = Line(p, p + dir1 * b).set_stroke(accent, lw, op)
+        l2 = Line(p, p + dir2 * b).set_stroke(accent, lw, op)
+        brackets.add(l1, l2)
+
+    inner_lines = VGroup(
+        Line(inner.get_left(), inner.get_right()).set_stroke(accent, 1.5, 0.06),
+        Line(inner.get_bottom(), inner.get_top()).set_stroke(accent, 1.5, 0.05),
+    )
+    inner_lines[0].shift(UP * 0.18)
+    inner_lines[1].shift(RIGHT * 0.15)
+
+    tab = RoundedRectangle(width=2.05, height=0.56, corner_radius=0.18)
+    tab.set_fill("#05080B", 0.90)
+    tab.set_stroke(accent, 2.3, 0.82)
+    tab.move_to(outer.get_top() + DOWN * 0.26)
+
+    lbl = safe_text(label.upper(), font_size=20, color=WHITE, weight=BOLD).move_to(tab.get_center())
+
+    grp = VGroup(glow, outer, inner, inner_lines, brackets, tab, lbl)
+    try:
+        grp.set_z_index(300)
+        glow.set_z_index(295)
+        outer.set_z_index(296)
+        inner.set_z_index(297)
+        inner_lines.set_z_index(298)
+        brackets.set_z_index(299)
+        tab.set_z_index(305)
+        lbl.set_z_index(306)
+    except Exception:
+        pass
+
+    return {
+        "group": grp,
+        "inner": inner,
+        "items": [],
+        "outer": outer,
+        "glow": glow,
+        "brackets": brackets,
+        "inner_lines": inner_lines,
+        "tab": tab,
+        "lbl": lbl,
+    }
+
+
+# ============================================================
+# CARD
+# ============================================================
+def build_card(img_path: str, accent: str, fallback_label: str) -> Group:
+    plate = RoundedRectangle(width=1.85, height=1.25, corner_radius=0.18)
+    plate.set_fill("#070A0C", 0.92)
+    plate.set_stroke(accent, 2.6, 0.82)
+
+    glow = plate.copy().set_fill(opacity=0).set_stroke(accent, 14, 0.10)
+    shadow = plate.copy().set_fill(BLACK, 0.30).set_stroke(width=0).shift(DOWN * 0.08 + RIGHT * 0.06)
+
+    if img_path and os.path.exists(img_path):
+        im = ImageMobject(img_path)
+        im.scale_to_fit_width(1.18)
+    else:
+        im = safe_text((fallback_label[:1] or "?").upper(), font_size=64, color=WHITE, weight=BOLD)
+
+    im.move_to(plate.get_center())
+
+    grp = Group(shadow, glow, plate, im)
+    try:
+        grp.set_z_index(380)
+        glow.set_z_index(376)
+        plate.set_z_index(377)
+        im.set_z_index(378)
+    except Exception:
+        pass
+    return grp
+
+
+# ============================================================
+# PACKING
+# ============================================================
 def pack_positions(inner_rect: Mobject, n: int, cols: int = 3) -> List[np.ndarray]:
     if n <= 0:
         return []
@@ -468,328 +667,333 @@ def pack_positions(inner_rect: Mobject, n: int, cols: int = 3) -> List[np.ndarra
     return pos
 
 
-# -------------------------
+# ============================================================
 # MAIN SCENE
-# -------------------------
+# ============================================================
 class SortCardTribunalFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
-        sf = get_safe_frame(margin=0.70)
 
-        # Data
-        csv_path = os.path.join(DATA_DIR, "sort_data.csv")
-        meta, df = load_csv_with_meta(csv_path)
-
-        # Intro (LOCKED)
+        # Intro
         try:
             IntroManager.play_intro(
                 self,
                 brand_title="BIGDATA LEAK",
                 brand_sub="SYSTEM BREACH DETECTED",
-                feed_text=str(meta.get("FEED", "FEED_SORT // TRIBUNAL")),
+                feed_text="FEED_SORT // TRIBUNAL",
                 footer_text="CONFIDENTIAL // VERIFIED",
             )
         except Exception:
-            IntroManager.play_intro(self)
+            try:
+                IntroManager.play_intro(self)
+            except Exception:
+                pass
+
+        W = float(config.frame_width)
+        H = float(config.frame_height)
 
         # Layers
-        bg_layer = VGroup().set_z_index(1)
-        mid_layer = VGroup().set_z_index(150)
-        ui_layer = VGroup().set_z_index(240)
-
-        containers_layer = Group().set_z_index(110)
-        items_layer = Group().set_z_index(160)
-
-        self.add(bg_layer, containers_layer, mid_layer, items_layer, ui_layer)
-
-        # Background
-        bg = build_background(sf)
-        bg_layer.add(bg)
-
-        # Alive scanlines (subtle, safe)
-        t = ValueTracker(0.0)
-        t.add_updater(lambda m, dt: m.increment_value(dt))
-
-        scanline = always_redraw(
-            lambda: Rectangle(width=sf["w"] + 2.0, height=0.12)
-            .set_fill(color=Theme.NEON_BLUE, opacity=0.018)
-            .set_stroke(width=0)
-            .move_to([sf["cx"], sf["bottom"] + (t.get_value() * 0.9) % (sf["h"] + 1.4), 0])
-            .set_z_index(2)
-        )
-        bg_layer.add(scanline)
-        self.add(t)  # ensure updater runs
-
+        bg_layer = VGroup()
+        hud_layer = VGroup()
+        items_layer = Group()
+        ui_layer = VGroup()
         try:
-            bg_layer.add(
-                make_floating_particles(
-                    n=14,
-                    color=Theme.NEON_BLUE,
-                    radius_range=(0.018, 0.042),
-                    opacity_range=(0.05, 0.14),
-                    drift=0.028,
-                    margin=0.75,
-                )
-            )
+            bg_layer.set_z_index(1)
+            hud_layer.set_z_index(200)
+            items_layer.set_z_index(380)
+            ui_layer.set_z_index(500)
+        except Exception:
+            pass
+        self.add(bg_layer, hud_layer, items_layer, ui_layer)
+
+        # Background (clean)
+        bg_layer.add(build_god_background())
+
+        # Branding border
+        try:
+            bb = get_branding_border().move_to(ORIGIN)
+            try:
+                bb.set_z_index(650)
+            except Exception:
+                pass
+            ui_layer.add(bb)
         except Exception:
             pass
 
-        # Header
-        header = build_header(sf, meta.get("TITLE", "TIER 1 vs TIER 2"), meta.get("SUB", "AI TRIBUNAL SORT TEST"))
+        # Data
+        csv_path = os.path.join(DATA_DIR, "sort_data.csv")
+        meta, df = load_csv_with_meta(csv_path)
+
+        # Blueprint positions (locked)
+        UI_DY = 0.28
+        shift_vec = DOWN * UI_DY
+
+        evidence_center = (np.array([0.0, H / 2 - 3.45, 0]) + shift_vec)
+        scanner_center = (np.array([0.0, 0.30, 0]) + shift_vec)
+
+        counters_y = float(scanner_center[1] - 2.35)
+        left_counter_pos = np.array([-W / 2 + 1.55, counters_y, 0])
+        right_counter_pos = np.array([W / 2 - 1.55, counters_y, 0])
+
+        bins_y = -H / 2 + 2.05
+        left_bin_pos = np.array([-2.25, bins_y, 0])
+        right_bin_pos = np.array([2.25, bins_y, 0])
+
+        # Build UI blocks
+        header = build_header(meta.get("TITLE", "TIER 1 vs TIER 2"), meta.get("SUB", "AI TRIBUNAL SORT TEST"))
         title = header["title"]
         sub = header["sub"]
         underline = header["underline"]
+        dot = header["dot"]
 
-        # Layout anchors
-        header_bottom_y = underline.get_bottom()[1]
-        evidence_center = np.array([sf["cx"], header_bottom_y - 1.85, 0])
-        scanner_center = np.array([sf["cx"], evidence_center[1] - 2.85, 0])
+        evidence = build_evidence_box(evidence_center)
+        scanner = build_scanner(scanner_center)
+        left_counter = build_counter(left_counter_pos, Theme.NEON_BLUE)
+        right_counter = build_counter(right_counter_pos, Theme.NEON_PINK)
+        left_bin = build_container(left_bin_pos, Theme.NEON_BLUE, "Tier 1")
+        right_bin = build_container(right_bin_pos, Theme.NEON_PINK, "Tier 2")
 
-        containers_y = sf["bottom"] + 2.55
-        left_bin_center = np.array([sf["cx"] - 2.25, containers_y, 0])
-        right_bin_center = np.array([sf["cx"] + 2.25, containers_y, 0])
-
-        # Helper: invisible entry state (no flash)
-        def prep_in(m: Mobject, shift_vec=ORIGIN, scale_factor: float = 1.0):
+        # Connector lines (subtle baseline)
+        line_ev = Line(evidence_center + DOWN * 0.05, scanner_center + UP * 1.55).set_stroke(Theme.NEON_BLUE, 2.2, 0.10)
+        line_lc = Line(scanner_center + LEFT * 1.25 + DOWN * 1.45, left_counter_pos + RIGHT * 0.65).set_stroke(Theme.NEON_BLUE, 2.0, 0.10)
+        line_rc = Line(scanner_center + RIGHT * 1.25 + DOWN * 1.45, right_counter_pos + LEFT * 0.65).set_stroke(Theme.NEON_PINK, 2.0, 0.10)
+        line_lb = Line(left_counter_pos + DOWN * 0.45, left_bin_pos + UP * 1.10).set_stroke(Theme.NEON_BLUE, 2.0, 0.10)
+        line_rb = Line(right_counter_pos + DOWN * 0.45, right_bin_pos + UP * 1.10).set_stroke(Theme.NEON_PINK, 2.0, 0.10)
+        for ln in [line_ev, line_lc, line_rc, line_lb, line_rb]:
             try:
-                if scale_factor != 1.0:
-                    m.scale(scale_factor)
+                ln.set_z_index(240)
             except Exception:
                 pass
-            try:
-                # robust shift check
-                sv = np.array(shift_vec, dtype=float)
-                if np.linalg.norm(sv) > 1e-6:
-                    m.shift(shift_vec)
-            except Exception:
-                pass
-            try:
-                m.set_opacity(0.0)
-            except Exception:
-                # if a mobject doesn't support opacity well, ignore
-                pass
-            return m
 
-        # Evidence
-        evidence = build_evidence_box(evidence_center, accent=Theme.NEON_BLUE)
-        evidence_grp = evidence["group"]
+        # Dynamic evidence->scanner glow link (only this one as dynamic)
+        ev_to_sc = Line(evidence_center + DOWN * 0.05, scanner_center + UP * 1.55)
+        ev_to_sc.set_stroke(scanner["neutral"], 3.0, 0.0)
+        try:
+            ev_to_sc.set_z_index(360)
+        except Exception:
+            pass
 
-        # Scanner
-        scanner = build_scanner(scanner_center, radius=1.15, accent=Theme.NEON_BLUE)
-        scanner_grp = scanner["group"]
-        scanner_label = scanner["label"]
-
-        # Beam connector
-        beam_alpha = ValueTracker(0.0)
-
-        def beam_start():
-            return evidence_grp.get_bottom() + DOWN * 0.14
-
-        def beam_end():
-            return scanner_grp.get_top() + UP * 0.14
-
-        beam = always_redraw(
-            lambda: VGroup(
-                Line(beam_start(), beam_end()).set_stroke(
-                    color=scanner["accent"], width=10, opacity=float(0.12 * beam_alpha.get_value())
-                ),
-                Line(beam_start(), beam_end()).set_stroke(
-                    color=scanner["accent"], width=2.8, opacity=float(0.55 * beam_alpha.get_value())
-                ),
-            ).set_z_index(170)
+        # Add layers
+        ui_layer.add(title, sub, underline, dot, scanner["text_group"], left_counter["group"], right_counter["group"])
+        hud_layer.add(
+            evidence["group"], scanner["group"],
+            left_bin["group"], right_bin["group"],
+            line_ev, line_lc, line_rc, line_lb, line_rb,
+            ev_to_sc
         )
 
-        # Containers
-        left_bin = build_vault_bay(left_bin_center, Theme.NEON_BLUE, "Tier 1")
-        right_bin = build_vault_bay(right_bin_center, Theme.NEON_PINK, "Tier 2")
+        # =====================================================
+        # PERFECT ENTRANCE (vs fixed)
+        # =====================================================
+        tL, tVS, tR = title[0], title[1], title[2]
+        tL_final = tL.get_center()
+        tR_final = tR.get_center()
 
-        # Route lines
-        routeL_alpha = ValueTracker(0.0)
-        routeR_alpha = ValueTracker(0.0)
+        tL.shift(LEFT * 3.0)
+        tR.shift(RIGHT * 3.0)
 
-        def _route_points(is_left: bool):
-            start = scanner_grp.get_bottom() + UP * 0.05 + (LEFT if is_left else RIGHT) * 0.85
-            mid1 = start + DOWN * 0.85 + (LEFT if is_left else RIGHT) * 0.55
-            target = (left_bin["group"] if is_left else right_bin["group"]).get_top() + DOWN * 0.18
-            mid2 = np.array([mid1[0], target[1] + 0.55, 0])
-            end = np.array([target[0], target[1] + 0.10, 0])
-            return [start, mid1, mid2, end]
+        tVS.scale(0.72)
+        tVS.set_opacity(0.0)
 
-        routeL = always_redraw(
-            lambda: VGroup(
-                VMobject().set_points_as_corners(_route_points(True)).set_stroke(Theme.NEON_BLUE, 2.2, opacity=0.08),
-                VMobject().set_points_as_corners(_route_points(True)).set_stroke(
-                    Theme.NEON_BLUE, 9, opacity=0.16 * routeL_alpha.get_value()
-                ),
-            ).set_z_index(115)
-        )
+        sub.save_state()
+        underline.save_state()
+        dot.save_state()
+        sub.set_opacity(0.0)
+        underline.set_opacity(0.0)
+        dot.set_opacity(0.0)
 
-        routeR = always_redraw(
-            lambda: VGroup(
-                VMobject().set_points_as_corners(_route_points(False)).set_stroke(Theme.NEON_PINK, 2.2, opacity=0.08),
-                VMobject().set_points_as_corners(_route_points(False)).set_stroke(
-                    Theme.NEON_PINK, 9, opacity=0.16 * routeR_alpha.get_value()
-                ),
-            ).set_z_index(115)
-        )
+        evidence["group"].save_state()
+        evidence["group"].set_opacity(0.0)
 
-        # Counters
-        cL = build_border_counter(np.array([sf["left"] + 0.20, sf["cy"] + 0.45, 0]), Theme.NEON_BLUE)
-        cR = build_border_counter(np.array([sf["right"] - 0.20, sf["cy"] + 0.45, 0]), Theme.NEON_PINK)
+        scanner["group"].save_state()
+        scanner["text_group"].save_state()
+        scanner["group"].set_opacity(0.0)
+        scanner["text_group"].set_opacity(0.0)
 
-        # -------------------------
-        # Reason tag (ON TOP BORDER)
-        # -------------------------
-        reason_glow = RoundedRectangle(width=evidence["outer"].width * 0.62, height=0.32, corner_radius=0.14)
-        reason_glow.set_fill(opacity=0)
-        reason_glow.set_stroke(color=Theme.NEON_BLUE, width=14, opacity=0.08).set_z_index(203)
+        left_counter["group"].save_state()
+        right_counter["group"].save_state()
+        left_counter["group"].set_opacity(0.0)
+        right_counter["group"].set_opacity(0.0)
 
-        reason_plate = RoundedRectangle(width=evidence["outer"].width * 0.62, height=0.32, corner_radius=0.14)
-        reason_plate.set_fill(color="#05070B", opacity=0.78)
-        reason_plate.set_stroke(color=Theme.NEON_BLUE, width=2.2, opacity=0.70).set_z_index(204)
-        _apply_sheen(reason_plate, 0.18)
+        left_bin["group"].save_state()
+        right_bin["group"].save_state()
+        left_bin["group"].shift(DOWN * 1.15).set_opacity(0.0)
+        right_bin["group"].shift(DOWN * 1.15).set_opacity(0.0)
 
-        reason_txt = _safe_text("", font="Consolas", font_size=15, color=WHITE, weight=BOLD).set_z_index(205)
+        for ln in [line_ev, line_lc, line_rc, line_lb, line_rb]:
+            ln.save_state()
+            ln.set_opacity(0.0)
 
-        def place_reason_tag():
-            # sits on/just above top border (premium tag)
-            anchor = evidence["outer"].get_top()
-            y = anchor[1] + 0.02
-            x = evidence["outer"].get_center()[0]
-            pos = np.array([x, y, 0])
-            reason_plate.move_to(pos)
-            reason_glow.move_to(pos)
-            reason_txt.move_to(pos + DOWN * 0.005)
+        scan_line = Rectangle(width=float(scanner["radius"]) * 3.4, height=0.10)
+        scan_line.set_fill(scanner["neutral"], 0.14)
+        scan_line.set_stroke(width=0)
+        scan_line.rotate(-18 * DEGREES)
+        scan_line.move_to(scanner_center + UP * (float(scanner["radius"]) * 1.65))
+        try:
+            scan_line.set_z_index(600)
+        except Exception:
+            pass
+        hud_layer.add(scan_line)
+        scan_line.set_opacity(0.0)
 
-        place_reason_tag()
-
-        # -------------------------
-        # Scanner sweep (subtle, alive)
-        # -------------------------
-        sweep = AnnularSector(
-            inner_radius=scanner["radius"] * 0.20,
-            outer_radius=scanner["radius"] * 0.62,
-            angle=22 * DEGREES,
-            start_angle=0,
-        ).set_fill(color=WHITE, opacity=0.045).set_stroke(width=0)
-        sweep.move_to(scanner_center).set_z_index(125)
-
-        # -------------------------
-        # ADD everything INVISIBLE first (no flash)
-        # -------------------------
-        prep_in(title, shift_vec=UP * 0.15)
-        prep_in(sub, shift_vec=UP * 0.10)
-        prep_in(underline, shift_vec=UP * 0.08)
-        ui_layer.add(title, sub, underline)
-
-        prep_in(evidence_grp, shift_vec=UP * 0.12, scale_factor=0.985)
-        prep_in(scanner_grp, scale_factor=0.97)
-        prep_in(scanner_label, shift_vec=UP * 0.06)
-        prep_in(sweep)
-        mid_layer.add(evidence_grp, scanner_grp, beam, routeL, routeR, sweep)
-        ui_layer.add(scanner_label)
-
-        prep_in(reason_glow, shift_vec=UP * 0.05)
-        prep_in(reason_plate, shift_vec=UP * 0.05)
-        prep_in(reason_txt, shift_vec=UP * 0.05)
-        ui_layer.add(reason_glow, reason_plate, reason_txt)
-
-        prep_in(left_bin["group"], shift_vec=DOWN * 0.20, scale_factor=0.988)
-        prep_in(right_bin["group"], shift_vec=DOWN * 0.20, scale_factor=0.988)
-        prep_in(left_bin["label"], shift_vec=DOWN * 0.08)
-        prep_in(right_bin["label"], shift_vec=DOWN * 0.08)
-        containers_layer.add(left_bin["group"], right_bin["group"])
-        ui_layer.add(left_bin["label"], right_bin["label"])
-
-        prep_in(cL["group"], shift_vec=LEFT * 0.28)
-        prep_in(cR["group"], shift_vec=RIGHT * 0.28)
-        ui_layer.add(cL["group"], cR["group"])
-
-        # -------------------------
-        # ENTRANCE ANIMS (premium, not too fast)
-        # -------------------------
         self.play(
-            AnimationGroup(
-                title.animate.set_opacity(1.0).shift(DOWN * 0.15),
-                sub.animate.set_opacity(1.0).shift(DOWN * 0.10),
-                underline.animate.set_opacity(1.0).shift(DOWN * 0.08),
-                lag_ratio=0.12,
+            LaggedStart(
+                AnimationGroup(
+                    tL.animate.move_to(tL_final),
+                    tR.animate.move_to(tR_final),
+                    tVS.animate.set_opacity(1.0).scale(1 / 0.72),
+                    run_time=0.52,
+                    rate_func=rf.ease_out_cubic,
+                ),
+                AnimationGroup(Restore(evidence["group"]), run_time=0.46, rate_func=rf.ease_out_cubic),
+                AnimationGroup(
+                    Restore(scanner["group"]),
+                    Restore(scanner["text_group"]),
+                    FadeIn(scan_line),
+                    scan_line.animate.move_to(scanner_center + DOWN * (float(scanner["radius"]) * 1.65)),
+                    FadeOut(scan_line),
+                    run_time=0.56,
+                    rate_func=rf.ease_in_out_sine,
+                ),
+                AnimationGroup(Restore(sub), run_time=0.22, rate_func=rf.ease_out_cubic),
+                AnimationGroup(Restore(underline), Restore(dot), run_time=0.24, rate_func=rf.ease_out_cubic),
+                AnimationGroup(
+                    Restore(line_ev),
+                    Restore(line_lc),
+                    Restore(line_rc),
+                    Restore(line_lb),
+                    Restore(line_rb),
+                    run_time=0.28,
+                    rate_func=rf.ease_out_cubic,
+                ),
+                AnimationGroup(Restore(left_counter["group"]), Restore(right_counter["group"]), run_time=0.26, rate_func=rf.ease_out_cubic),
+                AnimationGroup(Restore(left_bin["group"]), Restore(right_bin["group"]), run_time=0.42, rate_func=rf.ease_out_cubic),
+                lag_ratio=0.06,
             ),
-            run_time=0.70,
-            rate_func=rf.ease_out_cubic,
+            run_time=1.05,
         )
 
         self.play(
-            AnimationGroup(
-                evidence_grp.animate.set_opacity(1.0).shift(DOWN * 0.12).scale(1 / 0.985),
-                scanner_grp.animate.set_opacity(1.0).scale(1 / 0.97),
-                scanner_label.animate.set_opacity(1.0).shift(DOWN * 0.06),
-                lag_ratio=0.10,
-            ),
-            run_time=0.60,
-            rate_func=rf.ease_out_cubic,
+            MoveAlongPath(dot, Line(underline.get_left(), underline.get_right())),
+            run_time=0.38,
+            rate_func=rf.ease_in_out_sine,
         )
 
-        self.play(
-            AnimationGroup(
-                left_bin["group"].animate.set_opacity(1.0).shift(UP * 0.20).scale(1 / 0.988),
-                right_bin["group"].animate.set_opacity(1.0).shift(UP * 0.20).scale(1 / 0.988),
-                left_bin["label"].animate.set_opacity(1.0).shift(UP * 0.08),
-                right_bin["label"].animate.set_opacity(1.0).shift(UP * 0.08),
-                lag_ratio=0.07,
-            ),
-            run_time=0.58,
-            rate_func=rf.ease_out_cubic,
-        )
+        # Save baseline states for route glow restore
+        line_lc.save_state()
+        line_lb.save_state()
+        line_rc.save_state()
+        line_rb.save_state()
 
-        self.play(
-            AnimationGroup(
-                cL["group"].animate.set_opacity(1.0).shift(RIGHT * 0.28),
-                cR["group"].animate.set_opacity(1.0).shift(LEFT * 0.28),
-                lag_ratio=0.0,
-            ),
-            run_time=0.36,
-            rate_func=rf.ease_out_cubic,
-        )
+        # =====================================================
+        # ALWAYS-ON SCANNER (IMPORTANT)
+        # =====================================================
+        BASE_STRENGTH = 0.72   # stays ON forever (no fade-out)
+        SPIKE_STRENGTH = 1.00  # quick spike during scan-start
+        scanner["scan_strength"].set_value(BASE_STRENGTH)
 
-        # -------------------------
-        # LOOP ITEMS (LOCKED FLOW)
-        # -------------------------
-        entry = np.array([sf["right"] + 1.6, evidence_center[1] + 0.18, 0])
+        # =====================================================
+        # STATE + HELPERS
+        # =====================================================
+        c1, c2 = 0, 0
 
-        scan_phrases = [
-            "scanning evidence…",
-            "validating intent…",
-            "cross-checking logs…",
-            "finalizing verdict…",
-            "matching pattern…",
-        ]
+        def set_log(mobj: Mobject, text: str, color=Theme.TEXT_SUB):
+            new = safe_text(text, font="Consolas", font_size=11, color=color, weight=BOLD).move_to(mobj.get_center())
+            mobj.become(new)
 
-        # base idle label (reused)
-        def make_scanner_label(line: str):
-            g = VGroup(
-                _safe_text("AI TRIBUNAL", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD),
-                _safe_text("SCAN CORE", font_size=18, color=WHITE, weight=BOLD),
-                _safe_text(line, font="Consolas", font_size=11, color=Theme.TEXT_SUB),
-            ).arrange(DOWN, buff=0.06).move_to(scanner_center + DOWN * 0.02).set_z_index(230)
-            if g.width > scanner["radius"] * 1.7:
-                g.scale_to_fit_width(scanner["radius"] * 1.7)
-            return g
-
-        # smooth pulse instead of harsh flash
-        def evidence_pulse(accent: str):
+        def counter_pop(counter: Dict[str, Mobject], value: int, accent: str):
+            old = counter["num"]
+            new = safe_text(str(value), font="Consolas", font_size=34, color=WHITE, weight=BOLD).move_to(old.get_center())
             self.play(
-                evidence["outer"].animate.set_stroke(color=accent, width=3.2, opacity=0.90),
-                run_time=0.10,
+                Transform(old, new),
+                counter["glow"].animate.set_stroke(accent, 18, 0.18),
+                counter["bg"].animate.set_stroke(accent, 2.6, 0.85),
+                run_time=0.18,
                 rate_func=rf.ease_out_cubic,
             )
+            self.play(counter["group"].animate.scale(1.06), run_time=0.10, rate_func=rf.ease_out_cubic)
             self.play(
-                evidence["outer"].animate.set_stroke(color=accent, width=2.6, opacity=0.62),
-                run_time=0.12,
+                counter["group"].animate.scale(1 / 1.06),
+                counter["glow"].animate.set_stroke(accent, 16, 0.10),
+                counter["bg"].animate.set_stroke(accent, 2.2, 0.72),
+                run_time=0.14,
                 rate_func=rf.ease_in_out_sine,
             )
 
+        def repack(bin_ref: Dict[str, Mobject]):
+            items = bin_ref["items"]
+            inner = bin_ref["inner"]
+            n = len(items)
+            if n <= 0:
+                return
+            cols = 3
+            pos = pack_positions(inner, n, cols=cols)
+            target_w = float(inner.width / (cols + 0.70))
+
+            anims = []
+            for i, card in enumerate(items):
+                cw = float(card.width) if float(card.width) > 1e-6 else 1.0
+                factor = max(0.55, min(1.25, target_w / cw))
+                anims.append(card.animate.move_to(pos[i]).scale(factor))
+            self.play(LaggedStart(*anims, lag_ratio=0.03), run_time=0.35, rate_func=rf.ease_out_cubic)
+
+        def glow_route(is_left: bool):
+            if is_left:
+                return [
+                    line_lc.animate.set_stroke(Theme.NEON_BLUE, 3.2, 0.55),
+                    line_lb.animate.set_stroke(Theme.NEON_BLUE, 3.2, 0.55),
+                ]
+            return [
+                line_rc.animate.set_stroke(Theme.NEON_PINK, 3.2, 0.55),
+                line_rb.animate.set_stroke(Theme.NEON_PINK, 3.2, 0.55),
+            ]
+
+        def restore_route(is_left: bool):
+            if is_left:
+                return [Restore(line_lc), Restore(line_lb)]
+            return [Restore(line_rc), Restore(line_rb)]
+
+        # Entry point + holds
+        entry = np.array([W / 2 + 1.8, evidence_center[1] + 0.10, 0])
+        evidence_hold = evidence["inner"].get_center()
+
+        # Short, readable logs only (big logs intentionally avoided)
+        scan_log_pool = [
+            "hashing evidence…",
+            "syncing tribunal cores…",
+            "decrypting vibes…",
+            "checking plot armor…",
+            "running sarcasm check…",
+            "validating inputs…",
+            "mapping to tier grid…",
+            "building verdict packet…",
+            "cross-checking signals…",
+            "verifying consistency…",
+            "indexing proof…",
+            "locking decision path…",
+            "sanity-check complete…",
+            "scanning noise floor…",
+        ]
+
+        def pick_short_log(max_len: int = 34) -> str:
+            # Prefer short logs; ignore long logs.
+            for _ in range(16):
+                s = random.choice(scan_log_pool).strip()
+                s2 = f">> {s}"
+                if len(s2) <= max_len:
+                    return s2
+            # Worst case, ellipsize (still safe)
+            return f">> {ellipsize(random.choice(scan_log_pool).strip(), max_len - 3)}"
+
+        # Timing: fixed 6s from card appear -> card reaches bin top
+        TOTAL_CARD_TIME = 6.0
+
+        # =====================================================
+        # SORT LOOP
+        # =====================================================
         for _, row in df.iterrows():
+            t_card_start = self.renderer.time  # manim internal time
+
             img_name = str(row.get("Image", "")).strip()
             reason = str(row.get("Reason", "UNKNOWN")).strip()
             try:
@@ -800,186 +1004,131 @@ class SortCardTribunalFinal(Scene):
             is_left = (cat == 1)
             accent = Theme.NEON_BLUE if is_left else Theme.NEON_PINK
             bin_ref = left_bin if is_left else right_bin
-            counter_ref = cL if is_left else cR
 
             img_path = os.path.join(ASSETS_DIR, "images", img_name)
+            fallback_label = img_name.split(".")[0] if img_name else "X"
 
-            sprite = build_sprite(img_path, accent=accent)
-            sprite.move_to(entry)
-            sprite.set_opacity(1.0)
-            items_layer.add(sprite)
+            # Create card
+            card = build_card(img_path, accent, fallback_label)
+            card.move_to(entry).rotate(6 * DEGREES)
+            items_layer.add(card)
+            self.play(FadeIn(card, shift=LEFT * 0.35), run_time=0.22, rate_func=rf.ease_out_cubic)
 
-            # fit sprite into evidence
-            fit_mobject_to_box(sprite, evidence["inner"].width * 0.78, evidence["inner"].height * 0.72)
-
-            # accents
-            evidence["outer"].set_stroke(color=accent, opacity=0.62)
-            evidence["glow"].set_stroke(color=accent, opacity=0.09)
-            scanner_set_accent(scanner, accent)
-
-            # update reason tag (top border)
-            text_obj = _safe_text(ellipsize(reason.upper(), 26), font="Consolas", font_size=15, color=WHITE, weight=BOLD)
-            reason_txt.become(text_obj)
-            reason_txt.set_z_index(205)
-
-            # width based on text (clamped)
-            w_cap = evidence["outer"].width * 0.86
-            w_min = evidence["outer"].width * 0.48
-            target_w = max(w_min, min(w_cap, reason_txt.width + 0.55))
-            reason_plate.set_width(target_w)
-            reason_glow.set_width(target_w)
-            place_reason_tag()
-            reason_txt.scale_to_fit_width(reason_plate.width * 0.90)
-            reason_txt.move_to(reason_plate.get_center() + DOWN * 0.005)
-
-            # ENTRY -> EVIDENCE (tiny anticipation + smooth)
-            self.play(sprite.animate.shift(LEFT * 0.10), run_time=0.10, rate_func=rf.ease_out_cubic)
+            # Slide into evidence
             self.play(
-                AnimationGroup(
-                    sprite.animate.move_to(evidence_center),
-                    beam_alpha.animate.set_value(1.0),
-                    reason_glow.animate.set_opacity(1.0),
-                    reason_plate.animate.set_opacity(1.0),
-                    reason_txt.animate.set_opacity(1.0),
-                    lag_ratio=0.0,
-                ),
-                run_time=0.40,
+                card.animate.rotate(-6 * DEGREES).move_to(evidence_hold),
+                run_time=0.45,
                 rate_func=rf.ease_out_cubic,
             )
 
-            # SCAN (alive: rings rotate opposite, sweep subtle)
-            sweep.set_opacity(1.0)
-            for msg in random.sample(scan_phrases, k=3):
-                new_label = make_scanner_label(msg)
-                self.play(
-                    AnimationGroup(
-                        Transform(scanner_label, new_label),
-                        Rotate(scanner["ticks"], angle=TAU * 0.14, about_point=scanner_center),
-                        Rotate(scanner["dash"], angle=-TAU * 0.12, about_point=scanner_center),
-                        Rotate(sweep, angle=TAU * 0.28, about_point=scanner_center),
-                        lag_ratio=0.0,
-                    ),
-                    run_time=0.30,
-                    rate_func=rf.ease_in_out_sine,
-                )
+            # Reason pill
+            pill_w = min(W * 0.72, 5.4)
+            pill_bg = RoundedRectangle(width=pill_w, height=0.74, corner_radius=0.18)
+            pill_bg.set_fill("#05080B", 0.88)
+            pill_bg.set_stroke(accent, 2.3, 0.75)
+            pill_bg.move_to(evidence["outer"].get_top() + UP * 0.62)
 
-            # VERDICT (premium pulse, no harsh flash)
-            verdict = "GO LEFT" if is_left else "GO RIGHT"
-            verdict_label = VGroup(
-                _safe_text("VERDICT", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD),
-                _safe_text(verdict, font_size=22, color=accent, weight=BOLD),
-                _safe_text("route locked", font="Consolas", font_size=11, color=Theme.TEXT_SUB),
-            ).arrange(DOWN, buff=0.06).move_to(scanner_center + DOWN * 0.02).set_z_index(230)
+            pill_t = safe_text("REASON", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD)
+            pill_m = safe_text(ellipsize(reason.upper(), 30), font_size=22, color=accent, weight=BOLD)
+            pill_txt = VGroup(pill_t, pill_m).arrange(DOWN, buff=0.06).move_to(pill_bg.get_center())
+            pill = VGroup(pill_bg, pill_txt)
+            try:
+                pill.set_z_index(620)
+            except Exception:
+                pass
+            ui_layer.add(pill)
+            self.play(DrawBorderThenFill(pill_bg), Write(pill_txt), run_time=0.22, rate_func=rf.ease_out_cubic)
 
-            if verdict_label.width > scanner["radius"] * 1.7:
-                verdict_label.scale_to_fit_width(scanner["radius"] * 1.7)
+            # -----------------------------
+            # SCAN START (scanner never turns off)
+            # -----------------------------
+            set_log(scanner["log1"], pick_short_log(), color=Theme.TEXT_SUB)
 
-            self.play(Transform(scanner_label, verdict_label), run_time=0.22, rate_func=rf.ease_out_cubic)
-            evidence_pulse(accent)
-
-            # ROUTE glow ON + beam OFF
-            self.play(beam_alpha.animate.set_value(0.0), run_time=0.12, rate_func=rf.ease_in_out_sine)
-            if is_left:
-                self.play(routeL_alpha.animate.set_value(1.0), run_time=0.14, rate_func=rf.ease_out_cubic)
-            else:
-                self.play(routeR_alpha.animate.set_value(1.0), run_time=0.14, rate_func=rf.ease_out_cubic)
-
-            # MOVE card EVIDENCE -> BIN (smoother, scale late)
-            start = evidence_center
-            side = scanner_center + (LEFT * 1.75 if is_left else RIGHT * 1.75) + DOWN * 0.55
-            end = (left_bin["mouth"] if is_left else right_bin["mouth"]).get_center() + DOWN * 0.05
-
-            path = VMobject()
-            path.set_points_smoothly([start, side, end])
-            path.set_stroke(width=0, opacity=0)
-
+            ev_to_sc.set_stroke(scanner["neutral"], 3.0, 0.0)
             self.play(
-                AnimationGroup(
-                    MoveAlongPath(sprite, path, rate_func=rf.ease_in_out_cubic),
-                    AnimationGroup(
-                        Wait(0.22),
-                        sprite.animate.scale(0.72),
-                        lag_ratio=0.0,
-                    ),
-                    reason_txt.animate.set_opacity(0.0),
-                    reason_plate.animate.set_opacity(0.0),
-                    reason_glow.animate.set_opacity(0.0),
-                    lag_ratio=0.0,
-                ),
-                run_time=0.58,
-                rate_func=rf.ease_in_out_cubic,
-            )
-
-            # route glow OFF
-            if is_left:
-                self.play(routeL_alpha.animate.set_value(0.0), run_time=0.14, rate_func=rf.ease_in_out_sine)
-            else:
-                self.play(routeR_alpha.animate.set_value(0.0), run_time=0.14, rate_func=rf.ease_in_out_sine)
-
-            sweep.set_opacity(0.0)
-
-            # STORE inside container (grid pack)
-            bin_ref["items"].append(sprite)
-            n = len(bin_ref["items"])
-            positions = pack_positions(bin_ref["inner"], n, cols=3)
-
-            rows = int(math.ceil(n / 3))
-            cell_w = bin_ref["inner"].width / 3
-            cell_h = bin_ref["inner"].height / max(1, rows)
-            max_w = cell_w * 0.78
-            max_h = cell_h * 0.82
-
-            self.play(
-                LaggedStart(*[bin_ref["items"][i].animate.move_to(positions[i]) for i in range(n)], lag_ratio=0.03),
-                run_time=0.26,
+                ev_to_sc.animate.set_opacity(0.65),
+                evidence["glow"].animate.set_stroke(scanner["neutral"], 18, 0.16),
+                scanner["panel_glow"].animate.set_stroke(scanner["neutral"], 12, 0.14),
+                scanner["scan_strength"].animate.set_value(SPIKE_STRENGTH),
+                run_time=0.22,
                 rate_func=rf.ease_out_cubic,
             )
-            for sp in bin_ref["items"]:
-                fit_mobject_to_box(sp, max_w, max_h)
-
-            # confirm pulse (soft)
-            self.play(bin_ref["body"].animate.set_stroke(width=3.4, opacity=0.88), run_time=0.12, rate_func=rf.ease_out_cubic)
-            self.play(bin_ref["body"].animate.set_stroke(width=2.6, opacity=0.62), run_time=0.14, rate_func=rf.ease_in_out_sine)
-
-            # Counter increment
-            counter_ref["value"] += 1
-            new_txt = _safe_text(str(counter_ref["value"]), font="Consolas", font_size=28, color=WHITE, weight=BOLD)
-            new_txt.move_to(counter_ref["txt"].get_center())
-            self.play(Transform(counter_ref["txt"], new_txt), run_time=0.16, rate_func=rf.ease_out_cubic)
-            self.play(counter_ref["outer"].animate.set_stroke(width=3.2, opacity=0.88), run_time=0.10, rate_func=rf.ease_out_cubic)
-            self.play(counter_ref["outer"].animate.set_stroke(width=2.6, opacity=0.62), run_time=0.12, rate_func=rf.ease_in_out_sine)
-
-            # back to idle
-            idle = make_scanner_label("ready")
-            self.play(Transform(scanner_label, idle), run_time=0.18, rate_func=rf.ease_out_cubic)
-
-            # reset evidence neutral
-            evidence["outer"].set_stroke(color=Theme.NEON_BLUE, opacity=0.62)
-            evidence["glow"].set_stroke(color=Theme.NEON_BLUE, opacity=0.07)
-
-        # WINNER HIGHLIGHT
-        left_count = cL["value"]
-        right_count = cR["value"]
-        if left_count != right_count:
-            win_bin = left_bin if left_count > right_count else right_bin
-            win_counter = cL if left_count > right_count else cR
-            win_accent = Theme.NEON_BLUE if left_count > right_count else Theme.NEON_PINK
-
             self.play(
-                AnimationGroup(
-                    win_bin["group"].animate.scale(1.02),
-                    win_bin["body"].animate.set_stroke(color=win_accent, width=3.6, opacity=0.92),
-                    lag_ratio=0.0,
-                ),
-                run_time=0.24,
-                rate_func=rf.ease_out_cubic,
-            )
-            self.play(win_counter["outer"].animate.set_stroke(width=3.4, opacity=0.92), run_time=0.12, rate_func=rf.ease_out_cubic)
-            self.play(win_counter["outer"].animate.set_stroke(width=2.6, opacity=0.62), run_time=0.14, rate_func=rf.ease_in_out_sine)
-            self.play(
-                win_bin["body"].animate.set_stroke(color=win_accent, width=2.6, opacity=0.62),
-                run_time=0.18,
+                scanner["scan_strength"].animate.set_value(BASE_STRENGTH),
+                run_time=0.16,
                 rate_func=rf.ease_in_out_sine,
             )
 
-        self.wait(1.2)
+            # -----------------------------
+            # SCAN DWELL (readable log rotation for ~3.4s)
+            # -----------------------------
+            dwell_total = 3.4
+            hold = 0.95  # readable
+            n_steps = max(1, int(dwell_total / hold))
+
+            for i in range(n_steps):
+                set_log(scanner["log1"], pick_short_log(), color=Theme.TEXT_SUB)
+                # tiny "text refresh" motion (very subtle, no flicker)
+                self.wait(hold)
+
+            # Hide pill (scan continues; no decision flash)
+            self.play(
+                FadeOut(pill, shift=UP * 0.06),
+                run_time=0.16,
+                rate_func=rf.ease_in_cubic,
+            )
+            ui_layer.remove(pill)
+
+            # -----------------------------
+            # ROUTE MOMENT (only lines show destination)
+            # -----------------------------
+            # boost the correct route lines (scanner->counter and counter->bin)
+            self.play(*glow_route(is_left), run_time=0.18, rate_func=rf.ease_out_cubic)
+
+            # optionally update log line to “routing…” (still neutral)
+            set_log(scanner["log1"], ">> routing packet…", color=Theme.TEXT_SUB)
+
+            # Move to container
+            inner = bin_ref["inner"]
+            to_top = inner.get_top() + DOWN * 0.20
+            bend = (evidence_hold + to_top) / 2 + DOWN * 0.60 + (LEFT if is_left else RIGHT) * 0.75
+            path_move = CubicBezier(evidence_hold, bend, bend, to_top).set_stroke(width=0, opacity=0)
+
+            self.play(
+                MoveAlongPath(card, path_move),
+                card.animate.scale(0.80),
+                run_time=1.05,
+                rate_func=rf.ease_in_out_sine,
+            )
+
+            # restore baseline route lines + end scan link
+            self.play(
+                *restore_route(is_left),
+                ev_to_sc.animate.set_opacity(0.0),
+                evidence["glow"].animate.set_stroke(Theme.NEON_BLUE, 16, 0.10),
+                scanner["panel_glow"].animate.set_stroke(scanner["neutral"], 12, 0.08),
+                run_time=0.22,
+                rate_func=rf.ease_in_out_sine,
+            )
+
+            # Place into bin and pack
+            bin_ref["items"].append(card)
+            repack(bin_ref)
+
+            # Counters
+            if is_left:
+                c1 += 1
+                counter_pop(left_counter, c1, Theme.NEON_BLUE)
+            else:
+                c2 += 1
+                counter_pop(right_counter, c2, Theme.NEON_PINK)
+
+            # --- HARD guarantee: keep total time per card approx 6s
+            # If some machines render slightly faster, we pad with wait.
+            t_now = self.renderer.time
+            elapsed = float(t_now - t_card_start)
+            pad = TOTAL_CARD_TIME - elapsed
+            if pad > 0.01:
+                self.wait(pad)
+
+        self.wait(2.0)

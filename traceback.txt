@@ -1,0 +1,28 @@
+Traceback (most recent call last):
+  File "C:\MANIM_VIDEOS_CODE_TEMPALTE\debug_runner.py", line 10, in <module>
+    scene.render()
+  File "c:\MANIM_VIDEOS_CODE_TEMPALTE\.venv\Lib\site-packages\manim\scene\scene.py", line 260, in render
+    self.construct()
+  File "C:\MANIM_VIDEOS_CODE_TEMPALTE\src\templates\Sort_card\sort_card.py", line 235, in construct
+    ev_pack = build_evidence_part1([sf["cx"], sf["top"]-3.2, 0])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\MANIM_VIDEOS_CODE_TEMPALTE\src\templates\Sort_card\sort_card.py", line 207, in build_evidence_part1
+    r_grp = VGroup(Rectangle(3.8, 0.45).set_fill(UI_BG_BASE,1).set_stroke(width=0).move_to(f_grp[1].get_top()),
+                   ^^^^^^^^^^^^^^^^^^^^
+  File "c:\MANIM_VIDEOS_CODE_TEMPALTE\.venv\Lib\site-packages\manim\mobject\geometry\polygram.py", line 632, in __init__
+    super().__init__(UR, UL, DL, DR, color=color, **kwargs)
+  File "c:\MANIM_VIDEOS_CODE_TEMPALTE\.venv\Lib\site-packages\manim\mobject\geometry\polygram.py", line 330, in __init__
+    super().__init__(vertices, **kwargs)
+  File "c:\MANIM_VIDEOS_CODE_TEMPALTE\.venv\Lib\site-packages\manim\mobject\geometry\polygram.py", line 88, in __init__
+    super().__init__(color=color, **kwargs)
+  File "c:\MANIM_VIDEOS_CODE_TEMPALTE\.venv\Lib\site-packages\manim\mobject\types\vectorized_mobject.py", line 159, in __init__
+    super().__init__(**kwargs)
+  File "c:\MANIM_VIDEOS_CODE_TEMPALTE\.venv\Lib\site-packages\manim\mobject\mobject.py", line 115, in __init__
+    self.color = ManimColor.parse(color)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\MANIM_VIDEOS_CODE_TEMPALTE\.venv\Lib\site-packages\manim\utils\color\core.py", line 955, in parse
+    return cls._from_internal(ManimColor(color, alpha)._internal_value)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\MANIM_VIDEOS_CODE_TEMPALTE\.venv\Lib\site-packages\manim\utils\color\core.py", line 220, in __init__
+    raise TypeError(
+TypeError: ManimColor only accepts int, str, list[int, int, int], list[int, int, int, int], list[float, float, float], list[float, float, float, float], not <class 'float'>
