@@ -17,7 +17,6 @@ import sys
 import math
 import random
 import re
-from collections import deque
 from typing import Dict, Tuple, List
 
 import numpy as np
@@ -187,6 +186,88 @@ def get_safe_frame(W: float, H: float, *, m_top=0.90, m_bottom=0.80, m_side=0.62
 
 
 # ============================================================
+# PATCH #6: SMART IMAGE RESOLVER (CSV meta -> assets/images)
+# ============================================================
+def resolve_player_image_path(img_filename: str, *, fallback_index: int = 0) -> str:
+    """
+    Smart resolver for assets/images:
+    - supports png/jpg/jpeg/webp
+    - fixes wrong extensions (player1.png -> player1.jpg)
+    - case-insensitive match
+    - fallback: pick first two images from folder (sorted) for P1/P2
+    """
+    images_dir = os.path.join(ASSETS_DIR, "images")
+    if not os.path.isdir(images_dir):
+        return ""
+
+    def exists(p: str) -> bool:
+        try:
+            return bool(p) and os.path.exists(p)
+        except Exception:
+            return False
+
+    # 1) exact
+    if img_filename:
+        p = os.path.join(images_dir, img_filename)
+        if exists(p):
+            return p
+
+        # 2) same basename + common extensions
+        base, _ext = os.path.splitext(img_filename)
+        common_exts = [".png", ".jpg", ".jpeg", ".webp"]
+        if base:
+            for e in common_exts:
+                p2 = os.path.join(images_dir, base + e)
+                if exists(p2):
+                    return p2
+
+        # 3) case-insensitive exact match
+        low = img_filename.lower()
+        try:
+            for fn in os.listdir(images_dir):
+                if fn.lower() == low:
+                    p3 = os.path.join(images_dir, fn)
+                    if exists(p3):
+                        return p3
+        except Exception:
+            pass
+
+        # 4) fuzzy contains match (basename)
+        lowb = base.lower().strip() if base else ""
+        if lowb:
+            try:
+                for fn in os.listdir(images_dir):
+                    if lowb in fn.lower():
+                        p4 = os.path.join(images_dir, fn)
+                        if exists(p4):
+                            return p4
+            except Exception:
+                pass
+
+    # 5) fallback: first N images (sorted)
+    try:
+        all_files = sorted(os.listdir(images_dir))
+    except Exception:
+        return ""
+
+    valid = []
+    for fn in all_files:
+        low = fn.lower()
+        if low.endswith((".png", ".jpg", ".jpeg", ".webp")):
+            full = os.path.join(images_dir, fn)
+            if exists(full):
+                valid.append(full)
+
+    if not valid:
+        return ""
+
+    idx = int(max(0, fallback_index))
+    if idx >= len(valid):
+        idx = len(valid) - 1
+    return valid[idx]
+
+
+# ============================================================
 # 4) VISUAL BUILDERS (ALL PATCHED)
 # ============================================================
 def build_background(W: float, H: float, c_left: str, c_right: str, c_mid: str) -> Group:
@@ -305,17 +386,6 @@ def build_energy_spine(center: np.ndarray, W: float, c_left: str, c_right: str) 
     return grp
 
 
-def build_connector(a: np.ndarray, b: np.ndarray, color: str, opacity: float = 0.20) -> VGroup:
-    ln = Line(a, b)
-    ln.set_stroke(color=color, width=2, opacity=opacity)
-    glow = ln.copy().set_stroke(color=color, width=10, opacity=max(0.06, opacity * 0.35))
-    d1 = Dot(a, radius=0.03, color=color).set_opacity(min(0.9, opacity + 0.35))
-    d2 = Dot(b, radius=0.03, color=color).set_opacity(min(0.9, opacity + 0.35))
-    grp = VGroup(glow, ln, d1, d2)
-    grp.set_z_index(155)
-    return grp
-
-
 def build_elbow_connector(a: np.ndarray, b: np.ndarray, color: str, opacity: float = 0.20, lock_x: float | None = None) -> VGroup:
     """
     PATCH #1: Use elbow connectors to avoid ugly diagonals.
@@ -346,6 +416,9 @@ def build_elbow_connector(a: np.ndarray, b: np.ndarray, color: str, opacity: flo
     return grp
 
 
+# ============================================================
+# PATCH #6 APPLIED HERE: create_player_card (smart image + safe fit)
+# ============================================================
 def create_player_card(
     name: str,
     accent: str,
@@ -353,18 +426,26 @@ def create_player_card(
     center: np.ndarray,
     frame_w: float,
     frame_h: float,
+    *,
+    fallback_index: int = 0,  # NEW (P1=0, P2=1)
 ) -> Dict[str, Mobject]:
     bg = RoundedRectangle(width=frame_w, height=frame_h, corner_radius=0.18).set_fill("#050505", 0.94).set_stroke(width=0)
     bg.move_to(center)
 
-    img_path = os.path.join(ASSETS_DIR, "images", img_filename)
-    if img_filename and os.path.exists(img_path):
+    img_path = resolve_player_image_path(img_filename, fallback_index=fallback_index)
+
+    if img_path and os.path.exists(img_path):
         portrait = ImageMobject(img_path)
-        portrait.scale_to_fit_width(frame_w - 0.18)
-        if portrait.height > (frame_h - 0.18):
-            portrait.scale_to_fit_height(frame_h - 0.18)
+
+        inner_w = frame_w - 0.18
+        inner_h = frame_h - 0.18
+
+        portrait.scale_to_fit_width(inner_w)
+        if portrait.height > inner_h:
+            portrait.scale_to_fit_height(inner_h)
     else:
         portrait = safe_text((name[:1] or "?").upper(), font_size=96, color=accent, weight=BOLD)
+
     portrait.move_to(bg.get_center())
 
     frame = RoundedRectangle(width=frame_w, height=frame_h, corner_radius=0.18).set_fill(opacity=0)
@@ -385,7 +466,6 @@ def create_player_card(
     plate.move_to(bg.get_bottom() + UP * 0.42)
     label = safe_text(name.upper(), font_size=22, color=accent, weight=BOLD).move_to(plate.get_center())
 
-    # PATCH #3 (counter feels empty): add tiny "PTS" tag inside badge
     badge = Circle(radius=0.30).set_fill("#0F0F0F", 1.0).set_stroke(WHITE, 2.0, 0.93)
     badge.move_to(bg.get_top() + DOWN * 0.16)
     score = safe_text("0", font="Consolas", font_size=22, color=WHITE, weight=BOLD).move_to(badge.get_center())
@@ -408,6 +488,7 @@ def create_player_card(
         "bg": bg,
         "plate": plate,
         "label": label,
+        "portrait": portrait,
     }
 
 
@@ -427,9 +508,6 @@ def build_value_box(center: np.ndarray, accent: str) -> Dict[str, Mobject]:
 
 
 def build_announcement_box(center: np.ndarray, width: float, c_left: str, c_right: str) -> Dict[str, Mobject]:
-    """
-    PATCH #1: Metrics box centered, strong border (no dull/fika).
-    """
     outer = RoundedRectangle(width=width, height=1.30, corner_radius=0.24)
     outer.set_fill("#070A0C", 0.92)
     outer.set_stroke(color=[c_left, c_right], width=3.4, opacity=0.95)
@@ -437,9 +515,21 @@ def build_announcement_box(center: np.ndarray, width: float, c_left: str, c_righ
 
     glow = outer.copy().set_fill(opacity=0).set_stroke(color=[c_left, c_right], width=26, opacity=0.22)
 
-    top_line = safe_text("ROUND 1/1   |   CATEGORY: —", font="Consolas", font_size=14, color=getattr(Theme, "TEXT_SUB", "#B8B8B8"), weight=BOLD)
+    top_line = safe_text(
+        "ROUND 1/1   |   CATEGORY: —",
+        font="Consolas",
+        font_size=14,
+        color=getattr(Theme, "TEXT_SUB", "#B8B8B8"),
+        weight=BOLD,
+    )
     main_line = safe_text("🔥 METRIC", font="Montserrat", font_size=36, color=WHITE, weight=BOLD)
-    sub_line = safe_text("Weight: 1.0", font="Consolas", font_size=14, color=getattr(Theme, "TEXT_SUB", "#B8B8B8"), weight=BOLD)
+    sub_line = safe_text(
+        "Weight: 1.0",
+        font="Consolas",
+        font_size=14,
+        color=getattr(Theme, "TEXT_SUB", "#B8B8B8"),
+        weight=BOLD,
+    )
 
     text = VGroup(top_line, main_line, sub_line).arrange(DOWN, buff=0.08)
     text.move_to(outer.get_center() + DOWN * 0.02)
@@ -450,11 +540,6 @@ def build_announcement_box(center: np.ndarray, width: float, c_left: str, c_righ
 
 
 def build_decision_terminal(center: np.ndarray, w: float, h: float, accent: str, sub: str) -> Dict[str, Mobject]:
-    """
-    PATCH #2: Terminal-style decision box
-    - moved under main frame (below values area) and above notes
-    - text ALWAYS visible (default = scanning)
-    """
     plate = RoundedRectangle(width=w, height=h, corner_radius=0.18)
     plate.set_fill("#06090B", 0.96)
     plate.set_stroke(accent, 3.0, 0.96)
@@ -472,7 +557,6 @@ def build_decision_terminal(center: np.ndarray, w: float, h: float, accent: str,
     head_txt = safe_text("DECISION TERMINAL", font="Consolas", font_size=12, color=sub, weight=BOLD)
     head_txt.move_to(head.get_center() + LEFT * (w * 0.12))
 
-    # body lines
     line1 = safe_text("AI TRIBUNAL SCANNING", font="Consolas", font_size=18, color=WHITE, weight=BOLD)
     line2 = safe_text("log: awaiting input...", font="Consolas", font_size=14, color=sub, weight=BOLD)
     line3 = safe_text("status: online", font="Consolas", font_size=14, color=sub, weight=BOLD)
@@ -482,7 +566,6 @@ def build_decision_terminal(center: np.ndarray, w: float, h: float, accent: str,
     body.move_to(plate.get_center() + DOWN * 0.08)
     body.align_to(plate.get_left() + RIGHT * pad_x, LEFT)
 
-    # subtle scanline
     scan = Rectangle(width=w - 0.18, height=0.05).set_fill(accent, 0.10).set_stroke(width=0)
     scan.move_to(plate.get_bottom() + UP * 0.25)
 
@@ -519,9 +602,6 @@ def build_decision_terminal(center: np.ndarray, w: float, h: float, accent: str,
 
 
 def build_scoreboard(center: np.ndarray, w: float, c_left: str, c_right: str, p1_name: str, p2_name: str) -> Dict[str, Mobject]:
-    """
-    PATCH #3: Scoreboard less empty (adds tiny label + separators) + stronger glow.
-    """
     bar = RoundedRectangle(width=w, height=0.84, corner_radius=0.30)
     bar.set_fill("#070A0C", 0.94)
     bar.set_stroke(color=[c_left, c_right], width=3.0, opacity=0.92)
@@ -536,7 +616,6 @@ def build_scoreboard(center: np.ndarray, w: float, c_left: str, c_right: str, p1
     right_name = safe_text(p2_name.upper(), font_size=20, color=c_right, weight=BOLD)
     score_txt = safe_text("0  —  0", font="Consolas", font_size=26, color=WHITE, weight=BOLD)
 
-    # separators
     sep1 = Line(UP * 0.22, DOWN * 0.22).set_stroke(WHITE, 2, 0.18)
     sep2 = sep1.copy()
     row = VGroup(left_name, sep1, score_txt, sep2, right_name).arrange(RIGHT, buff=0.22)
@@ -548,55 +627,56 @@ def build_scoreboard(center: np.ndarray, w: float, c_left: str, c_right: str, p1
     return {"group": grp, "bar": bar, "glow": glow, "left": left_name, "right": right_name, "score": score_txt, "row": row, "label": label}
 
 
+# ============================================================
+# PATCH #2: LIVE COMMENTARY -> SINGLE LINE SYSTEM STATUS TICKER
+# ============================================================
 def build_notes_console(center: np.ndarray, w: float, c_accent: str, c_sub: str, c_high: str) -> Dict[str, Mobject]:
     """
-    PATCH #3:
-    - LIVE COMMENTARY with better color, slightly bigger, and better infix (">" style)
-    - stronger glow/opacity
+    PATCH #2:
+    - LIVE COMMENTARY -> SINGLE LINE SYSTEM STATUS ticker
+    - no decision duplication (decision already inside terminal)
+    - blinking caret terminal feel
     """
-    chip = RoundedRectangle(width=w, height=0.96, corner_radius=0.18)
+    chip = RoundedRectangle(width=w, height=0.62, corner_radius=0.18)
     chip.set_fill("#0B0B0B", 0.94)
-    chip.set_stroke(c_accent, 2.6, 0.70)
+    chip.set_stroke(c_accent, 2.4, 0.60)
     chip.move_to(center)
 
-    glow = chip.copy().set_fill(opacity=0).set_stroke(c_accent, 18, 0.16)
+    glow = chip.copy().set_fill(opacity=0).set_stroke(c_accent, 18, 0.14)
 
-    head = safe_text("LIVE COMMENTARY", font="Consolas", font_size=12, color=c_sub, weight=BOLD)
-    head.move_to(chip.get_top() + DOWN * 0.24)
-    head.align_to(chip.get_left() + RIGHT * 0.22, LEFT)
+    head = safe_text("SYSTEM STATUS", font="Consolas", font_size=12, color=c_sub, weight=BOLD)
+    head.move_to(chip.get_top() + DOWN * 0.20)
+    head.align_to(chip.get_left() + RIGHT * 0.20, LEFT)
 
-    # prefix + colored text
-    p1 = safe_text("> ", font="Consolas", font_size=15, color=c_high, weight=BOLD)
-    p2 = p1.copy()
-    p3 = p1.copy()
+    line = safe_text("• system: initializing | backend: online", font="Consolas", font_size=16, color=WHITE, weight=BOLD)
+    if line.width > (chip.width - 0.65):
+        line.scale_to_fit_width(chip.width - 0.65)
+    line.move_to(chip.get_center() + DOWN * 0.08)
+    line.align_to(chip.get_left() + RIGHT * 0.20, LEFT)
 
-    l1 = safe_text("system: ready", font="Consolas", font_size=15, color=c_sub, weight=BOLD)
-    l2 = safe_text("waiting for round", font="Consolas", font_size=15, color=c_sub, weight=BOLD)
-    l3 = safe_text("—", font="Consolas", font_size=15, color=c_sub, weight=BOLD)
+    caret = safe_text("▍", font="Consolas", font_size=18, color=c_accent, weight=BOLD)
+    caret.next_to(line, RIGHT, buff=0.10)
 
-    r1 = VGroup(p1, l1).arrange(RIGHT, buff=0.06, aligned_edge=DOWN)
-    r2 = VGroup(p2, l2).arrange(RIGHT, buff=0.06, aligned_edge=DOWN)
-    r3 = VGroup(p3, l3).arrange(RIGHT, buff=0.06, aligned_edge=DOWN)
+    t = ValueTracker(0.0)
 
-    lines = VGroup(r1, r2, r3).arrange(DOWN, buff=0.07, aligned_edge=LEFT)
-    lines.move_to(chip.get_center() + DOWN * 0.10)
-    lines.align_to(chip.get_left() + RIGHT * 0.22, LEFT)
+    def caret_blink(mob, dt):
+        t.increment_value(dt)
+        v = float(t.get_value())
+        mob.set_opacity(0.25 + 0.75 * (0.5 + 0.5 * math.sin(v * 6.0)))
 
-    grp = VGroup(glow, chip, head, lines)
+    caret.add_updater(caret_blink)
+
+    grp = VGroup(glow, chip, head, line, caret)
     grp.set_z_index(305)
-    return {"group": grp, "chip": chip, "glow": glow, "head": head, "lines": lines}
+    return {"group": grp, "chip": chip, "glow": glow, "head": head, "line": line, "caret": caret}
 
 
 def build_title_scanner_line(center_y: float, width: float, c_left: str, c_right: str) -> VGroup:
-    """
-    PATCH #4: Under-title moving line (like sort_card).
-    """
     base = Line(LEFT * width / 2, RIGHT * width / 2).set_stroke(WHITE, 2, 0.18)
     base.move_to([0.0, center_y, 0.0])
 
     glow = base.copy().set_stroke(color=[c_left, c_right], width=12, opacity=0.10)
 
-    # moving bright segment
     seg = Line(LEFT * 0.55, RIGHT * 0.55).set_stroke(color=[c_left, c_right], width=3.2, opacity=0.85)
     seg.move_to(base.get_left())
 
@@ -608,7 +688,6 @@ def build_title_scanner_line(center_y: float, width: float, c_left: str, c_right
     def mover(_m, dt):
         t.increment_value(dt)
         v = float(t.get_value())
-        # 0..1 pingpong
         u = 0.5 + 0.5 * math.sin(v * 1.4)
         x = base.get_left()[0] + u * (base.get_right()[0] - base.get_left()[0])
         seg.move_to([x, base.get_center()[1], 0.0])
@@ -649,7 +728,7 @@ class VsCardFinal(Scene):
         C_MAIN = getattr(Theme, "TEXT_MAIN", "#FFFFFF")
         C_SUB = getattr(Theme, "TEXT_SUB", "#B8B8B8")
         C_GOLD = "#FFD700"
-        C_HI = "#7CFFB8"  # commentary highlight
+        C_HI = "#7CFFB8"
 
         # Data
         csv_path = os.path.join(DATA_DIR, "vs_data.csv")
@@ -673,22 +752,23 @@ class VsCardFinal(Scene):
 
         # ----------------------------------------------------------------
         # SAFE LAYOUT (PATCH #1 + #4)
+        # PATCH #1: hud_y will be computed dynamically AFTER subtitle exists
         # ----------------------------------------------------------------
-        # title moved slightly down from top (as requested)
-        top_y = sf["top"] - 0.35
-        hud_y = top_y - 1.05  # metrics box row (centered)
+        # top_y = sf["top"] - 0.35  ## OLD ONE
+        TITLE_DROP = 0.05  # 5%
+        top_y = sf["top"] - (0.35 + sf["height"] * TITLE_DROP)
         cards_y = 0.10
         values_y = -2.05
         score_y = sf["bottom"] + 0.48
-        notes_y = score_y + 0.92  # lifted up (PATCH #3)
-        decision_y = notes_y + 1.30  # PATCH #2: decision terminal above notes, under main frame area
+        notes_y = score_y + 0.92
+        decision_y = notes_y + 1.30
 
         # Cards
         X_OFF = 2.15
         card_w, card_h = 2.70, 3.70
 
         # ----------------------------------------------------------------
-        # HEADER (PATCH #4: VS always visible + moving line under title)
+        # HEADER (VS always visible + moving line under title)
         # ----------------------------------------------------------------
         parts = re.split(r"\s+vs\s+", title_raw, flags=re.IGNORECASE)
         left_title = parts[0].strip() if len(parts) == 2 else p1_name
@@ -702,10 +782,11 @@ class VsCardFinal(Scene):
         vs_grp = VGroup(vs_box, vs_txt)
         vs_grp.set_z_index(341)
 
-        header = VGroup(tL, vs_grp, tR).arrange(RIGHT, buff=0.33).move_to([0, top_y, 0])
+        # header = VGroup(tL, vs_grp, tR).arrange(RIGHT, buff=0.33).move_to([0, top_y, 0])  ## OLD ONE
+        TITLE_GAP = 0.18  # smaller = closer
+        header = VGroup(tL, vs_grp, tR).arrange(RIGHT, buff=TITLE_GAP).move_to([0, top_y, 0])
         header.set_z_index(340)
 
-        # subtle pulse only on vs diamond (not scaling whole header)
         pulse = ValueTracker(0.0)
 
         def vs_pulse(_m, dt):
@@ -716,27 +797,61 @@ class VsCardFinal(Scene):
 
         vs_box.add_updater(vs_pulse)
 
+        # sub = safe_text(sub_raw, font="Consolas", font_size=14, color=C_SUB, weight=BOLD)   ## OLD ONE
+        # sub.next_to(header, DOWN, buff=0.08).set_opacity(0.90)
+        # sub.set_z_index(340)
+        #
+        # scan_line = build_title_scanner_line(
+        #     center_y=sub.get_bottom()[1] - 0.18,
+        #     width=min(sf["width"] * 0.70, 6.4),
+        #     c_left=C_P1,
+        #     c_right=C_P2,
+        # )
+        #
+        # ui_layer.add(header, sub, scan_line)
+
+        # Subtitle banate hain but position baad me set karenge
         sub = safe_text(sub_raw, font="Consolas", font_size=14, color=C_SUB, weight=BOLD)
-        sub.next_to(header, DOWN, buff=0.08).set_opacity(0.90)
+        sub.set_opacity(0.90)
         sub.set_z_index(340)
 
-        scan_line = build_title_scanner_line(center_y=sub.get_bottom()[1] - 0.18, width=min(sf["width"] * 0.70, 6.4), c_left=C_P1, c_right=C_P2)
+        # LINE: title ke niche (subtitle abhi line ke baad)
+        scan_line_y = header.get_bottom()[1] - 0.22
+        scan_line = build_title_scanner_line(
+            center_y=scan_line_y,
+            width=min(sf["width"] * 0.70, 6.4),
+            c_left=C_P1,
+            c_right=C_P2,
+        )
 
-        ui_layer.add(header, sub, scan_line)
+        # Subtitle line ke niche
+        SUB_GAP = 0.10
+        sub.next_to(scan_line, DOWN, buff=SUB_GAP)
+
+        ui_layer.add(header, scan_line, sub)
 
         # ----------------------------------------------------------------
-        # METRICS / ANNOUNCEMENT (PATCH #1: centered + strong border)
+        # PATCH #1: Metrics box position dynamic (subtitle ke niche)
+        # ----------------------------------------------------------------
+        # hud_y = sub.get_bottom()[1] - 0.62  ## OLD ONE
+
+        # PATCH: Metrics box subtitle ke niche controlled distance pe
+        METRICS_GAP = 0.05  # 5%
+        hud_y = sub.get_bottom()[1] - (sf["height"] * METRICS_GAP) - 0.30
+
+        # ----------------------------------------------------------------
+        # METRICS / ANNOUNCEMENT
         # ----------------------------------------------------------------
         ann_w = clamp(min(sf["width"] * 0.92, 6.6), 5.0, 6.6)
         ann = build_announcement_box(center=np.array([0.0, hud_y, 0]), width=ann_w, c_left=C_P1, c_right=C_P2)
         ui_layer.add(ann["group"])
 
         # ----------------------------------------------------------------
-        # DECISION TERMINAL (PATCH #2: moved bottom, above notes; text visible)
+        # DECISION TERMINAL
         # ----------------------------------------------------------------
         term_w, term_h = clamp(min(sf["width"] * 0.92, 6.2), 5.2, 6.2), 1.30
         terminal = build_decision_terminal(np.array([0.0, decision_y, 0]), term_w, term_h, C_GOLD, C_SUB)
-        terminal["group"].set_opacity(1.0)  # ALWAYS visible (fix invisible text issue)
+        terminal["group"].set_opacity(1.0)
         ui_layer.add(terminal["group"])
 
         # ----------------------------------------------------------------
@@ -746,29 +861,41 @@ class VsCardFinal(Scene):
         spine = build_energy_spine(spine_center, W, C_P1, C_P2)
         fx_layer.add(spine)
 
-        p1 = create_player_card(p1_name, C_P1, p1_img, np.array([-X_OFF, cards_y, 0]), card_w, card_h)
-        p2 = create_player_card(p2_name, C_P2, p2_img, np.array([+X_OFF, cards_y, 0]), card_w, card_h)
+        p1 = create_player_card(p1_name, C_P1, p1_img, np.array([-X_OFF, cards_y, 0]), card_w, card_h, fallback_index=0)
+        p2 = create_player_card(p2_name, C_P2, p2_img, np.array([+X_OFF, cards_y, 0]), card_w, card_h, fallback_index=1)
         ui_layer.add(p1["group"], p2["group"])
 
         v1 = build_value_box(np.array([-X_OFF, values_y, 0]), C_P1)
         v2 = build_value_box(np.array([+X_OFF, values_y, 0]), C_P2)
         ui_layer.add(v1["group"], v2["group"])
 
-        scoreboard = build_scoreboard(np.array([0.0, score_y, 0]), w=min(sf["width"], 6.6), c_left=C_P1, c_right=C_P2, p1_name=p1_name, p2_name=p2_name)
+        scoreboard = build_scoreboard(
+            np.array([0.0, score_y, 0]),
+            w=min(sf["width"], 6.6),
+            c_left=C_P1,
+            c_right=C_P2,
+            p1_name=p1_name,
+            p2_name=p2_name,
+        )
         ui_layer.add(scoreboard["group"])
 
-        notes = build_notes_console(np.array([0.0, notes_y, 0]), w=min(sf["width"], 6.2), c_accent=C_GOLD, c_sub=C_SUB, c_high=C_HI)
+        notes = build_notes_console(
+            np.array([0.0, notes_y, 0]),
+            w=min(sf["width"], 6.2),
+            c_accent=C_GOLD,
+            c_sub=C_SUB,
+            c_high=C_HI,
+        )
         ui_layer.add(notes["group"])
 
         # ----------------------------------------------------------------
-        # CONNECTORS (PATCH #1: straight/clean, no diagonals; fade-safe via trackers)
+        # CONNECTORS (straight/clean)
         # ----------------------------------------------------------------
         conn_alpha = ValueTracker(1.0)
 
         def a_val() -> float:
             return float(conn_alpha.get_value())
 
-        # Straight feel: lock_x=0 forces the vertical backbone look
         conn_ann_spine = always_redraw(
             lambda: build_elbow_connector(
                 ann["outer"].get_bottom() + DOWN * 0.05,
@@ -829,64 +956,153 @@ class VsCardFinal(Scene):
         # ----------------------------------------------------------------
         # ENTRANCE
         # ----------------------------------------------------------------
-        # start visible (avoid "dead" feeling)
-        for mob in [ann["group"], p1["group"], p2["group"], v1["group"], v2["group"], scoreboard["group"], notes["group"], terminal["group"]]:
-            mob.set_opacity(1.0)
+        # ----------------------------------------------------------------
+        # ENTRANCE (PATCH: no flash + everything enters on-screen)
+        # ----------------------------------------------------------------
+
+        # 1) HARD FIX: intro खत्म होते ही UI "already visible" नहीं होना चाहिए
+        # => सबको पहले hidden कर दो (same frame), ताकि flash-glitch ना हो
+        # IMPORTANT: header ko hide mat karo, warna VS gayab hoga (parent opacity kills children)
+        for mob in [
+            sub, scan_line,
+            ann["group"],
+            p1["group"], p2["group"],
+            v1["group"], v2["group"],
+            terminal["group"],
+            notes["group"],
+            scoreboard["group"],
+        ]:
+            mob.set_opacity(0.0)
+
+        # Title ke parts ko individually hide karo (safe)
+        tL.set_opacity(0.0)
+        tR.set_opacity(0.0)
+        vs_grp.set_opacity(0.0)
+
+        # (optional) header opacity force 1 to avoid future issues
+        header.set_opacity(1.0)
+
+        # Spine + connectors भी hidden from start
+        spine.set_opacity(0.0)
+        conn_alpha.set_value(0.0)
+
+        # 2) Prep: slide offsets (so we can animate back to exact position)
+        # Title parts (works with your current code: tL, tR, vs_grp)
+        try:
+            tL.shift(LEFT * 0.55)
+            tR.shift(RIGHT * 0.55)
+        except Exception:
+            pass
+
+        # VS group exists in your current code (diamond+text)
+        try:
+            vs_grp.shift(UP * 0.28)
+        except Exception:
+            pass
+
+        # Line + subtitle slight offset
+        scan_line.shift(DOWN * 0.10)
+        sub.shift(DOWN * 0.12)
+
+        # Metrics + cards + bottom blocks offsets
+        ann["group"].shift(UP * 0.22)
+        p1["group"].shift(LEFT * 0.55)
+        p2["group"].shift(RIGHT * 0.55)
+
+        v1["group"].shift(DOWN * 0.18)
+        v2["group"].shift(DOWN * 0.18)
+        terminal["group"].shift(DOWN * 0.14)
+        notes["group"].shift(DOWN * 0.14)
+        scoreboard["group"].shift(DOWN * 0.14)
+
+        # 3) TITLE entrance: names slide in, VS comes from top
+        anims = []
+        try:
+            anims += [
+                tL.animate.shift(RIGHT * 0.55).set_opacity(1.0),
+                tR.animate.shift(LEFT * 0.55).set_opacity(1.0),
+                vs_grp.animate.shift(DOWN * 0.28).set_opacity(1.0),
+            ]
+        except Exception:
+            # fallback if title variables differ
+            anims += [header.animate.set_opacity(1.0)]
 
         self.play(
-            FadeIn(header, shift=DOWN * 0.12),
-            FadeIn(sub, shift=DOWN * 0.10),
-            FadeIn(scan_line, shift=DOWN * 0.06),
-            run_time=0.45,
+            *anims,
+            run_time=0.60,
             rate_func=rf.ease_out_cubic,
         )
 
+        # 4) line first (under title), then subtitle
+        self.play(
+            scan_line.animate.shift(UP * 0.10).set_opacity(1.0),
+            run_time=0.28,
+            rate_func=rf.ease_out_cubic,
+        )
+        self.play(
+            sub.animate.shift(UP * 0.12).set_opacity(0.90),
+            run_time=0.26,
+            rate_func=rf.ease_out_cubic,
+        )
+
+        # 5) Metrics box: top → settle
+        self.play(
+            ann["group"].animate.shift(DOWN * 0.22).set_opacity(1.0),
+            run_time=0.42,
+            rate_func=rf.ease_out_cubic,
+        )
+
+        # 6) Spine + connectors build
+        self.play(
+            spine.animate.set_opacity(1.0),
+            conn_alpha.animate.set_value(1.0),
+            run_time=0.38,
+            rate_func=rf.ease_out_cubic,
+        )
+
+        # 7) Cards slide in (main frame)
+        self.play(
+            p1["group"].animate.shift(RIGHT * 0.55).set_opacity(1.0),
+            p2["group"].animate.shift(LEFT * 0.55).set_opacity(1.0),
+            run_time=0.60,
+            rate_func=rf.ease_out_cubic,
+        )
+
+        # 8) Bottom stack stagger (values + terminal + notes + scoreboard)
         self.play(
             LaggedStart(
-                FadeIn(ann["group"], shift=DOWN * 0.10),
-                FadeIn(p1["group"], shift=RIGHT * 0.12),
-                FadeIn(p2["group"], shift=LEFT * 0.12),
-                FadeIn(v1["group"], shift=UP * 0.10),
-                FadeIn(v2["group"], shift=UP * 0.10),
-                FadeIn(scoreboard["group"], shift=UP * 0.08),
-                FadeIn(notes["group"], shift=UP * 0.08),
-                FadeIn(terminal["group"], shift=UP * 0.06),
-                lag_ratio=0.06,
+                v1["group"].animate.shift(UP * 0.18).set_opacity(1.0),
+                v2["group"].animate.shift(UP * 0.18).set_opacity(1.0),
+                terminal["group"].animate.shift(UP * 0.14).set_opacity(1.0),
+                notes["group"].animate.shift(UP * 0.14).set_opacity(1.0),
+                scoreboard["group"].animate.shift(UP * 0.14).set_opacity(1.0),
+                lag_ratio=0.10,
             ),
-            run_time=0.95,
+            run_time=0.75,
             rate_func=rf.ease_out_cubic,
         )
 
         # ----------------------------------------------------------------
-        # LIVE COMMENTARY ENGINE (PATCH #3)
+        # PATCH #2: SYSTEM STATUS TICKER (1-line)
         # ----------------------------------------------------------------
-        log = deque(["system: fight begin", "awaiting round 1", "—"], maxlen=3)
-
-        def rebuild_log(lines: List[str]) -> VGroup:
-            # keep the same structure ( > + text ), with 2-tone color
-            rows = VGroup()
-            for s in lines:
-                pref = safe_text("> ", font="Consolas", font_size=15, color=C_HI, weight=BOLD)
-                txt = safe_text(s, font="Consolas", font_size=15, color=C_SUB, weight=BOLD)
-                row = VGroup(pref, txt).arrange(RIGHT, buff=0.06, aligned_edge=DOWN)
-                rows.add(row)
-            rows.arrange(DOWN, buff=0.07, aligned_edge=LEFT)
-            rows.move_to(notes["lines"].get_center())
-            rows.align_to(notes["chip"].get_left() + RIGHT * 0.22, LEFT)
-            return rows
-
-        def push_log(msg: str):
+        def set_status(msg: str, *, color=WHITE):
             msg = (msg or "").strip()
             if not msg:
-                return
-            log.appendleft(msg)
-            while len(log) < 3:
-                log.append("—")
-            new_lines = rebuild_log(list(log))
-            self.play(Transform(notes["lines"], new_lines), run_time=0.22, rate_func=rf.ease_out_cubic)
+                msg = "system: ok | backend: online"
+
+            new_line = safe_text(f"• {msg}", font="Consolas", font_size=16, color=color, weight=BOLD)
+            if new_line.width > (notes["chip"].width - 0.65):
+                new_line.scale_to_fit_width(notes["chip"].width - 0.65)
+
+            new_line.move_to(notes["line"].get_center())
+            new_line.align_to(notes["chip"].get_left() + RIGHT * 0.20, LEFT)
+
+            self.play(Transform(notes["line"], new_line), run_time=0.20, rate_func=rf.ease_out_cubic)
+
+        set_status("system boot: ready | backend: online | awaiting round 1", color=C_SUB)
 
         # ----------------------------------------------------------------
-        # ROUND LOOP (terminal decision + premium glow)
+        # ROUND LOOP
         # ----------------------------------------------------------------
         n_rounds = max(1, len(df))
         p1_pts = 0.0
@@ -911,7 +1127,6 @@ class VsCardFinal(Scene):
             new2 = safe_text(l2, font="Consolas", font_size=14, color=C_SUB, weight=BOLD)
             new3 = safe_text(l3, font="Consolas", font_size=14, color=C_SUB, weight=BOLD)
 
-            # position like original body
             new1.move_to(terminal["line1"].get_center()).align_to(terminal["plate"].get_left() + RIGHT * pad_x, LEFT)
             new2.move_to(terminal["line2"].get_center()).align_to(terminal["plate"].get_left() + RIGHT * pad_x, LEFT)
             new3.move_to(terminal["line3"].get_center()).align_to(terminal["plate"].get_left() + RIGHT * pad_x, LEFT)
@@ -946,11 +1161,9 @@ class VsCardFinal(Scene):
             p2_val = str(row.get("P2_Value", "")).strip()
             winner = int(row.get("Winner", 0))
             emoji = str(row.get("Emoji", "")).strip()
-            notes_txt = str(row.get("Notes", "")).strip()
             category = str(row.get("Category", "")).strip().upper()
             weight = float(row.get("Weight", 1.0))
 
-            # Announcement update
             top_line = f"ROUND {i+1}/{n_rounds}   |   CATEGORY: {category or '—'}"
             main_line = f"{(emoji + ' ') if emoji else ''}{ellipsize(metric, 24)}"
             sub_line = f"Weight: {weight:.1f}"
@@ -981,11 +1194,8 @@ class VsCardFinal(Scene):
             )
             self.play(ann["glow"].animate.set_stroke(opacity=0.22), run_time=0.16, rate_func=rf.ease_in_out_sine)
 
-            # commentary
-            if notes_txt:
-                push_log(f"round {i+1}: {ellipsize(notes_txt, 46)}")
-            else:
-                push_log(f"round {i+1}: metric locked")
+            # PATCH #2: status (backend/system feel)
+            set_status(f"scanning: r{i+1}/{n_rounds} | stream: stable | parsing metric…", color=C_SUB)
 
             # decision
             if winner in (1, 2):
@@ -1008,15 +1218,26 @@ class VsCardFinal(Scene):
                     f"metric: {ellipsize(metric, 22)}",
                     C_WIN,
                 )
-                push_log(f"decision: +{fmt_pts(add_pts)} to {win_name.lower()}")
+
+                # PATCH #4: round-winner highlight (premium but minimal)
+                WIN_SCALE = 1.08
+                LOSE_SCALE = 0.96
 
                 self.play(
-                    win_obj["group"].animate.scale(1.10),
-                    win_obj["glow"].animate.set_stroke(C_WIN, 26, 0.26),
-                    win_obj["frame"].animate.set_stroke(C_WIN, 3.4, 0.97),
-                    lose_obj["group"].animate.scale(0.92).set_opacity(0.28),
-                    run_time=0.36,
-                    rate_func=rf.ease_out_back,
+                    win_obj["group"].animate.scale(WIN_SCALE),
+                    win_obj["glow"].animate.set_stroke(C_WIN, 26, 0.28),
+                    win_obj["frame"].animate.set_stroke(C_WIN, 3.6, 0.98),
+                    win_obj["corners"].animate.set_stroke(C_WIN, 5.8, 0.98),
+                    lose_obj["group"].animate.scale(LOSE_SCALE).set_opacity(0.72),
+                    lose_obj["glow"].animate.set_stroke(lose_obj["accent"], 20, 0.14),
+                    lose_obj["frame"].animate.set_stroke(lose_obj["accent"], 2.8, 0.75),
+                    run_time=0.34,
+                    rate_func=rf.ease_out_cubic,
+                )
+                self.play(
+                    Flash(win_obj["frame"], color=C_WIN, line_length=0.35, num_lines=10),
+                    run_time=0.18,
+                    rate_func=rf.ease_out_cubic,
                 )
 
                 update_score_text()
@@ -1028,14 +1249,21 @@ class VsCardFinal(Scene):
                 )
                 self.play(scoreboard["glow"].animate.set_stroke(opacity=0.20), run_time=0.16, rate_func=rf.ease_in_out_sine)
 
+                # PATCH #2: status after decision
+                set_status("decision committed | backend: ok | preparing next round…", color=C_SUB)
+
                 self.wait(ROUND_HOLD)
 
+                # PATCH #4: reset to neutral (still alive, not dull)
                 self.play(
-                    win_obj["group"].animate.scale(1 / 1.10),
-                    win_obj["glow"].animate.set_stroke(win_obj["accent"], 22, 0.22),
-                    win_obj["frame"].animate.set_stroke(win_obj["accent"], 2.9, 0.93),
-                    lose_obj["group"].animate.scale(1 / 0.92).set_opacity(1.0),
-                    run_time=0.28,
+                    win_obj["group"].animate.scale(1 / WIN_SCALE),
+                    win_obj["glow"].animate.set_stroke(win_obj["accent"], 20, 0.20),
+                    win_obj["frame"].animate.set_stroke(win_obj["accent"], 2.8, 0.90),
+                    win_obj["corners"].animate.set_stroke(win_obj["accent"], 5.2, 0.95),
+                    lose_obj["group"].animate.scale(1 / LOSE_SCALE).set_opacity(1.0),
+                    lose_obj["glow"].animate.set_stroke(lose_obj["accent"], 20, 0.20),
+                    lose_obj["frame"].animate.set_stroke(lose_obj["accent"], 2.8, 0.90),
+                    run_time=0.26,
                     rate_func=rf.ease_in_out_sine,
                 )
 
@@ -1048,7 +1276,6 @@ class VsCardFinal(Scene):
                     f"metric: {ellipsize(metric, 22)}",
                     C_GOLD,
                 )
-                push_log("decision: draw")
 
                 self.play(
                     p1["glow"].animate.set_stroke(C_P1, 22, 0.24),
@@ -1064,10 +1291,13 @@ class VsCardFinal(Scene):
                     rate_func=rf.ease_in_out_sine,
                 )
 
+                # PATCH #2: status after draw
+                set_status("draw confirmed | backend: ok | preparing next round…", color=C_SUB)
+
                 terminal_scanning()
 
         # ----------------------------------------------------------------
-        # OUTRO (PATCH #5: winner logic clean, no movement, text at loser slot)
+        # OUTRO (PATCH #5: loser truly gone + winner scale + no floating VS)
         # ----------------------------------------------------------------
         final = 0
         if p1_pts > p2_pts:
@@ -1075,8 +1305,17 @@ class VsCardFinal(Scene):
         elif p2_pts > p1_pts:
             final = 2
 
+        # stop VS updater so diamond never floats/rotates later
+        try:
+            vs_box.clear_updaters()
+        except Exception:
+            pass
+        try:
+            vs_grp.clear_updaters()
+        except Exception:
+            pass
+
         if final == 0:
-            # Fade everything except background
             self.play(
                 header.animate.set_opacity(0.0),
                 sub.animate.set_opacity(0.0),
@@ -1105,10 +1344,9 @@ class VsCardFinal(Scene):
         win = p1 if final == 1 else p2
         lose = p2 if final == 1 else p1
         win_color = win["accent"]
-
         loser_slot = lose["bg"].get_center()
 
-        # 1) vanish EVERYTHING except winner card (no movement)
+        # fade UI fast
         self.play(
             header.animate.set_opacity(0.0),
             sub.animate.set_opacity(0.0),
@@ -1119,39 +1357,42 @@ class VsCardFinal(Scene):
             terminal["group"].animate.set_opacity(0.0),
             notes["group"].animate.set_opacity(0.0),
             scoreboard["group"].animate.set_opacity(0.0),
-            lose["group"].animate.set_opacity(0.0),
-            run_time=0.55,
+            run_time=0.45,
             rate_func=rf.ease_in_out_sine,
         )
 
-        # 2) connectors + spine gone (fade-safe)
-        self.play(conn_alpha.animate.set_value(0.0), spine.animate.set_opacity(0.0), run_time=0.35, rate_func=rf.ease_in_out_sine)
+        # connectors/spine: fade + HARD remove (always_redraw safety)
+        self.play(conn_alpha.animate.set_value(0.0), spine.animate.set_opacity(0.0), run_time=0.30, rate_func=rf.ease_in_out_sine)
+        self.remove(conn_ann_spine, conn_spine_p1, conn_spine_p2, conn_p1_val, conn_p2_val, conn_term_notes, spine)
 
-        # 3) winner power (scale only; NO move)
+        # PATCH #3/#5: loser MUST disappear (FadeOut + remove)
         self.play(
-            win["group"].animate.scale(1.12),
-            win["frame"].animate.set_stroke(C_WIN, 3.8, 0.99),
-            win["glow"].animate.set_stroke(C_WIN, 28, 0.28),
-            run_time=0.70,
-            rate_func=rf.ease_out_back,
+            FadeOut(lose["group"], scale=0.92),
+            run_time=0.45,
+            rate_func=rf.ease_in_out_sine,
+        )
+        self.remove(lose["group"])
+
+        # winner scale only (no move)
+        self.play(
+            win["group"].animate.scale(1.16),
+            win["frame"].animate.set_stroke(C_WIN, 3.8, 0.98),
+            win["glow"].animate.set_stroke(C_WIN, 26, 0.26),
+            run_time=0.60,
+            rate_func=rf.ease_out_cubic,
         )
 
-        # 4) winner text appears at loser slot (clean, engaging)
-        power1 = safe_text("YOUR WINNER", font="Montserrat", font_size=30, color=WHITE, weight=BOLD)
-        power2 = safe_text(win["name"].upper(), font="Montserrat", font_size=56, color=win_color, weight=BOLD)
-        power3 = safe_text("verdict: confirmed", font="Consolas", font_size=16, color=GREY_B, weight=BOLD)
-        power = VGroup(power1, power2, power3).arrange(DOWN, buff=0.12)
+        power1 = safe_text("WINNER CONFIRMED", font="Consolas", font_size=18, color=C_SUB, weight=BOLD)
+        power2 = safe_text("YOUR WINNER", font="Montserrat", font_size=30, color=WHITE, weight=BOLD)
+        power3 = safe_text(win["name"].upper(), font="Montserrat", font_size=56, color=win_color, weight=BOLD)
+
+        power = VGroup(power1, power2, power3).arrange(DOWN, buff=0.10)
         power.move_to(loser_slot)
-        power.set_z_index(380)
+        power.set_z_index(390)
 
-        # glow behind name
-        name_glow = power2.copy().set_stroke(win_color, 10, 0.0).set_fill(opacity=1.0)
-        name_glow.set_opacity(0.0)
-
-        self.add(power)
-        self.play(Write(power1), run_time=0.40, rate_func=rf.ease_out_cubic)
-        self.play(Write(power2), run_time=0.55, rate_func=rf.ease_out_cubic)
-        self.play(FadeIn(power3, shift=UP * 0.06), run_time=0.25, rate_func=rf.ease_out_cubic)
-        self.play(Flash(power2, color=win_color, line_length=0.65, num_lines=14), run_time=0.35)
+        self.play(FadeIn(power1, shift=UP * 0.08), run_time=0.25, rate_func=rf.ease_out_cubic)
+        self.play(Write(power2), run_time=0.40, rate_func=rf.ease_out_cubic)
+        self.play(Write(power3), run_time=0.55, rate_func=rf.ease_out_cubic)
+        self.play(Flash(power3, color=win_color, line_length=0.70, num_lines=14), run_time=0.35)
 
         self.wait(2.0)

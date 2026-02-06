@@ -1,7 +1,9 @@
-# bar_chart/bar_chart.py  (FINAL - V2 BASE + VALUE GUTTER FIX + NO FEATURE LOSS)
+# bar_chart/bar_chart.py  (FINAL - V2 BASE + VALUE GUTTER FIX + CSV DATA LOAD + META SUPPORT)
+# NOTE: Only changes added = CSV loader + meta-driven title/sub/max/sort/top_n. बाकी सब same.
 
 import sys
 import os
+import re
 import numpy as np
 import random
 import pandas as pd
@@ -15,7 +17,7 @@ sys.path.append(project_root)
 
 # --- IMPORTS (Robust) ---
 try:
-    from src.config import Theme, BACKGROUND_COLOR
+    from src.config import Theme, BACKGROUND_COLOR, DATA_DIR  # ✅ PATCH: DATA_DIR used for csv path
     from src.utils import (
         IntroManager,
         get_safe_frame,
@@ -26,6 +28,7 @@ try:
     )
 except Exception:
     BACKGROUND_COLOR = "#050505"
+    DATA_DIR = os.path.join(project_root, "data")  # ✅ PATCH: fallback DATA_DIR
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -83,6 +86,79 @@ except Exception:
         return VGroup()
 
 
+# ============================================================
+# ✅ PATCH: CSV loader with optional META line
+# Meta line format:
+#   # TITLE=MARKET LEADERS, SUB=Tech leaders comparison, MAX=100, SORT=DESC, TOP_N=10
+# Then header row:
+#   Name,Value
+# ============================================================
+_META_RE = re.compile(r"([A-Za-z_]+)\s*=\s*([^,]+)")
+
+
+def load_ai_stats_csv(csv_path: str):
+    meta = {}
+
+    if not os.path.exists(csv_path):
+        # fallback (old demo)
+        names = ["Nvidia", "Microsoft", "Apple", "Google", "Amazon"]
+        values = [95, 88, 82, 76, 70]
+        return meta, names, values, 100.0
+
+    with open(csv_path, "r", encoding="utf-8-sig") as f:
+        first = (f.readline() or "").strip()
+
+    skip_first = False
+    if first.startswith("#"):
+        skip_first = True
+        meta_line = first[1:].strip()
+        for m in _META_RE.finditer(meta_line):
+            meta[m.group(1).strip().upper()] = m.group(2).strip()
+
+    df = pd.read_csv(csv_path, encoding="utf-8-sig", skiprows=1 if skip_first else 0)
+    df.columns = [str(c).strip().replace("\ufeff", "") for c in df.columns]
+
+    # Accept Name or Label (both)
+    name_col = "Name" if "Name" in df.columns else ("Label" if "Label" in df.columns else None)
+    if name_col is None or "Value" not in df.columns:
+        raise ValueError(f"ai_stats.csv must have columns: Name(or Label), Value. Found: {df.columns.tolist()}")
+
+    df[name_col] = df[name_col].astype(str).fillna("").str.strip()
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce").fillna(0.0)
+
+    df = df[df[name_col] != ""].copy()
+
+    # sorting (default DESC)
+    sort_mode = (meta.get("SORT", "DESC") or "DESC").strip().upper()
+    if sort_mode == "ASC":
+        df = df.sort_values("Value", ascending=True)
+    elif sort_mode == "NONE":
+        pass
+    else:
+        df = df.sort_values("Value", ascending=False)
+
+    # TOP_N
+    try:
+        top_n = int(float(meta.get("TOP_N", "0")))
+    except Exception:
+        top_n = 0
+    if top_n and top_n > 0:
+        df = df.head(top_n)
+
+    names = df[name_col].tolist()
+    values = df["Value"].astype(float).tolist()
+
+    # MAX scale
+    try:
+        max_val = float(meta.get("MAX", "100"))
+        if max_val <= 0:
+            max_val = 100.0
+    except Exception:
+        max_val = 100.0
+
+    return meta, names, values, max_val
+
+
 class BarChartTemplate(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
@@ -136,10 +212,39 @@ class BarChartTemplate(Scene):
             pass
 
         # ============================================================
-        # 4) HEADER (safe)
+        # ✅ 4) DATA (CSV LOAD - SMART, NO HARDCODE)
         # ============================================================
+        csv_path = os.path.join(DATA_DIR, "ai_stats.csv")
+        meta, names, values, max_val = load_ai_stats_csv(csv_path)
+
+        # Safety if empty
+        if not names:
+            names = ["Nvidia", "Microsoft", "Apple", "Google", "Amazon"]
+            values = [95, 88, 82, 76, 70]
+            max_val = 100.0
+
+        # Normalize types
+        values = [float(v) for v in values]
+        max_val = float(max_val)
+
+        # Optional: enforce sort safety (only if SORT != NONE)
+        sort_mode = (meta.get("SORT", "DESC") or "DESC").strip().upper()
+        if sort_mode != "NONE":
+            reverse = (sort_mode != "ASC")
+            rows = sorted(list(zip(names, values)), key=lambda x: float(x[1]), reverse=reverse)
+            names = [r[0] for r in rows]
+            values = [float(r[1]) for r in rows]
+
+        num_items = len(names)
+
+        # ============================================================
+        # ✅ 5) HEADER (SMART: title/sub from CSV meta)
+        # ============================================================
+        title_text = (meta.get("TITLE", "MARKET LEADERS") or "MARKET LEADERS").strip()
+        sub_text = (meta.get("SUB", "Tech leaders comparison") or "Tech leaders comparison").strip()
+
         title = Text(
-            "MARKET LEADERS",
+            title_text,
             font="Montserrat",
             weight=BOLD,
             font_size=52,
@@ -163,7 +268,7 @@ class BarChartTemplate(Scene):
         scanner_dot.add_updater(_scan)
 
         subtitle = Text(
-            "Tech leaders comparison",
+            sub_text,
             font="Montserrat",
             font_size=22,
             color=Theme.TEXT_SUB,
@@ -176,20 +281,6 @@ class BarChartTemplate(Scene):
             FadeIn(scanner_dot, run_time=0.3),
             FadeIn(subtitle, shift=UP * 0.2, run_time=0.8),
         )
-
-        # ============================================================
-        # 5) DATA (CSV ready later; for now same demo set)
-        # ============================================================
-        names = ["Nvidia", "Microsoft", "Apple", "Google", "Amazon"]
-        values = [95, 88, 82, 76, 70]
-        max_val = 100
-
-        # sort safety (so it works even if user provides random order)
-        rows = sorted(list(zip(names, values)), key=lambda x: x[1], reverse=True)
-        names = [r[0] for r in rows]
-        values = [r[1] for r in rows]
-
-        num_items = len(names)
 
         # ============================================================
         # 6) LAYOUT (SAFE)
@@ -210,7 +301,6 @@ class BarChartTemplate(Scene):
         # -----------------------------
         # ✅ FIX: Reserve a VALUE GUTTER
         # -----------------------------
-        # This ensures right-side numbers NEVER overlap bars.
         VALUE_GUTTER_W = 0.95  # reserved column width
         BAR_RIGHT_LIMIT = sf["right"] - VALUE_GUTTER_W
         BAR_MAX_WIDTH = BAR_RIGHT_LIMIT - BAR_START_X
@@ -278,7 +368,10 @@ class BarChartTemplate(Scene):
 
         for i, (name, value) in enumerate(zip(names, values)):
             y_pos = START_Y - (i * GAP_Y)
-            target_width = (value / max_val) * BAR_MAX_WIDTH
+
+            # smart width relative to max_val from CSV meta
+            denom = max(1e-6, float(max_val))
+            target_width = (float(value) / denom) * BAR_MAX_WIDTH
 
             # Branch from rail to rank circle
             branch = Line([RAIL_X, y_pos, 0], [RANK_X - 0.18, y_pos, 0])
@@ -387,10 +480,9 @@ class BarChartTemplate(Scene):
 
             def update_single_bar(_):
                 t = tracker.get_value()
-                val_num.set_value(t * value)
+                val_num.set_value(t * float(value))
 
                 # keep value in a dedicated gutter column
-                # adjust x for changing digit width
                 x = VALUE_ANCHOR_X - (val_num.width / 2)
                 x = clamp_x(x, val_num.width, 0.70)
                 val_num.move_to([x, y_pos, 0])
@@ -469,6 +561,9 @@ class BarChartTemplate(Scene):
         # ============================================================
         self.wait(0.4)
 
+        winner_index = int(np.argmax(values)) if values else 0
+        winner_index = int(np.clip(winner_index, 0, max(0, len(bar_groups) - 1)))
+
         winner = bar_groups[winner_index]
         others = [g for j, g in enumerate(bar_groups) if j != winner_index]
 
@@ -485,12 +580,12 @@ class BarChartTemplate(Scene):
         banner.move_to([sf["cx"], sf["bottom"] + (banner_h / 2) + 0.35, 0])
         banner.set_z_index(200)
 
-        win_name = names[winner_index].upper()
-        win_val = values[winner_index]
+        win_name = str(names[winner_index]).upper()
+        win_val = float(values[winner_index])
 
         t1 = Text("TOP LEADER", font="Montserrat", weight=BOLD, font_size=22, color=Theme.TEXT_SUB)
         t2 = Text(win_name, font="Montserrat", weight=BOLD, font_size=46, color=Theme.TEXT_MAIN)
-        t3 = Text(f"SCORE: {win_val}", font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
+        t3 = Text(f"SCORE: {int(round(win_val)) if abs(win_val-round(win_val))<1e-9 else win_val}", font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
 
         txt = VGroup(t1, t2, t3).arrange(DOWN, buff=0.12).move_to(banner)
         txt.set_z_index(201)
@@ -505,20 +600,20 @@ class BarChartTemplate(Scene):
             winner_val.animate.set_color(WHITE),
             Indicate(winner_label, color=WHITE, scale_factor=1.02),
             run_time=0.45,
-            rate_func=rf.ease_out_back
+            rate_func=rf.ease_out_back,
         )
 
         self.play(
             GrowFromCenter(banner),
             FadeIn(txt, shift=UP * 0.2),
             run_time=0.6,
-            rate_func=rf.ease_out_cubic
+            rate_func=rf.ease_out_cubic,
         )
 
         self.play(
             Flash(banner.get_top(), color=WHITE, line_length=0.6, num_lines=10),
             Flash(winner_bar.get_right(), color=Theme.NEON_BLUE, line_length=0.6, num_lines=8),
-            run_time=0.35
+            run_time=0.35,
         )
 
         self.wait(2.2)
