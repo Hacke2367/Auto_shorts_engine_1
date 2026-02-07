@@ -234,7 +234,7 @@ class PanelOnlyPreview(Scene):
         self.camera.background_color = BACKGROUND_COLOR
         sf = get_safe_frame(margin=0.70)
 
-        # Dummy data (panel shows TOP4 + OTHERS automatically)
+        # Dummy geo_data (panel shows TOP4 + OTHERS automatically)
         items = [
             ("Apple", 35, "#00F0FF"),
             ("Samsung", 25, "#BD00FF"),

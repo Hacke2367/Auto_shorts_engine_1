@@ -365,8 +365,8 @@ class ButterflyChart(Scene):
         # 2) DATA
         # ==========================================
         csv_candidates = [
-            os.path.join(project_root, "Data", "butterfly_data.csv"),
-            os.path.join(current_dir, "Data", "butterfly_data.csv"),
+            os.path.join(project_root, "geo_data", "butterfly_data.csv"),
+            os.path.join(current_dir, "geo_data", "butterfly_data.csv"),
             os.path.join(current_dir, "butterfly_data.csv"),
             os.path.join(project_root, "butterfly_data.csv"),
             "butterfly_data.csv",

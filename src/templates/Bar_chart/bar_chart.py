@@ -157,7 +157,7 @@ class BarChartTemplate(Scene):
         job = load_job(default={"template_id": "bar_chart", "timeline": {}})
         timeline_dict = job.get("timeline", {}) if isinstance(job.get("timeline", {}), dict) else {}
 
-        # Data path override (job.json can provide)
+        # geo_data path override (job.json can provide)
         csv_path = job.get("data_csv") or os.path.join(DATA_DIR, "ai_stats.csv")
         meta, names, values, max_val = load_ai_stats_csv(csv_path)
 

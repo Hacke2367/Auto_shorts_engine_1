@@ -7,7 +7,7 @@ Goal: run ONE job folder end-to-end (manual test, no agents yet)
 What it does:
 1) Reads jobs/<job_id>/job.json
 2) Sets JOB_JSON_PATH env var (so Manim templates can read the job)
-3) Ensures data CSV is available at src.config.DATA_DIR as ai_stats.csv (for bar_chart)
+3) Ensures geo_data CSV is available at src.config.DATA_DIR as ai_stats.csv (for bar_chart)
 4) Renders Manim scene
 5) (Optional) If audio segments exist, concatenates + muxes into final mp4
 
@@ -59,7 +59,7 @@ def _find_latest_mp4(root: Path) -> Path:
 
 def _copy_csv_for_bar_chart(job_dir: Path, job: Dict, repo_root: Path) -> None:
     """
-    Current bar_chart.py expects ai_stats.csv at src.config.DATA_DIR (usually <repo>/data/ai_stats.csv).
+    Current bar_chart.py expects ai_stats.csv at src.config.DATA_DIR (usually <repo>/geo_data/ai_stats.csv).
     If your bar_chart.py already reads job.json for data_csv, you can remove this later.
     """
     try:
@@ -72,7 +72,7 @@ def _copy_csv_for_bar_chart(job_dir: Path, job: Dict, repo_root: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
 
     # Prefer job.json data_csv if provided
-    data_csv = job.get("data_csv") or job.get("data", {}).get("csv")
+    data_csv = job.get("data_csv") or job.get("jobs/data", {}).get("csv")
     if not data_csv:
         print("[WARN] job.json has no data_csv. Skipping CSV copy.")
         return

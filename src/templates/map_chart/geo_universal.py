@@ -13,7 +13,7 @@ sys.path.append(project_root)
 
 from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme
 from src.utils import IntroManager, get_safe_frame, make_floating_particles
-from src.data.map_coords import COORDINATES
+from src.geo_data.map_coords import COORDINATES
 
 # ===========================
 # MAP CALIBRATION

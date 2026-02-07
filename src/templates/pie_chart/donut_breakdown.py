@@ -965,7 +965,7 @@
 #             except Exception:
 #                 pass
 #
-#         # Data
+#         # geo_data
 #         csv_path = os.path.join(DATA_DIR, "market_share.csv")
 #         meta, names, raw_vals, csv_colors, groups = read_market_csv(csv_path)
 #
@@ -1019,7 +1019,7 @@
 #         commentary = make_commentary(center, inner_r, "SCAN", "MARKET", "…", getattr(Theme, "NEON_BLUE", "#2DD4FF"))
 #         self.add(commentary)
 #
-#         # Edge case: no data
+#         # Edge case: no geo_data
 #         if not names or not raw_vals:
 #             self.play(Write(title), run_time=0.45, rate_func=rf.ease_out_cubic)
 #             self.play(Create(underline), run_time=0.30, rate_func=rf.ease_out_cubic)
@@ -2391,7 +2391,7 @@ class DonutBreakdownFinal(Scene):
             except Exception:
                 pass
 
-        # Data
+        # geo_data
         csv_path = os.path.join(DATA_DIR, "market_share.csv")
         meta, names, raw_vals, csv_colors, groups = read_market_csv(csv_path)
 
@@ -2447,7 +2447,7 @@ class DonutBreakdownFinal(Scene):
         commentary = make_commentary(center, inner_r, "SCAN", "MARKET", "…", getattr(Theme, "NEON_BLUE", "#2DD4FF"))
         self.add(commentary)
 
-        # Edge case: no data
+        # Edge case: no geo_data
         if not names or not raw_vals:
             self.play(Write(title), run_time=0.45, rate_func=rf.ease_out_cubic)
             self.play(Create(underline), run_time=0.30, rate_func=rf.ease_out_cubic)

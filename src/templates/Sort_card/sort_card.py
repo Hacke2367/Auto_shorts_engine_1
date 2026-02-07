@@ -35,7 +35,7 @@ try:
     from src.utils import IntroManager, get_branding_border  # type: ignore
 except Exception:
     project_root = os.getcwd()
-    DATA_DIR = os.path.join(project_root, "data")
+    DATA_DIR = os.path.join(project_root, "geo_data")
     ASSETS_DIR = os.path.join(project_root, "assets")
     BACKGROUND_COLOR = "#050505"
 
@@ -720,7 +720,7 @@ class SortCardTribunalFinal(Scene):
         except Exception:
             pass
 
-        # Data
+        # geo_data
         csv_path = os.path.join(DATA_DIR, "sort_data.csv")
         meta, df = load_csv_with_meta(csv_path)
 

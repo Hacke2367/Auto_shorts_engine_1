@@ -27,7 +27,7 @@
 #         get_rotating_watermark,
 #     )
 # except Exception:
-#     DATA_DIR = "./Data"
+#     DATA_DIR = "./geo_data"
 #     BACKGROUND_COLOR = "#050505"
 #
 #     class Theme:
@@ -174,7 +174,7 @@
 #             df.columns = df.columns.str.strip()
 #         else:
 #             years = np.arange(2000, 2025)
-#             data = {
+#             geo_data = {
 #                 "Year": years,
 #                 "USA": np.linspace(10, 26, 25),
 #                 "China": np.linspace(2, 24, 25) * 1.15,
@@ -184,7 +184,7 @@
 #                 "UK": np.linspace(1.5, 3.8, 25),
 #                 "France": np.linspace(1.4, 3.5, 25),
 #             }
-#             df = pd.DataFrame(data)
+#             df = pd.DataFrame(geo_data)
 #
 #         years = df.iloc[:, 0].values.astype(float)
 #         labels = df.columns[1:]
@@ -737,7 +737,7 @@ try:
         get_rotating_watermark,
     )
 except Exception:
-    DATA_DIR = "./Data"
+    DATA_DIR = "./geo_data"
     BACKGROUND_COLOR = "#050505"
 
     class Theme:
@@ -902,8 +902,8 @@ def _resolve_race_meta(meta: Dict[str, str]) -> RaceMeta:
 def _find_race_csv() -> Optional[str]:
     candidates = [
         os.path.join(DATA_DIR, "race_data.csv"),
-        os.path.join(project_root, "Data", "race_data.csv"),
-        os.path.join(current_dir, "Data", "race_data.csv"),
+        os.path.join(project_root, "geo_data", "race_data.csv"),
+        os.path.join(current_dir, "geo_data", "race_data.csv"),
         os.path.join(current_dir, "race_data.csv"),
         os.path.join(project_root, "race_data.csv"),
         "race_data.csv",
@@ -1019,7 +1019,7 @@ class CinematicLineRace(Scene):
         self.current_ranks = {c: 99 for c in labels}
 
         def interp_value(c: str, t: float) -> float:
-            # ✅ freeze-safe: handle 1-row data
+            # ✅ freeze-safe: handle 1-row geo_data
             if len(years) < 2:
                 return float(series[c][0]) if len(series[c]) else 0.0
             idx = int(np.searchsorted(years, t) - 1)

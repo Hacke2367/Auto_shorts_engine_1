@@ -31,7 +31,7 @@ config.background_color = BACKGROUND_COLOR
 class Theme:
     # --- CORE BRANDING (Spy/Hacker Theme) ---
     BACKGROUND = "#050505"  # Deepest Dark (Not Pitch Black)
-    BRAND_CYAN = "#00F0FF"  # Primary Brand Color (Data)
+    BRAND_CYAN = "#00F0FF"  # Primary Brand Color (geo_data)
     BRAND_RED = "#FF0055"  # Secondary Brand Color (Alert/REC)
     BRAND_WHITE = "#FFFFFF"
 

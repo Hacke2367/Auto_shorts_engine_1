@@ -37,7 +37,7 @@ try:
     # IntroManager attaches border/overlay/watermark
 except Exception:
     project_root = os.getcwd()
-    DATA_DIR = os.path.join(project_root, "data")
+    DATA_DIR = os.path.join(project_root, "geo_data")
     ASSETS_DIR = os.path.join(project_root, "assets")
     BACKGROUND_COLOR = "#050505"
 
@@ -730,7 +730,7 @@ class VsCardFinal(Scene):
         C_GOLD = "#FFD700"
         C_HI = "#7CFFB8"
 
-        # Data
+        # geo_data
         csv_path = os.path.join(DATA_DIR, "vs_data.csv")
         meta, df = load_vs_csv(csv_path)
 
