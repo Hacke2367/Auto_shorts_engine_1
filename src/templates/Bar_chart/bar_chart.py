@@ -1,11 +1,11 @@
-# bar_chart/bar_chart.py  (FINAL - V2 BASE + VALUE GUTTER FIX + CSV DATA LOAD + META SUPPORT)
-# NOTE: Only changes added = CSV loader + meta-driven title/sub/max/sort/top_n. बाकी सब same.
+# bar_chart/bar_chart.py  (FINAL + AUDIO-SYNC READY)
+# - job.json timeline (Option A) supported
+# - main reveal fast; leftover time -> alive holds (no boring freezes)
 
 import sys
 import os
 import re
 import numpy as np
-import random
 import pandas as pd
 from manim import *
 from manim import rate_functions as rf
@@ -17,7 +17,7 @@ sys.path.append(project_root)
 
 # --- IMPORTS (Robust) ---
 try:
-    from src.config import Theme, BACKGROUND_COLOR, DATA_DIR  # ✅ PATCH: DATA_DIR used for csv path
+    from src.config import Theme, BACKGROUND_COLOR, DATA_DIR
     from src.utils import (
         IntroManager,
         get_safe_frame,
@@ -28,7 +28,7 @@ try:
     )
 except Exception:
     BACKGROUND_COLOR = "#050505"
-    DATA_DIR = os.path.join(project_root, "data")  # ✅ PATCH: fallback DATA_DIR
+    DATA_DIR = os.path.join(project_root, "data")
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -38,15 +38,8 @@ except Exception:
         TEXT_MAIN = "#FFFFFF"
         TEXT_SUB = "#B8B8B8"
         AXIS_COLOR = "#00F0FF"
-        C_CONTAINER_FILL = "#050505"
-        C_CONTAINER_STROKE = "#004488"
         C_BAR_GRADIENT = ["#0033CC", "#0088FF", "#00FFFF"]
-        C_DOT_CORE = "#FFFFFF"
-        C_DOT_GLOW = "#00FFFF"
-        C_LINE_CORE = "#FFFFFF"
-        C_LINE_GLOW = "#00FFFF"
 
-    # minimal safe-frame fallbacks
     config.frame_height = 16.0
     config.frame_width = 9.0
 
@@ -85,22 +78,20 @@ except Exception:
     def make_floating_particles(*args, **kwargs):
         return VGroup()
 
+# --- SYNC HELPERS (new) ---
+from src.sync.job import load_job
+from src.sync.timeline import Timeline, clamp
+from src.sync.retention import hold_breathing, banner_scan_hold
 
 # ============================================================
-# ✅ PATCH: CSV loader with optional META line
-# Meta line format:
-#   # TITLE=MARKET LEADERS, SUB=Tech leaders comparison, MAX=100, SORT=DESC, TOP_N=10
-# Then header row:
-#   Name,Value
+# CSV loader with optional META line
 # ============================================================
 _META_RE = re.compile(r"([A-Za-z_]+)\s*=\s*([^,]+)")
-
 
 def load_ai_stats_csv(csv_path: str):
     meta = {}
 
     if not os.path.exists(csv_path):
-        # fallback (old demo)
         names = ["Nvidia", "Microsoft", "Apple", "Google", "Amazon"]
         values = [95, 88, 82, 76, 70]
         return meta, names, values, 100.0
@@ -118,17 +109,14 @@ def load_ai_stats_csv(csv_path: str):
     df = pd.read_csv(csv_path, encoding="utf-8-sig", skiprows=1 if skip_first else 0)
     df.columns = [str(c).strip().replace("\ufeff", "") for c in df.columns]
 
-    # Accept Name or Label (both)
     name_col = "Name" if "Name" in df.columns else ("Label" if "Label" in df.columns else None)
     if name_col is None or "Value" not in df.columns:
         raise ValueError(f"ai_stats.csv must have columns: Name(or Label), Value. Found: {df.columns.tolist()}")
 
     df[name_col] = df[name_col].astype(str).fillna("").str.strip()
     df["Value"] = pd.to_numeric(df["Value"], errors="coerce").fillna(0.0)
-
     df = df[df[name_col] != ""].copy()
 
-    # sorting (default DESC)
     sort_mode = (meta.get("SORT", "DESC") or "DESC").strip().upper()
     if sort_mode == "ASC":
         df = df.sort_values("Value", ascending=True)
@@ -137,7 +125,6 @@ def load_ai_stats_csv(csv_path: str):
     else:
         df = df.sort_values("Value", ascending=False)
 
-    # TOP_N
     try:
         top_n = int(float(meta.get("TOP_N", "0")))
     except Exception:
@@ -148,7 +135,6 @@ def load_ai_stats_csv(csv_path: str):
     names = df[name_col].tolist()
     values = df["Value"].astype(float).tolist()
 
-    # MAX scale
     try:
         max_val = float(meta.get("MAX", "100"))
         if max_val <= 0:
@@ -164,13 +150,49 @@ class BarChartTemplate(Scene):
         self.camera.background_color = BACKGROUND_COLOR
 
         # ============================================================
-        # 1) INTRO (adds border + overlay + timer + watermark via utils)
+        # ✅ 0) JOB + TIMELINE (Option A)
+        # job.json -> timeline dict:
+        # { "hook":2.6, "setup":1.3, "item_1":2.0, ..., "winner":3.4, "outro":1.2 }
+        # ============================================================
+        job = load_job(default={"template_id": "bar_chart", "timeline": {}})
+        timeline_dict = job.get("timeline", {}) if isinstance(job.get("timeline", {}), dict) else {}
+
+        # Data path override (job.json can provide)
+        csv_path = job.get("data_csv") or os.path.join(DATA_DIR, "ai_stats.csv")
+        meta, names, values, max_val = load_ai_stats_csv(csv_path)
+
+        if not names:
+            names = ["Nvidia", "Microsoft", "Apple", "Google", "Amazon"]
+            values = [95, 88, 82, 76, 70]
+            max_val = 100.0
+
+        values = [float(v) for v in values]
+        max_val = float(max_val)
+
+        # Optional: enforce sort safety (only if SORT != NONE)
+        sort_mode = (meta.get("SORT", "DESC") or "DESC").strip().upper()
+        if sort_mode != "NONE":
+            reverse = (sort_mode != "ASC")
+            rows = sorted(list(zip(names, values)), key=lambda x: float(x[1]), reverse=reverse)
+            names = [r[0] for r in rows]
+            values = [float(r[1]) for r in rows]
+
+        num_items = len(names)
+
+        # Defaults (if timeline missing)
+        defaults = {"hook": 2.6, "setup": 1.3, "winner": 3.2, "outro": 1.2}
+        for i in range(1, num_items + 1):
+            defaults[f"item_{i}"] = 2.0
+        TL = Timeline.from_dict(timeline_dict, defaults=defaults)
+
+        # ============================================================
+        # 1) INTRO
         # ============================================================
         try:
             IntroManager.play_intro(
                 self,
                 brand_title="BIGDATA LEAK",
-                brand_sub="> FEED VERIFIED",
+                brand_sub="> system breach detected",
                 feed_text="FEED_BAR // MARKET",
                 footer_text="CONFIDENTIAL // LEAKED_SOURCE",
             )
@@ -178,7 +200,7 @@ class BarChartTemplate(Scene):
             print(f"Intro Error: {e}")
 
         # ============================================================
-        # 2) SAFE FRAME (we will layout everything inside it)
+        # 2) SAFE FRAME
         # ============================================================
         sf = get_safe_frame(margin=0.70)
 
@@ -197,7 +219,6 @@ class BarChartTemplate(Scene):
         )
         self.add(grid)
 
-        # Particles (subtle)
         try:
             particles = make_floating_particles(
                 n=26,
@@ -212,51 +233,18 @@ class BarChartTemplate(Scene):
             pass
 
         # ============================================================
-        # ✅ 4) DATA (CSV LOAD - SMART, NO HARDCODE)
-        # ============================================================
-        csv_path = os.path.join(DATA_DIR, "ai_stats.csv")
-        meta, names, values, max_val = load_ai_stats_csv(csv_path)
-
-        # Safety if empty
-        if not names:
-            names = ["Nvidia", "Microsoft", "Apple", "Google", "Amazon"]
-            values = [95, 88, 82, 76, 70]
-            max_val = 100.0
-
-        # Normalize types
-        values = [float(v) for v in values]
-        max_val = float(max_val)
-
-        # Optional: enforce sort safety (only if SORT != NONE)
-        sort_mode = (meta.get("SORT", "DESC") or "DESC").strip().upper()
-        if sort_mode != "NONE":
-            reverse = (sort_mode != "ASC")
-            rows = sorted(list(zip(names, values)), key=lambda x: float(x[1]), reverse=reverse)
-            names = [r[0] for r in rows]
-            values = [float(r[1]) for r in rows]
-
-        num_items = len(names)
-
-        # ============================================================
-        # ✅ 5) HEADER (SMART: title/sub from CSV meta)
+        # 5) HEADER (hook segment)
         # ============================================================
         title_text = (meta.get("TITLE", "MARKET LEADERS") or "MARKET LEADERS").strip()
         sub_text = (meta.get("SUB", "Tech leaders comparison") or "Tech leaders comparison").strip()
 
-        title = Text(
-            title_text,
-            font="Montserrat",
-            weight=BOLD,
-            font_size=52,
-            color=Theme.TEXT_MAIN,
-        )
+        title = Text(title_text, font="Montserrat", weight=BOLD, font_size=52, color=Theme.TEXT_MAIN)
         title.move_to([sf["cx"], sf["top"] - 1.05, 0])
 
         underline = Line(LEFT * 2.8, RIGHT * 2.8)
         underline.set_stroke(width=4, color=[Theme.NEON_PINK, Theme.NEON_BLUE])
         underline.next_to(title, DOWN, buff=0.18)
 
-        # header scanner (premium)
         scanner_dot = Dot(color=WHITE, radius=0.07)
         scanner_dot.move_to(underline.get_left())
         scanner_dot.set_z_index(50)
@@ -267,59 +255,62 @@ class BarChartTemplate(Scene):
 
         scanner_dot.add_updater(_scan)
 
-        subtitle = Text(
-            sub_text,
-            font="Montserrat",
-            font_size=22,
-            color=Theme.TEXT_SUB,
-        )
+        subtitle = Text(sub_text, font="Montserrat", font_size=22, color=Theme.TEXT_SUB)
         subtitle.next_to(underline, DOWN, buff=0.25)
 
+        hook_total = TL.seg_total("hook", 2.6)
+        # action part ko premium range me rakho, leftover hold banega
+        hook_action = clamp(hook_total * 0.70, 1.2, 2.2)
+        scale = hook_action / 2.5
+
+        rt_title = clamp(0.7 * scale, 0.35, 0.85)
+        rt_line = clamp(0.7 * scale, 0.35, 0.85)
+        rt_dot = clamp(0.3 * scale, 0.18, 0.35)
+        rt_sub = clamp(0.8 * scale, 0.40, 0.95)
+
         self.play(
-            Write(title, run_time=0.7),
-            GrowFromCenter(underline, run_time=0.7),
-            FadeIn(scanner_dot, run_time=0.3),
-            FadeIn(subtitle, shift=UP * 0.2, run_time=0.8),
+            Write(title, run_time=rt_title),
+            GrowFromCenter(underline, run_time=rt_line),
+            FadeIn(scanner_dot, run_time=rt_dot),
+            FadeIn(subtitle, shift=UP * 0.2, run_time=rt_sub),
         )
+        TL.consume("hook", hook_action)
+
+        # ✅ leftover time (hook) -> alive hold
+        hold_breathing(self, TL.remaining("hook"), focus=underline)
 
         # ============================================================
-        # 6) LAYOUT (SAFE)
+        # 6) LAYOUT
         # ============================================================
-        # Vertical layout bounds for bars
         top_y = sf["top"] - 3.2
         bottom_y = sf["bottom"] + 2.1
         available_h = top_y - bottom_y
         GAP_Y = min(1.75, available_h / (num_items + 0.2))
         START_Y = top_y
 
-        # Horizontal layout
         RAIL_X = sf["left"] + 0.55
         RANK_X = RAIL_X + 0.60
         LABEL_X = RANK_X + 1.10
         BAR_START_X = LABEL_X + 1.10
 
-        # -----------------------------
-        # ✅ FIX: Reserve a VALUE GUTTER
-        # -----------------------------
-        VALUE_GUTTER_W = 0.95  # reserved column width
+        VALUE_GUTTER_W = 0.95
         BAR_RIGHT_LIMIT = sf["right"] - VALUE_GUTTER_W
         BAR_MAX_WIDTH = BAR_RIGHT_LIMIT - BAR_START_X
-
-        # value anchor (fixed column, safe)
         VALUE_ANCHOR_X = sf["right"] - 0.30
-
         BAR_HEIGHT = 0.62
 
-        # ---- Left RANK RAIL ----
+        # ============================================================
+        # SETUP segment (rail + guides)
+        # ============================================================
         rail_top = START_Y + 0.55
         rail_bottom = START_Y - (num_items - 1) * GAP_Y - 0.55
 
-        rail = Line([RAIL_X, rail_top, 0], [RAIL_X, rail_bottom, 0])
-        rail.set_stroke(color=Theme.NEON_BLUE, width=3, opacity=0.35)
+        rail = Line([RAIL_X, rail_top, 0], [RAIL_X, rail_bottom, 0]).set_stroke(
+            color=Theme.NEON_BLUE, width=3, opacity=0.35
+        )
         rail.set_z_index(20)
 
-        rail_glow = rail.copy()
-        rail_glow.set_stroke(color=WHITE, width=10, opacity=0.06)
+        rail_glow = rail.copy().set_stroke(color=WHITE, width=10, opacity=0.06)
         rail_glow.set_z_index(19)
 
         rail_label = Text("RANK", font="Montserrat", weight=BOLD, font_size=16, color=Theme.NEON_PINK)
@@ -328,7 +319,6 @@ class BarChartTemplate(Scene):
         rail_label.set_opacity(0.85)
         rail_label.set_z_index(25)
 
-        # rail scanner dot
         rail_scanner = Dot(color=WHITE, radius=0.06).move_to([RAIL_X, rail_top, 0])
         rail_scanner.set_z_index(30)
 
@@ -339,9 +329,12 @@ class BarChartTemplate(Scene):
 
         rail_scanner.add_updater(_rail_scan)
 
-        self.play(FadeIn(rail_glow), Create(rail), FadeIn(rail_label), FadeIn(rail_scanner), run_time=0.6)
+        setup_total = TL.seg_total("setup", 1.3)
+        setup_action = clamp(setup_total * 0.75, 0.9, 1.6)
 
-        # ---- Milestones (inside safe) ----
+        self.play(FadeIn(rail_glow), Create(rail), FadeIn(rail_label), FadeIn(rail_scanner),
+                  run_time=clamp(setup_action * 0.55, 0.35, 0.75))
+
         milestones = [0, 25, 50, 75, 100]
         guide_group = VGroup()
         for m in milestones:
@@ -351,69 +344,74 @@ class BarChartTemplate(Scene):
                 end=[x_pos, rail_bottom - 0.25, 0],
                 dash_length=0.18,
                 dashed_ratio=0.6,
-            )
-            v_line.set_stroke(Theme.NEON_BLUE, width=2, opacity=0.12)
+            ).set_stroke(Theme.NEON_BLUE, width=2, opacity=0.12)
 
             label = Text(str(m), font="Arial", font_size=14, color=Theme.TEXT_SUB)
             label.move_to([x_pos, rail_bottom - 0.55, 0])
             guide_group.add(v_line, label)
 
-        self.play(Create(guide_group, run_time=0.8, lag_ratio=0.08))
+        self.play(Create(guide_group, run_time=clamp(setup_action * 0.75, 0.55, 1.05), lag_ratio=0.08))
+
+        TL.consume("setup", setup_action)
+        hold_breathing(self, TL.remaining("setup"), focus=rail)
 
         # ============================================================
-        # 7) BAR ENGINE
+        # 7) BAR ENGINE (item_1 ... item_n)
         # ============================================================
-        winner_index = int(np.argmax(values))
         bar_groups = []
 
         for i, (name, value) in enumerate(zip(names, values)):
-            y_pos = START_Y - (i * GAP_Y)
+            seg = f"item_{i+1}"
+            item_total = TL.seg_total(seg, 2.0)
 
-            # smart width relative to max_val from CSV meta
+            y_pos = START_Y - (i * GAP_Y)
             denom = max(1e-6, float(max_val))
             target_width = (float(value) / denom) * BAR_MAX_WIDTH
 
-            # Branch from rail to rank circle
-            branch = Line([RAIL_X, y_pos, 0], [RANK_X - 0.18, y_pos, 0])
-            branch.set_stroke(color=Theme.NEON_BLUE, width=2, opacity=0.25)
+            branch = Line([RAIL_X, y_pos, 0], [RANK_X - 0.18, y_pos, 0]).set_stroke(
+                color=Theme.NEON_BLUE, width=2, opacity=0.25
+            )
             bolt = Dot(color=WHITE, radius=0.035).move_to(branch.get_start())
             bolt.set_opacity(0.6)
 
-            # Rank badge
             rank_bg = Circle(radius=0.25, color="#0B0B0B", fill_opacity=1).set_stroke(
                 Theme.NEON_BLUE, width=2, opacity=0.7
-            )
-            rank_bg.move_to([RANK_X, y_pos, 0])
+            ).move_to([RANK_X, y_pos, 0])
             rank_num = Text(f"{i + 1}", font="Montserrat", weight=BOLD, font_size=20, color=WHITE).move_to(rank_bg)
 
-            # Label plate
             name_text = Text(str(name).upper(), font="Montserrat", weight=BOLD, font_size=24, color=WHITE)
             text_plate = RoundedRectangle(corner_radius=0.12, width=name_text.width + 0.55, height=0.52)
             text_plate.set_fill(color="#000000", opacity=0.70).set_stroke(width=0)
             text_plate.move_to([LABEL_X, y_pos + 0.45, 0])
             name_text.move_to(text_plate)
 
-            # Keep label inside safe
             text_plate.move_to(
-                [
-                    clamp_x(text_plate.get_x(), text_plate.width, 0.70),
-                    clamp_y(text_plate.get_y(), text_plate.height, 0.70),
-                    0,
-                ]
+                [clamp_x(text_plate.get_x(), text_plate.width, 0.70),
+                 clamp_y(text_plate.get_y(), text_plate.height, 0.70), 0]
             )
             name_text.move_to(text_plate)
-
             label_group = VGroup(text_plate, name_text)
 
-            self.play(
-                FadeIn(branch, run_time=0.25),
-                FadeIn(bolt, run_time=0.25),
-                FadeIn(rank_bg, shift=RIGHT * 0.15, run_time=0.35),
-                FadeIn(rank_num, shift=RIGHT * 0.15, run_time=0.35),
-                FadeIn(label_group, shift=RIGHT * 0.15, run_time=0.4),
-            )
+            # ✅ item segment split: label + tracker + morph (premium range)
+            t_label = clamp(item_total * 0.22, 0.30, 0.55)
+            t_track = clamp(item_total * 0.56, 0.95, 1.60)
+            t_morph = clamp(item_total * 0.22, 0.35, 0.55)
 
-            # Bar container (ends BEFORE value gutter)
+            # keep sum <= item_total (tracker compress first)
+            s = t_label + t_track + t_morph
+            if s > item_total:
+                overflow = s - item_total
+                t_track = max(0.75, t_track - overflow)
+
+            self.play(
+                FadeIn(branch, run_time=t_label),
+                FadeIn(bolt, run_time=t_label),
+                FadeIn(rank_bg, shift=RIGHT * 0.15, run_time=t_label),
+                FadeIn(rank_num, shift=RIGHT * 0.15, run_time=t_label),
+                FadeIn(label_group, shift=RIGHT * 0.15, run_time=t_label),
+            )
+            TL.consume(seg, t_label)
+
             container = RoundedRectangle(corner_radius=0.12, width=BAR_MAX_WIDTH + 0.20, height=BAR_HEIGHT)
             container.set_stroke(Theme.NEON_BLUE, width=2, opacity=0.35)
             container.set_fill("#060606", opacity=0.85)
@@ -445,13 +443,10 @@ class BarChartTemplate(Scene):
 
             zig_line = VMobject().set_stroke(color=WHITE, width=3, opacity=0.9)
             zig_glow = VMobject().set_stroke(color=Theme.NEON_BLUE, width=10, opacity=0.22)
-            spark = Dot(radius=0.11, color=WHITE)
-            spark.set_opacity(0.9)
-
+            spark = Dot(radius=0.11, color=WHITE).set_opacity(0.9)
             line_group = VGroup(zig_glow, zig_line, spark)
             self.add(line_group)
 
-            # Final bar (morph target)
             final_bar = RoundedRectangle(corner_radius=0.10, width=max(0.10, target_width), height=BAR_HEIGHT - 0.16)
             final_bar.set_stroke(width=0)
             final_bar.set_fill(
@@ -464,12 +459,10 @@ class BarChartTemplate(Scene):
             sheen.set_stroke(width=0).set_fill(color=WHITE, opacity=0.18)
             sheen.align_to(final_bar, UP).align_to(final_bar, LEFT).set_opacity(0)
 
-            # Value number (FIXED COLUMN -> NEVER overlaps bars)
             val_num = DecimalNumber(0, num_decimal_places=0, font_size=24, color=Theme.NEON_BLUE)
             val_num.set_z_index(60)
             self.add(val_num)
 
-            # optional: small pill behind value for readability
             val_pill = RoundedRectangle(corner_radius=0.12, width=1.15, height=0.46)
             val_pill.set_fill(color=BLACK, opacity=0.55).set_stroke(width=0)
             val_pill.set_z_index(55)
@@ -482,12 +475,10 @@ class BarChartTemplate(Scene):
                 t = tracker.get_value()
                 val_num.set_value(t * float(value))
 
-                # keep value in a dedicated gutter column
                 x = VALUE_ANCHOR_X - (val_num.width / 2)
                 x = clamp_x(x, val_num.width, 0.70)
                 val_num.move_to([x, y_pos, 0])
 
-                # pill follows (auto width)
                 pill_w = max(1.10, val_num.width + 0.35)
                 val_pill.become(
                     RoundedRectangle(corner_radius=0.12, width=pill_w, height=0.46)
@@ -529,11 +520,11 @@ class BarChartTemplate(Scene):
 
             line_group.add_updater(update_single_bar)
 
-            self.play(tracker.animate.set_value(1.0), run_time=1.4, rate_func=linear)
+            self.play(tracker.animate.set_value(1.0), run_time=t_track, rate_func=linear)
+            TL.consume(seg, t_track)
 
             line_group.remove_updater(update_single_bar)
 
-            # Morph to bar
             temp_straight = Line(dot_positions[0], dot_positions[-1], color=WHITE, stroke_width=4)
             self.add(temp_straight)
             self.remove(line_group, dots_group)
@@ -544,76 +535,93 @@ class BarChartTemplate(Scene):
             shockwave = Circle(radius=0.08, color=WHITE, stroke_width=4).move_to(final_bar.get_right())
             self.play(
                 ReplacementTransform(temp_straight, final_bar),
-                FadeIn(sheen, run_time=0.15),
+                FadeIn(sheen, run_time=min(0.18, t_morph * 0.35)),
                 Flash(final_bar.get_right(), color=WHITE, line_length=0.9, flash_radius=0.45),
                 shockwave.animate.scale(6).set_opacity(0),
-                run_time=0.42,
+                run_time=t_morph,
                 rate_func=rf.ease_out_back,
             )
             self.remove(shockwave)
+            TL.consume(seg, t_morph)
+
+            # ✅ leftover in item_k -> alive hold on the bar
+            hold_breathing(self, TL.remaining(seg), focus=final_bar)
 
             bar_groups.append(
                 VGroup(branch, bolt, rank_bg, rank_num, label_group, container, final_bar, sheen, val_pill, val_num)
             )
 
         # ============================================================
-        # 8) WINNER REVEAL (premium outro)
+        # 8) WINNER REVEAL (winner segment + outro segment)
         # ============================================================
-        self.wait(0.4)
+        winner_seg = "winner"
+        winner_total = TL.seg_total(winner_seg, 3.2)
 
-        winner_index = int(np.argmax(values)) if values else 0
-        winner_index = int(np.clip(winner_index, 0, max(0, len(bar_groups) - 1)))
+        if bar_groups:
+            winner_index = int(np.argmax(values)) if values else 0
+            winner_index = int(np.clip(winner_index, 0, max(0, len(bar_groups) - 1)))
 
-        winner = bar_groups[winner_index]
-        others = [g for j, g in enumerate(bar_groups) if j != winner_index]
+            winner = bar_groups[winner_index]
+            others = [g for j, g in enumerate(bar_groups) if j != winner_index]
 
-        self.play(*[g.animate.set_opacity(0.25) for g in others], run_time=0.35)
+            t_dim = clamp(winner_total * 0.12, 0.25, 0.45)
+            self.play(*[g.animate.set_opacity(0.25) for g in others], run_time=t_dim)
+            TL.consume(winner_seg, t_dim)
 
-        winner_bar = winner[6]
-        winner_val = winner[9]
-        winner_label = winner[4]
+            winner_bar = winner[6]
+            winner_val = winner[9]
+            winner_label = winner[4]
 
-        banner_h = 1.65
-        banner = RoundedRectangle(width=sf["w"], height=banner_h, corner_radius=0.18)
-        banner.set_fill(color="#000000", opacity=0.85)
-        banner.set_stroke(color=Theme.NEON_PINK, width=3, opacity=0.8)
-        banner.move_to([sf["cx"], sf["bottom"] + (banner_h / 2) + 0.35, 0])
-        banner.set_z_index(200)
+            banner_h = 1.65
+            banner = RoundedRectangle(width=sf["w"], height=banner_h, corner_radius=0.18)
+            banner.set_fill(color="#000000", opacity=0.85)
+            banner.set_stroke(color=Theme.NEON_PINK, width=3, opacity=0.8)
+            banner.move_to([sf["cx"], sf["bottom"] + (banner_h / 2) + 0.35, 0])
+            banner.set_z_index(200)
 
-        win_name = str(names[winner_index]).upper()
-        win_val = float(values[winner_index])
+            win_name = str(names[winner_index]).upper()
+            win_val = float(values[winner_index])
 
-        t1 = Text("TOP LEADER", font="Montserrat", weight=BOLD, font_size=22, color=Theme.TEXT_SUB)
-        t2 = Text(win_name, font="Montserrat", weight=BOLD, font_size=46, color=Theme.TEXT_MAIN)
-        t3 = Text(f"SCORE: {int(round(win_val)) if abs(win_val-round(win_val))<1e-9 else win_val}", font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
+            t1 = Text("TOP LEADER", font="Montserrat", weight=BOLD, font_size=22, color=Theme.TEXT_SUB)
+            t2 = Text(win_name, font="Montserrat", weight=BOLD, font_size=46, color=Theme.TEXT_MAIN)
+            t3 = Text(f"SCORE: {int(round(win_val))}", font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
+            txt = VGroup(t1, t2, t3).arrange(DOWN, buff=0.12).move_to(banner)
+            txt.set_z_index(201)
 
-        txt = VGroup(t1, t2, t3).arrange(DOWN, buff=0.12).move_to(banner)
-        txt.set_z_index(201)
+            dimmer = Rectangle(width=60, height=60).set_fill(color=BLACK, opacity=0.25).set_stroke(width=0)
+            dimmer.set_z_index(180)
+            self.add(dimmer)
 
-        dimmer = Rectangle(width=60, height=60).set_fill(color=BLACK, opacity=0.25).set_stroke(width=0)
-        dimmer.set_z_index(180)
-        self.add(dimmer)
+            t_focus = clamp(winner_total * 0.22, 0.35, 0.60)
+            self.play(
+                winner.animate.set_opacity(1.0),
+                winner_bar.animate.scale(1.05),
+                winner_val.animate.set_color(WHITE),
+                Indicate(winner_label, color=WHITE, scale_factor=1.02),
+                run_time=t_focus,
+                rate_func=rf.ease_out_back,
+            )
+            TL.consume(winner_seg, t_focus)
 
-        self.play(
-            winner.animate.set_opacity(1.0),
-            winner_bar.animate.scale(1.05),
-            winner_val.animate.set_color(WHITE),
-            Indicate(winner_label, color=WHITE, scale_factor=1.02),
-            run_time=0.45,
-            rate_func=rf.ease_out_back,
-        )
+            t_banner = clamp(winner_total * 0.28, 0.45, 0.85)
+            self.play(GrowFromCenter(banner), FadeIn(txt, shift=UP * 0.2),
+                      run_time=t_banner, rate_func=rf.ease_out_cubic)
+            TL.consume(winner_seg, t_banner)
 
-        self.play(
-            GrowFromCenter(banner),
-            FadeIn(txt, shift=UP * 0.2),
-            run_time=0.6,
-            rate_func=rf.ease_out_cubic,
-        )
+            t_flash = clamp(winner_total * 0.14, 0.25, 0.40)
+            self.play(
+                Flash(banner.get_top(), color=WHITE, line_length=0.6, num_lines=10),
+                Flash(winner_bar.get_right(), color=Theme.NEON_BLUE, line_length=0.6, num_lines=8),
+                run_time=t_flash,
+            )
+            TL.consume(winner_seg, t_flash)
 
-        self.play(
-            Flash(banner.get_top(), color=WHITE, line_length=0.6, num_lines=10),
-            Flash(winner_bar.get_right(), color=Theme.NEON_BLUE, line_length=0.6, num_lines=8),
-            run_time=0.35,
-        )
+            # ✅ leftover in winner -> banner scan hold
+            banner_scan_hold(self, banner, TL.remaining(winner_seg), color=WHITE)
 
-        self.wait(2.2)
+        # OUTRO segment
+        outro_total = TL.seg_total("outro", 1.2)
+        try:
+            banner_scan_hold(self, banner, outro_total, color=WHITE)
+        except Exception:
+            hold_breathing(self, outro_total, focus=underline)
