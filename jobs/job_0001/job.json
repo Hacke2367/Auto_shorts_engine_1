@@ -1,0 +1,118 @@
+{
+  "job_id": "job_0001",
+  "template_id": "bar_chart",
+  "data_csv": "data/ai_stats.csv",
+
+  "audio": {
+    "segments": [
+      { "name": "hook",   "path": "audio/hook.mp3" },
+      { "name": "setup",  "path": "audio/setup.mp3" },
+      { "name": "item_1", "path": "audio/item1.mp3" },
+      { "name": "item_2", "path": "audio/item2.mp3" },
+      { "name": "item_3", "path": "audio/item3.mp3" },
+      { "name": "item_4", "path": "audio/item4.mp3" },
+      { "name": "item_5", "path": "audio/item5.mp3" },
+      { "name": "item_6", "path": "audio/item6.mp3" },
+      { "name": "item_7", "path": "audio/item7.mp3" },
+      { "name": "winner", "path": "audio/winner.mp3" },
+      { "name": "outro",  "path": "audio/outro.mp3" }
+    ],
+    "order": [
+      "hook",
+      "setup",
+      "item_1",
+      "item_2",
+      "item_3",
+      "item_4",
+      "item_5",
+      "item_6",
+      "item_7",
+      "winner",
+      "outro"
+    ]
+  },
+
+  "timeline": {
+    "hook": 2.53,
+    "setup": 2.74,
+    "item_1": 3.0,
+    "item_2": 2.53,
+    "item_3": 3.34,
+    "item_4": 2.64,
+    "item_5": 3.79,
+    "item_6": 2.82,
+    "item_7": 2.4,
+    "winner": 3.47,
+    "outro": 2.35
+  },
+
+  "gains": {
+    "gain_voice": 1.0,
+    "gain_sfx": 1.0,
+    "gain_bgm_db": -20.0
+  },
+
+  "sfx": {
+    "enabled": true,
+    "gain": 1.0
+  },
+
+  "bgm": {
+    "enabled": true,
+    "mode": "per_segment",
+    "library_dir": "audio/bgm",
+
+    "default": {
+      "path": "Dramatic Cinematic.mp3",
+      "gain_db": 0.0,
+      "duck": true,
+      "duck_amount": "strong"
+    },
+
+    "segments": {
+      "hook":   { "path": "bgm_hook.mp3",   "gain_db": 0.0, "duck": true,  "duck_amount": "strong" },
+      "setup":  { "path": "bgm_setup.mp3",  "gain_db": 0.0, "duck": true,  "duck_amount": "strong" },
+      "winner": { "path": "bgm_winner.mp3", "gain_db": 0.0, "duck": false, "duck_amount": "medium" },
+      "outro":  { "path": "bgm_outro.mp3",  "gain_db": 0.0, "duck": false, "duck_amount": "medium" }
+    },
+
+    "crossfade": 0.25
+  },
+
+  "mix": {
+    "preset": "punchy",
+    "duck_sfx": false
+  },
+
+  "captions": {
+    "enabled": true,
+
+    "script": {
+      "path": "script/script.json",
+      "source_lang": "hi",
+      "target_langs": ["en"]
+    },
+
+    "render": {
+      "format": "ass",
+      "burn_in": true,
+
+      "style": {
+        "preset": "modern_clean",
+        "safe_margin_px": 80,
+        "max_lines": 2
+      },
+
+      "tracks": [
+        { "lang": "hi", "mode": "reveal_words", "position": "above_bottom" }
+      ],
+
+      "highlight": { "enabled": true, "mode": "word_karaoke" }
+    }
+  },
+
+  "output": {
+    "final_mp4": "output/final.mp4",
+    "subtitles_ass": "output/subtitles.ass"
+  }
+}

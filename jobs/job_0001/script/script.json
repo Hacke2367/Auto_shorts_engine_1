@@ -1,0 +1,42 @@
+{
+  "segments": [
+    {
+      "name": "hook",
+      "text": {
+        "hi": "Aaj hum dekhne wale hain top AI tools ka real comparison!",
+        "en": "Today we’re doing a real comparison of the top AI tools!"
+      }
+    },
+
+    {
+      "name": "setup",
+      "text": {
+        "hi": "Data CSV se aata hai aur animation auto-sync hota hai.",
+        "en": "The data comes from CSV and the animation auto-syncs."
+      }
+    },
+
+    { "name": "item_1", "text": { "hi": "Item 1 dummy — pehla point.", "en": "Item 1 dummy — first point." } },
+    { "name": "item_2", "text": { "hi": "Item 2 dummy — doosra point.", "en": "Item 2 dummy — second point." } },
+    { "name": "item_3", "text": { "hi": "Item 3 dummy — teesra point.", "en": "Item 3 dummy — third point." } },
+    { "name": "item_4", "text": { "hi": "Item 4 dummy — chautha point.", "en": "Item 4 dummy — fourth point." } },
+    { "name": "item_5", "text": { "hi": "Item 5 dummy — paanchwa point.", "en": "Item 5 dummy — fifth point." } },
+    { "name": "item_6", "text": { "hi": "Item 6 dummy — chhatha point.", "en": "Item 6 dummy — sixth point." } },
+    { "name": "item_7", "text": { "hi": "Item 7 dummy — saatwa point.", "en": "Item 7 dummy — seventh point." } },
+
+    {
+      "name": "winner",
+      "text": {
+        "hi": "Winner final score se decide hota hai.",
+        "en": "The winner is decided by the final score."
+      }
+    },
+    {
+      "name": "outro",
+      "text": {
+        "hi": "Agar video useful laga to follow zaroor karna!",
+        "en": "If this video helped, make sure to follow!"
+      }
+    }
+  ]
+}

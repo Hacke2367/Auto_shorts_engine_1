@@ -59,6 +59,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="\data\ai_stats.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="\data\butterfly_data.csv">
           <value>
             <Attribute>
@@ -102,6 +109,13 @@
           </value>
         </entry>
         <entry key="\data\sort_data.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\jobs\job_0001\data\ai_stats.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />

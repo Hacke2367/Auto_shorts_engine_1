@@ -1,0 +1,291 @@
+{
+  "version": 1,
+  "template_id": "bar_chart",
+  "marks": [
+    {
+      "t": 0.0,
+      "key": "ui_pop",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "intro_start"
+      }
+    },
+    {
+      "t": 0.0,
+      "key": "intro_glitch",
+      "gain_db": -8.0,
+      "meta": {
+        "at": "intro_sub_in"
+      }
+    },
+    {
+      "t": 0.5500000000000002,
+      "key": "intro_rise",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "intro_title_in"
+      }
+    },
+    {
+      "t": 0.9000000000000001,
+      "key": "intro_hit",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "intro_flash"
+      }
+    },
+    {
+      "t": 1.9500000000000002,
+      "key": "charge_up",
+      "gain_db": -8.0,
+      "meta": {
+        "at": "hook_title_start"
+      }
+    },
+    {
+      "t": 2.371498,
+      "key": "ui_pop",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "hook_title_end"
+      }
+    },
+    {
+      "t": 2.123558,
+      "key": "scan_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "at": "hook_scan_begin"
+      }
+    },
+    {
+      "t": 3.2999999999999954,
+      "key": "ui_pop",
+      "gain_db": -11.0,
+      "meta": {
+        "at": "setup_rail_in"
+      }
+    },
+    {
+      "t": 4.049999999999993,
+      "key": "scan_tick",
+      "gain_db": -16.0,
+      "meta": {
+        "at": "setup_guides"
+      }
+    },
+    {
+      "t": 6.249999999999985,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "item_label",
+        "i": 1
+      }
+    },
+    {
+      "t": 6.799999999999983,
+      "key": "scan_tick",
+      "gain_db": -16.0,
+      "meta": {
+        "at": "item_fill",
+        "i": 1
+      }
+    },
+    {
+      "t": 8.399999999999999,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "item_impact",
+        "i": 1
+      }
+    },
+    {
+      "t": 9.266666666666708,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "item_label",
+        "i": 2
+      }
+    },
+    {
+      "t": 9.816666666666736,
+      "key": "scan_tick",
+      "gain_db": -16.0,
+      "meta": {
+        "at": "item_fill",
+        "i": 2
+      }
+    },
+    {
+      "t": 11.25000000000014,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "item_impact",
+        "i": 2
+      }
+    },
+    {
+      "t": 11.800000000000168,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "item_label",
+        "i": 3
+      }
+    },
+    {
+      "t": 12.350000000000195,
+      "key": "scan_tick",
+      "gain_db": -16.0,
+      "meta": {
+        "at": "item_fill",
+        "i": 3
+      }
+    },
+    {
+      "t": 13.950000000000275,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "item_impact",
+        "i": 3
+      }
+    },
+    {
+      "t": 15.150000000000334,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "item_label",
+        "i": 4
+      }
+    },
+    {
+      "t": 15.700000000000362,
+      "key": "scan_tick",
+      "gain_db": -16.0,
+      "meta": {
+        "at": "item_fill",
+        "i": 4
+      }
+    },
+    {
+      "t": 17.183333333333643,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "item_impact",
+        "i": 4
+      }
+    },
+    {
+      "t": 17.833333333333606,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "item_label",
+        "i": 5
+      }
+    },
+    {
+      "t": 18.383333333333574,
+      "key": "scan_tick",
+      "gain_db": -16.0,
+      "meta": {
+        "at": "item_fill",
+        "i": 5
+      }
+    },
+    {
+      "t": 19.983333333333483,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "item_impact",
+        "i": 5
+      }
+    },
+    {
+      "t": 21.63333333333339,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "item_label",
+        "i": 6
+      }
+    },
+    {
+      "t": 22.18333333333336,
+      "key": "scan_tick",
+      "gain_db": -16.0,
+      "meta": {
+        "at": "item_fill",
+        "i": 6
+      }
+    },
+    {
+      "t": 23.7666666666666,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "item_impact",
+        "i": 6
+      }
+    },
+    {
+      "t": 24.483333333333228,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "item_label",
+        "i": 7
+      }
+    },
+    {
+      "t": 25.01666666666653,
+      "key": "scan_tick",
+      "gain_db": -16.0,
+      "meta": {
+        "at": "item_fill",
+        "i": 7
+      }
+    },
+    {
+      "t": 26.366666666666454,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "item_impact",
+        "i": 7
+      }
+    },
+    {
+      "t": 28.316666666666343,
+      "key": "winner_rise",
+      "gain_db": -9.0,
+      "meta": {
+        "at": "winner_banner"
+      }
+    },
+    {
+      "t": 29.166666666666295,
+      "key": "impact_soft",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "winner_flash"
+      }
+    },
+    {
+      "t": 30.383333333332892,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "outro_tag"
+      }
+    }
+  ]
+}
