@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "template_id": "vs_card",
+  "marks": [
+    {
+      "t": 2.400000000000001,
+      "key": "ui_pop",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "hook",
+        "at": "title_in"
+      }
+    },
+    {
+      "t": 13.666666666666638,
+      "key": "scan_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "setup",
+        "at": "metrics_down"
+      }
+    },
+    {
+      "t": 14.7333333333333,
+      "key": "impact_soft",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "setup",
+        "at": "cards_in"
+      }
+    },
+    {
+      "t": 15.733333333333297,
+      "key": "ui_tick",
+      "gain_db": -15.0,
+      "meta": {
+        "segment": "setup",
+        "at": "bottom_stack"
+      }
+    },
+    {
+      "t": 22.199999999999942,
+      "key": "ui_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_1",
+        "action": "metric_reveal"
+      }
+    },
+    {
+      "t": 23.33333333333327,
+      "key": "impact_soft",
+      "gain_db": -8.0,
+      "meta": {
+        "segment": "round_1",
+        "action": "winner_scale"
+      }
+    },
+    {
+      "t": 23.999999999999936,
+      "key": "ui_pop",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "round_1",
+        "action": "score_update"
+      }
+    },
+    {
+      "t": 32.53333333333327,
+      "key": "ui_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_2",
+        "action": "metric_reveal"
+      }
+    },
+    {
+      "t": 33.66666666666666,
+      "key": "impact_soft",
+      "gain_db": -8.0,
+      "meta": {
+        "segment": "round_2",
+        "action": "winner_scale"
+      }
+    },
+    {
+      "t": 34.33333333333336,
+      "key": "ui_pop",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "round_2",
+        "action": "score_update"
+      }
+    },
+    {
+      "t": 43.800000000000495,
+      "key": "ui_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_3",
+        "action": "metric_reveal"
+      }
+    },
+    {
+      "t": 44.933333333333884,
+      "key": "impact_soft",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_3",
+        "action": "draw_result"
+      }
+    },
+    {
+      "t": 51.26666666666753,
+      "key": "ui_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_4",
+        "action": "metric_reveal"
+      }
+    },
+    {
+      "t": 52.40000000000092,
+      "key": "impact_soft",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_4",
+        "action": "draw_result"
+      }
+    },
+    {
+      "t": 60.0000000000013,
+      "key": "ui_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_5",
+        "action": "metric_reveal"
+      }
+    },
+    {
+      "t": 61.13333333333469,
+      "key": "impact_soft",
+      "gain_db": -8.0,
+      "meta": {
+        "segment": "round_5",
+        "action": "winner_scale"
+      }
+    },
+    {
+      "t": 61.80000000000139,
+      "key": "ui_pop",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "round_5",
+        "action": "score_update"
+      }
+    },
+    {
+      "t": 68.86666666666788,
+      "key": "ui_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_6",
+        "action": "metric_reveal"
+      }
+    },
+    {
+      "t": 70.00000000000115,
+      "key": "impact_soft",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "round_6",
+        "action": "draw_result"
+      }
+    },
+    {
+      "t": 80.60000000000055,
+      "key": "outro_swipe",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "winner"
+      }
+    },
+    {
+      "t": 82.1333333333338,
+      "key": "winner_rise",
+      "gain_db": -8.0,
+      "meta": {
+        "segment": "winner"
+      }
+    },
+    {
+      "t": 82.93333333333375,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "winner",
+        "at": "winner_announcement"
+      }
+    }
+  ]
+}

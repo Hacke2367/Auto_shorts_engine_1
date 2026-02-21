@@ -1,0 +1,56 @@
+{
+    "template_id": "donut_breakdown",
+    "data_source": "market_share.csv (Global smartphone shipments 2025: Apple 35%, Samsung 25%, Xiaomi 15%, Oppo 10%, Vivo 8%, Others 7%)",
+    "segments": [
+        {
+            "name": "hook",
+            "text": "System breach detected. We just intercepted the complete global smartphone market share data for twenty twenty five. Here is the classified breakdown.",
+            "file": "audio/hook.mp3"
+        },
+        {
+            "name": "setup",
+            "text": "Generating the three-D data core. Six slices of market dominance about to be exposed. Watch the donut render in real time.",
+            "file": "audio/setup.mp3"
+        },
+        {
+            "name": "slice_1",
+            "text": "Apple takes the massive lead with thirty five percent of global shipments. An undisputed leader in the premium segment. The biggest slice of the pie by far.",
+            "file": "audio/slice_1.mp3"
+        },
+        {
+            "name": "slice_2",
+            "text": "Samsung holds strong at twenty five percent. A powerful global presence across every price tier. Still the number two threat in the market.",
+            "file": "audio/slice_2.mp3"
+        },
+        {
+            "name": "slice_3",
+            "text": "Xiaomi surges in with fifteen percent. Fast growth, aggressive pricing, and massive traction in Asia. A serious contender in the value segment.",
+            "file": "audio/slice_3.mp3"
+        },
+        {
+            "name": "slice_4",
+            "text": "Oppo carves out ten percent. Heavy dominance in Asian markets with a growing foothold overseas. Quietly climbing the ranks.",
+            "file": "audio/slice_4.mp3"
+        },
+        {
+            "name": "slice_5",
+            "text": "Vivo locks in eight percent. Offline retail strength and solid mid-range offerings keep it firmly in the game.",
+            "file": "audio/slice_5.mp3"
+        },
+        {
+            "name": "slice_6",
+            "text": "The remaining seven percent goes to Other brands. Combined smaller players fighting for every fraction of the pie. Volatile, unpredictable, but still in the race.",
+            "file": "audio/slice_6.mp3"
+        },
+        {
+            "name": "winner",
+            "text": "The undisputed heavyweight of this breakdown is Apple. Thirty five percent of the entire global smartphone market. No one even comes close.",
+            "file": "audio/winner.mp3"
+        },
+        {
+            "name": "outro",
+            "text": "Core shutdown. Data secured. Follow for the next market intelligence drop.",
+            "file": "audio/outro.mp3"
+        }
+    ]
+}

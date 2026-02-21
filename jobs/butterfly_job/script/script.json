@@ -1,0 +1,51 @@
+{
+  "template_id": "butterfly_chart",
+  "data_source": "butterfly_data.csv (ITEM A vs ITEM B: SPEED 88/92, HANDLING 95/80, ACCEL 78/88, LUXURY 90/65, TECH 85/95)",
+  "segments": [
+    {
+      "name": "hook",
+      "text": "A massive system leak just exposed the raw performance stats. Item A versus Item B. Who will dominate the luxury tech showdown?",
+      "file": "audio/hook.mp3"
+    },
+    {
+      "name": "setup",
+      "text": "Five critical attributes are being loaded into the butterfly chart. Watch both sides render head to head.",
+      "file": "audio/setup.mp3"
+    },
+    {
+      "name": "item1",
+      "text": "Speed test. Item A hits eighty eight, but Item B edges ahead with ninety two. Item B takes the first round.",
+      "file": "audio/item1.mp3"
+    },
+    {
+      "name": "item2",
+      "text": "Handling precision. Item A dominates at ninety five against Item B's eighty. A massive gap. Item A takes this one convincingly.",
+      "file": "audio/item2.mp3"
+    },
+    {
+      "name": "item3",
+      "text": "Acceleration metrics. Item A shows seventy eight, but Item B surges to eighty eight. Item B pulls ahead again.",
+      "file": "audio/item3.mp3"
+    },
+    {
+      "name": "item4",
+      "text": "Luxury finish score. Item A hits ninety against Item B's sixty five. A complete blowout. Item A takes it with no contest.",
+      "file": "audio/item4.mp3"
+    },
+    {
+      "name": "item5",
+      "text": "Technology innovation. Item A scores eighty five, but Item B fires back with ninety five. Item B claims the tech crown.",
+      "file": "audio/item5.mp3"
+    },
+    {
+      "name": "winner",
+      "text": "All five attributes are in. The final calculations complete. And the overall performance winner is revealed.",
+      "file": "audio/winner.mp3"
+    },
+    {
+      "name": "outro",
+      "text": "System offline. Stay tuned for the next head-to-head data leak.",
+      "file": "audio/outro.mp3"
+    }
+  ]
+}

@@ -112,5 +112,5 @@ GROUP_COLORS = {
 # ----------------------------------------
 # 4. FONT SETTINGS
 # ----------------------------------------
-DEFAULT_FONT = "Arial"
+DEFAULT_FONT = "DejaVu Sans"
 # Note: Manim uses 'font="Montserrat"' in calls, ensure it's installed or fallback to Arial.

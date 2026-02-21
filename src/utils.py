@@ -520,7 +520,7 @@ def get_cinematic_overlay(scene,
     rec_dot = Dot(color=Brand.PINK, radius=0.06)
     rec_dot.move_to([sf["left"] + 0.35, sf["top"] - 0.28, 0])
 
-    rec_label = Text("REC", font="Arial", weight=BOLD, font_size=18, color=Brand.TEXT_MAIN)
+    rec_label = Text("REC", font="Montserrat", weight=BOLD, font_size=18, color=Brand.TEXT_MAIN)
     rec_label.next_to(rec_dot, RIGHT, buff=0.12).align_to(rec_dot, DOWN)
 
     def _blink(m, dt):
@@ -532,14 +532,14 @@ def get_cinematic_overlay(scene,
     rec_dot.add_updater(_blink)
 
     # TIMER top-right
-    timer = Text("00:00", font="Arial", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
+    timer = Text("00:00", font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
     timer.move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
     timer.set_opacity(0.9)
 
     def _update_timer(m):
         m.become(
             Text(_format_time(getattr(scene, "time", 0.0)),
-                 font="Arial", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
+                 font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
             .move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
             .set_opacity(0.9)
         )
@@ -547,12 +547,12 @@ def get_cinematic_overlay(scene,
     timer.add_updater(_update_timer)
 
     # FEED label top-right
-    feed = Text(feed_text, font="Arial", font_size=12, color=Brand.TEXT_SUB)
+    feed = Text(feed_text, font="Montserrat", font_size=12, color=Brand.TEXT_SUB)
     feed.move_to([sf["right"] - 1.45, sf["top"] - 0.10, 0])
     feed.set_opacity(0.75)
 
     # Footer bottom-left
-    footer = Text(footer_text, font="Arial", font_size=12, color=Brand.CYAN)
+    footer = Text(footer_text, font="Montserrat", font_size=12, color=Brand.CYAN)
     footer.move_to([sf["left"] + 1.75, sf["bottom"] + 0.22, 0])
     footer.set_opacity(0.7)
 
@@ -745,7 +745,7 @@ def get_brand_plate(text="DATA VERIFIED", margin=0.60):
     plate.set_stroke(color=Brand.CYAN, width=1.5, opacity=0.7)
     plate.move_to([sf["left"] + 1.35, sf["bottom"] + 0.65, 0])
 
-    t = Text(text, font="Arial", weight=BOLD, font_size=14, color=Brand.TEXT_MAIN)
+    t = Text(text, font="Montserrat", weight=BOLD, font_size=14, color=Brand.TEXT_MAIN)
     t.move_to(plate)
 
     grp = VGroup(plate, t)

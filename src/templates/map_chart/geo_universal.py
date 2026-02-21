@@ -2,6 +2,7 @@ import os
 import sys
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 from manim import *
 from manim import rate_functions as rf
@@ -14,6 +15,42 @@ sys.path.append(project_root)
 from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme
 from src.utils import IntroManager, get_safe_frame, make_floating_particles
 from src.geo_data.map_coords import COORDINATES
+from src.sync.job import load_job
+from src.sync.timeline import Timeline, clamp
+from src.sync.retention import hold_breathing, banner_scan_hold
+
+# ============================================================
+# SFX MARKS WRITER
+# ============================================================
+import json
+
+class SFXMarksWriter:
+    def __init__(self, scene, job_dir, template_id="geo_universal", out_rel="output/sfx_marks.json"):
+        self.scene = scene
+        self.template_id = template_id
+        self.out_path = Path(str(job_dir)) / out_rel if job_dir else None
+        self.marks = []
+
+    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: dict | None = None):
+        t = float(self.scene.time) + float(offset)
+        ev = {"t": t, "key": str(key), "gain_db": float(gain_db)}
+        if meta:
+            ev["meta"] = meta
+        self.marks.append(ev)
+
+    def flush(self):
+        if self.out_path is None:
+            return
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": 1,
+            "template_id": self.template_id,
+            "marks": self.marks,
+        }
+        with self.out_path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print(f"[OK] Wrote sfx_marks.json: {self.out_path} ({len(self.marks)} marks)")
+
 
 # ===========================
 # MAP CALIBRATION
@@ -83,11 +120,91 @@ def _pick_compare_cols(df: pd.DataFrame):
     return None, None
 
 
+def _resolve_job_dir() -> Path:
+    job_dir_env = os.environ.get("JOB_DIR", "").strip()
+    if job_dir_env:
+        return Path(job_dir_env).resolve()
+    job_json = os.environ.get("JOB_JSON_PATH", "").strip()
+    if job_json:
+        return Path(job_json).resolve().parent
+    return Path(project_root).resolve()
+
+
+def _resolve_data_csv(job: dict, job_dir: Path) -> Path:
+    rel = str(job.get("data_csv", "")).strip() if isinstance(job, dict) else ""
+    candidates = []
+    if rel:
+        p = Path(rel)
+        if not p.is_absolute():
+            p = (job_dir / p).resolve()
+        candidates.append(p)
+    candidates.append((job_dir / "data" / "map_data.csv").resolve())
+    candidates.append((Path(DATA_DIR) / "map_data.csv").resolve())
+    for p in candidates:
+        if p.exists():
+            return p
+    return candidates[0]
+
+
+def _extract_audio_order(job: dict) -> list[str]:
+    audio = job.get("audio") if isinstance(job, dict) else {}
+    order = audio.get("order") if isinstance(audio, dict) else []
+    if not isinstance(order, list):
+        order = []
+    clean_order = [str(x).strip() for x in order if str(x).strip()]
+    if clean_order:
+        return clean_order
+    return ["hook", "setup"] + [f"node_{i}" for i in range(1, 9)] + ["winner", "outro"]
+
+
+def _extract_geo_segments(job: dict, audio_order: list[str] | None = None):
+    clean_order = list(audio_order) if audio_order else _extract_audio_order(job)
+
+    hook = "hook" if "hook" in clean_order else clean_order[0]
+    setup = "setup" if "setup" in clean_order else (clean_order[1] if len(clean_order) > 1 else hook)
+    winner = "winner" if "winner" in clean_order else (clean_order[-2] if len(clean_order) >= 2 else hook)
+    outro = "outro" if "outro" in clean_order else (clean_order[-1] if clean_order else hook)
+    node_segments = [s for s in clean_order if s.startswith("node_")]
+    if not node_segments:
+        node_segments = [f"node_{i}" for i in range(1, 9)]
+    return hook, setup, node_segments, winner, outro
+
+
+def _timeline_defaults(hook: str, setup: str, node_segments: list, winner: str, outro: str) -> dict:
+    d = {}
+    d[hook] = 3.2
+    d[setup] = 2.6
+    for seg in node_segments:
+        d[seg] = 1.9
+    d[winner] = 2.2
+    d[outro] = 1.6
+    return d
+
+
 class GeoUniversalMap(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        job_dir = _resolve_job_dir()
+        job = load_job(default={"template_id": "geo_universal", "timeline": {}, "audio": {"order": []}})
+        audio_order = _extract_audio_order(job)
+        hook_seg, setup_seg, node_segments, winner_seg, outro_seg = _extract_geo_segments(job, audio_order=audio_order)
+        timeline_src = job.get("timeline", {}) if isinstance(job.get("timeline"), dict) else {}
+        TL = Timeline.from_dict(timeline_src, defaults=_timeline_defaults(hook_seg, setup_seg, node_segments, winner_seg, outro_seg))
 
-        # ✅ SAME INTRO (utils.py) — DO NOT CHANGE
+        sfx = SFXMarksWriter(self, job_dir, template_id="geo_universal")
+
+        def sfx_mark(key: str, offset: float = 0.0, meta: dict | None = None):
+            try:
+                sfx.mark(key, offset=offset, meta=meta)
+            except Exception:
+                pass
+
+        self.sfx_mark = sfx_mark
+
+        # ✅ FIX: Anchor global start time before intro plays
+        # This ensures the intro duration is absorbed by the hook segment, maintaining sync.
+        global_start_t0 = float(self.time)
+
         try:
             IntroManager.play_intro(
                 self,
@@ -102,7 +219,7 @@ class GeoUniversalMap(Scene):
         sf = get_safe_frame(margin=0.70)
 
         # ===========================
-        # BACKGROUND (UPDATED): grid + vignette
+        # BACKGROUND: grid + vignette
         # ===========================
         bg_fx = VGroup().set_z_index(1)
 
@@ -146,7 +263,6 @@ class GeoUniversalMap(Scene):
 
         self.add(bg_fx)
 
-        # subtle particles (unchanged)
         try:
             self.add(
                 make_floating_particles(
@@ -164,7 +280,7 @@ class GeoUniversalMap(Scene):
         # ===========================
         # LOAD DATA + META
         # ===========================
-        csv_path = os.path.join(DATA_DIR, "map_data.csv")
+        csv_path = str(_resolve_data_csv(job, job_dir))
         if not os.path.exists(csv_path):
             raise FileNotFoundError("CRITICAL: map_data.csv nahi mila.")
 
@@ -173,11 +289,11 @@ class GeoUniversalMap(Scene):
         metric_name = (meta.get("METRIC") or "METRIC").strip()
         unit = (meta.get("UNIT") or "").strip()
 
-        try:
-            max_items = int(meta.get("MAX", "10"))
-        except Exception:
-            max_items = 10
-        max_items = int(np.clip(max_items, 1, 10))
+        max_items = int(len(node_segments))
+        if max_items <= 0:
+            max_items = 8
+        if max_items > 10:
+            raise ValueError(f"geo_universal supports up to 10 node segments, got {max_items}.")
 
         df = pd.read_csv(csv_path, comment="#")
         df.columns = [c.strip().title() for c in df.columns]
@@ -203,7 +319,7 @@ class GeoUniversalMap(Scene):
         compare_a, compare_b = _pick_compare_cols(df)
 
         # ===========================
-        # HEADER (animated)  (UNCHANGED)
+        # HEADER (animated)
         # ===========================
         title = Text(
             meta.get("TITLE", "GLOBAL ALLIANCE MAP"),
@@ -232,24 +348,21 @@ class GeoUniversalMap(Scene):
         self.play(underline.animate.set_opacity(1.0), run_time=0.30, rate_func=rf.there_and_back)
 
         # =====================================================
-        # ✅ LIVE FEED TICKER (UPDATED FINAL) — replaces legend completely
+        # LIVE FEED TICKER
         # =====================================================
         ticker_w = sf["w"] * 0.88
         ticker_h = 1.02
         pad_x = 0.42
 
-        # Strong readable panel
         ticker_bg = RoundedRectangle(width=ticker_w, height=ticker_h, corner_radius=0.18).set_z_index(110)
         ticker_bg.set_fill(color="#05080B", opacity=0.72)
         ticker_bg.set_stroke(color=Theme.NEON_BLUE, width=2.4, opacity=0.82)
 
-        # Top accent line
         ticker_accent = Line(LEFT, RIGHT).set_z_index(111)
         ticker_accent.set_stroke(color=[Theme.NEON_PINK, Theme.NEON_BLUE], width=3.2, opacity=0.80)
         ticker_accent.scale_to_fit_width(ticker_w * 0.94)
         ticker_accent.move_to(ticker_bg.get_top() + DOWN * 0.18)
 
-        # --- Shorteners (avoid overflow)
         mode_short = str(mode)
         metric_short = str(metric_name)
         if len(mode_short) > 10:
@@ -257,16 +370,13 @@ class GeoUniversalMap(Scene):
         if len(metric_short) > 16:
             metric_short = metric_short[:16] + "…"
 
-        # LEFT: feed label
         feed_label = Text("FEED_MAP // GEO", font="Consolas", font_size=13, color=Theme.TEXT_MAIN).set_z_index(112)
         feed_label.set_opacity(0.95)
 
-        # RIGHT: live status
         live_dot = Dot(radius=0.035, color=Theme.NEON_GREEN).set_z_index(112)
         live_txt = Text("LIVE", font="Consolas", font_size=12, color=Theme.TEXT_MAIN).set_z_index(112)
         right_block = VGroup(live_dot, live_txt).arrange(RIGHT, buff=0.10).set_z_index(112)
 
-        # live dot pulse (safe)
         live_dot._pulse_t = 0.0
 
         def _pulse(mob, dt):
@@ -276,7 +386,6 @@ class GeoUniversalMap(Scene):
 
         live_dot.add_updater(_pulse)
 
-        # Center chips (minimal, readable)
         def _ticker_chip(label, value, col):
             t_label = Text(str(label), font="Consolas", font_size=10, color=Theme.TEXT_SUB).set_z_index(112)
             t_val = Text(str(value), font="Consolas", font_size=12, color=Theme.TEXT_MAIN, weight=BOLD).set_z_index(112)
@@ -293,7 +402,6 @@ class GeoUniversalMap(Scene):
             _ticker_chip("MAX", str(max_items), Theme.NEON_YELLOW),
         ).arrange(RIGHT, buff=0.18).set_z_index(112)
 
-        # Center message (Transform-safe: same object instance)
         if mode == "ALLIANCE":
             initial_msg = "Boot sequence: links scanning…"
         elif mode == "COMPARE":
@@ -303,32 +411,26 @@ class GeoUniversalMap(Scene):
 
         feed_text = Text(initial_msg, font="Consolas", font_size=14, color=Theme.TEXT_MAIN).set_z_index(112)
 
-        # Compose ticker
         ticker = VGroup(ticker_bg, ticker_accent, feed_label, chips, right_block, feed_text).set_z_index(110)
         ticker.move_to([sf["cx"], sub.get_bottom()[1] - ticker_h / 2 - 0.18, 0])
 
-        # Anchor left/right
         feed_label.move_to(ticker_bg.get_left() + RIGHT * (pad_x + feed_label.width / 2)).shift(UP * 0.02)
         right_block.move_to(ticker_bg.get_right() + LEFT * (pad_x + right_block.width / 2)).shift(UP * 0.02)
 
-        # Fit chips inside remaining space
         available = ticker_bg.width - (2 * pad_x) - feed_label.width - right_block.width - 0.60
         available = max(1.2, float(available))
         chips.scale_to_fit_width(available * 0.62)
         chips.move_to(ticker_bg.get_center() + UP * 0.06)
 
-        # Feed text width fits remaining below chips
         feed_available = ticker_bg.width - 0.85
         feed_text.scale_to_fit_width(feed_available)
         feed_text.move_to(ticker_bg.get_center() + DOWN * 0.22)
 
-        # One-time sweep highlight (not loop)
         ticker_sweep = Rectangle(width=ticker_w * 0.18, height=ticker_h * 0.70).set_z_index(109)
         ticker_sweep.set_fill(color=Theme.NEON_BLUE, opacity=0.10).set_stroke(width=0)
         ticker_sweep.move_to(ticker_bg.get_left() + RIGHT * (ticker_sweep.width / 2 + 0.05))
         ticker_sweep.set_opacity(0)
 
-        # message setter (no NameError / no group break)
         def ticker_set(msg: str, animate: bool = True):
             new_mob = Text(str(msg), font="Consolas", font_size=14, color=Theme.TEXT_MAIN).set_z_index(112)
             new_mob.scale_to_fit_width(feed_available)
@@ -339,7 +441,7 @@ class GeoUniversalMap(Scene):
                 feed_text.become(new_mob)
 
         # ===========================
-        # MAP (fit between lanes)  (UNCHANGED except: lane_top uses ticker)
+        # MAP
         # ===========================
         svg_path = os.path.join(ASSETS_DIR, "svgs", "world.svg")
         if not os.path.exists(svg_path):
@@ -352,13 +454,11 @@ class GeoUniversalMap(Scene):
         map_target_w = sf["w"] * 0.62
         world.scale_to_fit_width(map_target_w)
 
-        # ✅ CHANGED: ticker bottom drives lanes (instead of legend)
         lane_top = ticker.get_bottom()[1] - 0.35
         lane_bottom = sf["bottom"] + 0.85
         map_center_y = (lane_top + lane_bottom) / 2 + 0.25
         world.move_to([sf["cx"], map_center_y, 0])
 
-        # ✅ map HUD panel (unchanged)
         map_panel = RoundedRectangle(
             width=world.width * 1.10,
             height=world.height * 1.35,
@@ -375,7 +475,6 @@ class GeoUniversalMap(Scene):
             r.move_to(map_panel.get_center() + UP * dy)
             bands.add(r)
 
-        # compute bounds for latlon conversion
         map_left = world.get_left()[0]
         map_right = world.get_right()[0]
         map_bottom = world.get_bottom()[1]
@@ -392,10 +491,10 @@ class GeoUniversalMap(Scene):
             return np.array([x, y, 0])
 
         # ===========================
-        # SLOT LANES (ONLY change: slots_per_side dynamic)
+        # SLOT LANES
         # ===========================
         n_items = int(len(df))
-        slots_per_side = int(np.ceil(max(1, n_items) / 2.0))  # ✅ dynamic (1..5 for up to 10 items)
+        slots_per_side = int(np.ceil(max(1, n_items) / 2.0))
 
         span = max(1.0, lane_top - lane_bottom)
         step = span / slots_per_side
@@ -433,7 +532,7 @@ class GeoUniversalMap(Scene):
             placed.append((it, "R", np.array([0, right_slots_y[i], 0])))
 
         # ===========================
-        # CARD FACTORY + meter final width store (UNCHANGED)
+        # CARD FACTORY
         # ===========================
         vals_numeric = pd.to_numeric(df["Value"], errors="coerce")
         vmax = float(np.nanmax(vals_numeric.values)) if np.isfinite(np.nanmax(vals_numeric.values)) else 100.0
@@ -459,7 +558,7 @@ class GeoUniversalMap(Scene):
 
             val_str = _format_value(row_obj, value)
 
-            val_txt = Text(val_str, font="Arial", weight=BOLD, font_size=16, color=col)
+            val_txt = Text(val_str, font="Montserrat", weight=BOLD, font_size=16, color=col)
             chip = RoundedRectangle(corner_radius=0.16, width=val_txt.width + 0.38, height=0.44)
             chip.set_fill(color="#070A0C", opacity=0.90)
             chip.set_stroke(color=col, width=1.8, opacity=0.90)
@@ -522,7 +621,7 @@ class GeoUniversalMap(Scene):
             return card
 
         # ===========================
-        # DOTS + U-TURN LINES (UNCHANGED)
+        # DOTS + U-TURN LINES
         # ===========================
         def make_dot(col, p):
             glow = Circle(radius=0.20).move_to(p)
@@ -554,7 +653,7 @@ class GeoUniversalMap(Scene):
             return VGroup(glow, core).set_z_index(75)
 
         # ===========================
-        # BUILD ALL (UNCHANGED)
+        # BUILD ALL
         # ===========================
         all_cards, all_lines, all_dots, meta_items = [], [], [], []
         group_dots_map = {g: [] for g in unique_groups}
@@ -591,13 +690,24 @@ class GeoUniversalMap(Scene):
         # =====================================================
         # ✅ STEP 1: BOOT (ticker + map reveal)
         # =====================================================
-        self.play(FadeIn(ticker, shift=UP * 0.06, scale=0.99), run_time=0.55, rate_func=rf.ease_out_back)
+        t_hook = TL.seg_total(hook_seg, 3.2)
+        
+        # ✅ FIX: Hook Delta Anchor uses the time captured before the intro ran
+        # This keeps the audio and video in sync from 0.0s.
+        hook_t0 = global_start_t0 
+        
+        act_ticker_in = clamp(t_hook * 0.20, 0.40, 0.70)
+        act_sweep = clamp(t_hook * 0.15, 0.30, 0.65)
+        act_map_in = clamp(t_hook * 0.35, 0.70, 1.25)
+        
+        sfx_mark("map_intro", meta={"segment": hook_seg})
+        self.play(FadeIn(ticker, shift=UP * 0.06, scale=0.99), run_time=act_ticker_in, rate_func=rf.ease_out_back)
 
         self.add(ticker_sweep)
         self.play(ticker_sweep.animate.set_opacity(1.0), run_time=0.08)
         self.play(
             ticker_sweep.animate.move_to(ticker_bg.get_right() + LEFT * (ticker_sweep.width / 2 + 0.05)),
-            run_time=0.55,
+            run_time=act_sweep,
             rate_func=rf.ease_in_out_sine,
         )
         self.play(ticker_sweep.animate.set_opacity(0), run_time=0.10)
@@ -618,7 +728,7 @@ class GeoUniversalMap(Scene):
         self.play(
             FadeIn(world, scale=1.02),
             scan.animate.move_to([sf["cx"], world.get_bottom()[1] - 0.25, 0]).set_opacity(0),
-            run_time=1.05,
+            run_time=act_map_in,
             rate_func=rf.ease_out_cubic,
         )
         self.remove(scan)
@@ -628,19 +738,41 @@ class GeoUniversalMap(Scene):
             run_time=0.35,
             rate_func=rf.there_and_back,
         )
+        
+        # ✅ FIX: Delta Time Hook
+        TL.consume(hook_seg, float(self.time) - hook_t0)
+        hold_breathing(self, TL.remaining(hook_seg), focus=ticker_bg, text="SYNCING INTRO")
 
         # =====================================================
-        # ✅ STEP 2: DATA REVEAL (UNCHANGED)
+        # ✅ STEP 2: DATA REVEAL
         # =====================================================
+        t_setup = TL.seg_total(setup_seg, 2.6)
+        setup_t0 = float(self.time)
+        act_setup = clamp(t_setup * 0.40, 0.80, 1.40)
+        
         ticker_set("Signal sweep: deploying nodes…", animate=True)
 
         self.play(
             LaggedStart(*[FadeIn(d, scale=0.70) for d in all_dots], lag_ratio=0.08),
-            run_time=1.00,
+            run_time=act_setup,
             rate_func=rf.ease_out_cubic,
         )
+        
+        # ✅ FIX: Delta Time Setup
+        TL.consume(setup_seg, float(self.time) - setup_t0)
+        hold_breathing(self, TL.remaining(setup_seg), focus=world, text="CALIBRATING MAP FEED")
 
-        for dot, ln, card, (cname, gname, col) in zip(all_dots, all_lines, all_cards, meta_items):
+        for i, (dot, ln, card, (cname, gname, col)) in enumerate(zip(all_dots, all_lines, all_cards, meta_items), start=1):
+            seg_name = node_segments[i - 1] if i - 1 < len(node_segments) else f"node_{i}"
+            t_node = TL.seg_total(seg_name, 1.9)
+            node_t0 = float(self.time)
+            
+            act_ping = clamp(t_node * 0.15, 0.20, 0.45)
+            act_line = clamp(t_node * 0.25, 0.40, 0.75)
+            act_card = clamp(t_node * 0.25, 0.35, 0.65)
+            act_meter = clamp(t_node * 0.15, 0.25, 0.45)
+            
+            sfx_mark("node_reveal", meta={"segment": seg_name, "node": i})
             glow, core = ln[0], ln[1]
 
             ping = Circle(radius=0.12).move_to(dot[2].get_center()).set_z_index(72)
@@ -651,18 +783,18 @@ class GeoUniversalMap(Scene):
                 Flash(dot[2].get_center(), color=col, flash_radius=0.22, time_width=0.25),
                 dot.animate.scale(1.12),
                 ping.animate.scale(2.4).set_opacity(0),
-                run_time=0.30,
+                run_time=act_ping,
                 rate_func=rf.ease_out_cubic,
             )
             self.remove(ping)
             self.play(dot.animate.scale(1.00), run_time=0.12, rate_func=rf.ease_out_cubic)
 
-            self.play(Create(core, rate_func=rf.linear), run_time=0.55)
+            self.play(Create(core, rate_func=rf.linear), run_time=act_line)
             self.play(FadeIn(glow), run_time=0.12)
 
             self.play(
                 FadeIn(card, shift=UP * 0.12, scale=0.985),
-                run_time=0.45,
+                run_time=act_card,
                 rate_func=rf.ease_out_back,
             )
 
@@ -672,7 +804,7 @@ class GeoUniversalMap(Scene):
                 final_w = getattr(card, "meter_final_width", meter_fill.width)
                 self.play(
                     meter_fill.animate.stretch_to_fit_width(max(0.01, final_w)).align_to(meter_bg, LEFT),
-                    run_time=0.32,
+                    run_time=act_meter,
                     rate_func=rf.ease_out_cubic,
                 )
             except Exception:
@@ -688,11 +820,28 @@ class GeoUniversalMap(Scene):
             except Exception:
                 pass
 
-            self.wait(0.05)
+            # ✅ FIX: Delta Time Node
+            TL.consume(seg_name, float(self.time) - node_t0)
+            hold_breathing(self, TL.remaining(seg_name), focus=card, text="PROCESSING NODE DATA")
 
         # =====================================================
-        # ✅ STEP 3: ALLIANCE TRAFFIC / ENDING + WINNER (UNCHANGED)
+        # ✅ CRITICAL FIX 2: GHOST PADDING
         # =====================================================
+        # Absorb the unused audio segments (e.g., node_4 to node_8) if CSV data is shorter than audio.
+        for ghost_i in range(len(all_dots) + 1, len(node_segments) + 1):
+            ghost_seg = node_segments[ghost_i - 1]
+            ghost_total = TL.seg_total(ghost_seg)
+            if ghost_total > 0.001:
+                hold_breathing(self, ghost_total, focus=world, text="AWAITING SIGNAL...")
+                TL.consume(ghost_seg, ghost_total)
+
+        # =====================================================
+        # ✅ STEP 3: ALLIANCE TRAFFIC / ENDING + WINNER
+        # =====================================================
+        t_winner = TL.seg_total(winner_seg, 2.2)
+        winner_t0 = float(self.time)
+        act_win_lines = clamp(t_winner * 0.40, 0.80, 1.60)
+        
         def _winner_metric_index():
             vals = pd.to_numeric(df["Value"], errors="coerce")
             if len(vals.dropna()) > 0:
@@ -742,14 +891,14 @@ class GeoUniversalMap(Scene):
                     travel_paths.append((base_arc, color))
 
             if len(connections) > 0:
-                self.play(Create(connections), run_time=1.15, rate_func=rf.ease_in_out_sine)
+                self.play(Create(connections), run_time=act_win_lines, rate_func=rf.ease_in_out_sine)
 
                 tracers, anims = [], []
                 for path, c in travel_paths:
                     tracer = Dot(radius=0.06, color=WHITE).set_opacity(0.85).set_z_index(95)
                     tracer.move_to(path.get_start())
                     tracers.append(tracer)
-                    anims.append(MoveAlongPath(tracer, path, run_time=2.2, rate_func=linear))
+                    anims.append(MoveAlongPath(tracer, path, run_time=1.8, rate_func=linear))
 
                 if tracers:
                     self.add(*tracers)
@@ -759,7 +908,7 @@ class GeoUniversalMap(Scene):
                             flashes.append(Flash(card[1].get_center(), color=Theme.TEXT_MAIN, flash_radius=0.52))
                         except Exception:
                             pass
-                    self.play(*anims, *flashes, run_time=2.2)
+                    self.play(*anims, *flashes, run_time=1.8)
                     self.play(*[FadeOut(t) for t in tracers], run_time=0.4)
 
                 self.play(connections.animate.set_opacity(0.35), run_time=0.6, rate_func=rf.ease_out_cubic)
@@ -790,6 +939,7 @@ class GeoUniversalMap(Scene):
 
             if winner_idx is not None and 0 <= winner_idx < len(all_cards):
                 ticker_set("Top signal detected: highlighting node…", animate=True)
+                sfx_mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
 
                 winner = all_cards[winner_idx]
                 winner_dot = all_dots[winner_idx]
@@ -816,6 +966,7 @@ class GeoUniversalMap(Scene):
 
             winner_idx = _winner_compare_index() if mode == "COMPARE" else _winner_metric_index()
             if winner_idx is not None and 0 <= winner_idx < len(all_cards):
+                sfx_mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
                 winner = all_cards[winner_idx]
                 winner_dot = all_dots[winner_idx]
                 self.play(winner.animate.scale(1.04), run_time=0.25, rate_func=rf.ease_out_cubic)
@@ -835,16 +986,30 @@ class GeoUniversalMap(Scene):
                 except Exception:
                     pass
                 self.play(winner.animate.scale(1.00), run_time=0.15)
+                
+        # ✅ FIX: Delta Time Winner
+        TL.consume(winner_seg, float(self.time) - winner_t0)
+        hold_breathing(self, TL.remaining(winner_seg), focus=ticker_bg, text="LOCKING WINNER SIGNAL")
 
+        # OUTRO
+        outro_t0 = float(self.time)
+        act_outro = clamp(TL.seg_total(outro_seg, 1.6) * 0.40, 0.40, 1.0)
+        sfx_mark("outro_swipe", meta={"segment": outro_seg})
         self.play(
             ticker_bg.animate.set_stroke(width=2.6, opacity=0.90),
-            run_time=0.45,
+            run_time=act_outro,
             rate_func=rf.there_and_back,
         )
 
-        self.wait(2.0)
+        # ✅ FIX: Delta Time Outro
+        TL.consume(outro_seg, float(self.time) - outro_t0)
+        hold_breathing(self, TL.remaining(outro_seg), focus=ticker_bg, text="FINALIZING MAP OUTPUT")
 
         try:
             live_dot.remove_updater(_pulse)
+        except Exception:
+            pass
+        try:
+            sfx.flush()
         except Exception:
             pass

@@ -61,7 +61,7 @@ def _make_style_line(style_name: str, st: Dict[str, Any], margin_v: int) -> str:
 
 
 def _ass_escape_text(s: str) -> str:
-    """
+    r"""
     ASS-safe escaping for normal (non-tag) text.
     NOTE: We DO NOT use this on strings that contain ASS tags like {\kf...}.
     """
@@ -114,7 +114,7 @@ def _distribute_cs(total_cs: int, words: list[str]) -> list[int]:
 
 
 def _to_reveal_words_ass(text: str, duration_sec: float) -> str:
-    """
+    r"""
     "Premium" word-wise reveal using ASS karaoke tags (\kf).
     This is NOT true forced-alignment karaoke. It's an approximation:
     - segment duration split across words (weighted by word length)
@@ -138,6 +138,16 @@ def _to_reveal_words_ass(text: str, duration_sec: float) -> str:
     return " ".join(out)
 
 
+def _with_premium_entry_tags(text: str) -> str:
+    """
+    Subtle per-dialogue entry treatment for premium preset.
+    """
+    if not text:
+        return ""
+    prefix = r"{\fad(140,100)\blur0.90\bord3.4\t(0,180,\blur0.35\bord2.8)}"
+    return prefix + text
+
+
 def render_ass(
     out_path: Path,
     job: Dict[str, Any],
@@ -156,6 +166,7 @@ def render_ass(
     style_cfg = render_cfg.get("style") if isinstance(render_cfg.get("style"), dict) else {}
 
     preset_name = str(style_cfg.get("preset", "modern_clean"))
+    preset_key = preset_name.strip().lower()
     safe_margin_px = int(style_cfg.get("safe_margin_px", 80))
     max_lines = int(style_cfg.get("max_lines", 2))
 
@@ -168,6 +179,7 @@ def render_ass(
         tracks = [{"lang": "en", "mode": "plain", "position": "bottom"}]
 
     st = get_style_preset(preset_name, safe_margin_px=safe_margin_px)
+    use_premium_entry = preset_key == "modern_premium"
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -253,6 +265,8 @@ def render_ass(
                         karaoke_chunks.append(r"\N")
 
                 text_out = "".join(karaoke_chunks).strip()
+                if use_premium_entry:
+                    text_out = _with_premium_entry_tags(text_out)
                 dialogue = f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},{style_name},,0,0,0,,{text_out}"
                 lines.append(dialogue)
 
@@ -283,6 +297,8 @@ def render_ass(
                     # plain
                     ass_text = r"\N".join(_escape_ass_text(x) for x in wrapped).strip()
 
+                if use_premium_entry:
+                    ass_text = _with_premium_entry_tags(ass_text)
                 dialogue = f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},{style_name},,0,0,0,,{ass_text}"
                 lines.append(dialogue)
 

@@ -710,8 +710,10 @@ from __future__ import annotations
 
 import os
 import sys
+import json
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -794,6 +796,11 @@ except Exception:
 
     def get_rotating_watermark(*args, **kwargs):
         return VGroup()
+
+# --- PIPELINE HELPERS (direct imports, NO try/except) ---
+from src.sync.job import load_job
+from src.sync.timeline import Timeline, clamp as tclamp
+from src.sync.retention import hold_breathing, banner_scan_hold
 
 
 # ==========================
@@ -899,16 +906,34 @@ def _resolve_race_meta(meta: Dict[str, str]) -> RaceMeta:
     )
 
 
-def _find_race_csv() -> Optional[str]:
-    candidates = [
-        os.path.join(DATA_DIR, "race_data.csv"),
-        os.path.join(project_root, "geo_data", "race_data.csv"),
-        os.path.join(current_dir, "geo_data", "race_data.csv"),
-        os.path.join(current_dir, "race_data.csv"),
-        os.path.join(project_root, "race_data.csv"),
-        "race_data.csv",
-    ]
-    return next((p for p in candidates if os.path.exists(p)), None)
+def _find_race_csv(job: Optional[Dict[str, Any]] = None, job_dir: Optional[Path] = None) -> Optional[str]:
+    candidates: List[str] = []
+
+    if isinstance(job, dict):
+        rel = str(job.get("data_csv", "")).strip()
+        if rel:
+            p = Path(rel)
+            if not p.is_absolute():
+                base = job_dir if job_dir is not None else _resolve_job_dir()
+                p = (base / p).resolve()
+            candidates.append(str(p))
+
+    if job_dir is not None:
+        candidates.append(str((job_dir / "data" / "race_data.csv").resolve()))
+
+    candidates.extend(
+        [
+            os.path.join(DATA_DIR, "race_data.csv"),
+            os.path.join(project_root, "geo_data", "race_data.csv"),
+            os.path.join(current_dir, "geo_data", "race_data.csv"),
+            os.path.join(current_dir, "race_data.csv"),
+            os.path.join(project_root, "race_data.csv"),
+            "race_data.csv",
+        ]
+    )
+    seen = set()
+    ordered = [p for p in candidates if not (p in seen or seen.add(p))]
+    return next((p for p in ordered if os.path.exists(p)), None)
 
 
 def _load_race_df(path: str) -> pd.DataFrame:
@@ -925,18 +950,135 @@ def _load_race_df(path: str) -> pd.DataFrame:
     return df
 
 
+def _resolve_job_dir() -> Path:
+    job_dir_env = os.environ.get("JOB_DIR", "").strip()
+    if job_dir_env:
+        return Path(job_dir_env).resolve()
+
+    job_json_path = os.environ.get("JOB_JSON_PATH", "").strip()
+    if job_json_path:
+        return Path(job_json_path).resolve().parent
+
+    return Path(project_root).resolve()
+
+
+def _extract_audio_order(job: Dict[str, Any]) -> List[str]:
+    audio = job.get("audio")
+    if not isinstance(audio, dict):
+        return []
+    order = audio.get("order")
+    if not isinstance(order, list):
+        return []
+    out: List[str] = []
+    for x in order:
+        if isinstance(x, str) and x.strip():
+            out.append(x.strip())
+    return out
+
+
+def _default_segment_order() -> List[str]:
+    return ["hook", "setup", "lap_1", "lap_2", "sprint", "finish", "outro"]
+
+
+def _segment_defaults(order: List[str]) -> Dict[str, float]:
+    defaults: Dict[str, float] = {}
+    if not order:
+        order = _default_segment_order()
+
+    n = len(order)
+    for i, seg in enumerate(order):
+        if i == 0:
+            defaults[seg] = 2.6
+        elif i == 1:
+            defaults[seg] = 2.0
+        elif i == n - 1:
+            defaults[seg] = 1.4
+        elif i == n - 2 and n >= 5:
+            defaults[seg] = 2.3
+        else:
+            defaults[seg] = 2.8
+    return defaults
+
+
+def _segment_roles(order: List[str]) -> Tuple[str, Optional[str], List[str], Optional[str], Optional[str]]:
+    seq = list(order) if order else _default_segment_order()
+    hook = seq[0]
+    setup = seq[1] if len(seq) > 1 else None
+
+    race: List[str] = []
+    finish: Optional[str] = None
+    outro: Optional[str] = None
+
+    if len(seq) >= 5:
+        race = seq[2:-2]
+        finish = seq[-2]
+        outro = seq[-1]
+    elif len(seq) == 4:
+        race = [seq[2]]
+        outro = seq[3]
+    elif len(seq) == 3:
+        race = [seq[2]]
+
+    return hook, setup, race, finish, outro
+
+
+class SFXMarksWriter:
+    def __init__(self, scene: Scene, job_dir: Path, template_id: str = "scan_race"):
+        self.scene = scene
+        self.template_id = template_id
+        self.out_path = job_dir / "output" / "sfx_marks.json"
+        self.marks: List[Dict[str, Any]] = []
+
+    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: Optional[Dict[str, Any]] = None):
+        t = float(getattr(self.scene, "time", 0.0)) + float(offset)
+        ev: Dict[str, Any] = {"t": t, "key": str(key), "gain_db": float(gain_db)}
+        if isinstance(meta, dict) and meta:
+            ev["meta"] = meta
+        self.marks.append(ev)
+
+    def flush(self):
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"version": 1, "template_id": self.template_id, "marks": self.marks}
+        with self.out_path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
 class CinematicLineRace(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR if "BACKGROUND_COLOR" in globals() else Design.BG
 
-        csv_path = _find_race_csv()
+        job = load_job(default={"template_id": "scan_race", "timeline": {}, "audio": {"order": []}})
+        job_dir = _resolve_job_dir()
+        timeline_dict = job.get("timeline", {}) if isinstance(job.get("timeline"), dict) else {}
+        audio_order = _extract_audio_order(job)
+        if not audio_order:
+            audio_order = _default_segment_order()
+
+        TL = Timeline.from_dict(timeline_dict, defaults=_segment_defaults(audio_order))
+        hook_seg, setup_seg, race_segments, finish_seg, outro_seg = _segment_roles(audio_order)
+        sfx = SFXMarksWriter(self, job_dir, template_id="scan_race")
+
+        csv_path = _find_race_csv(job=job, job_dir=job_dir)
         meta = RaceMeta()
         if csv_path:
             meta = _resolve_race_meta(_parse_meta_lines(csv_path))
 
+        def _pad_segment(name: Optional[str], focus: Optional[Mobject] = None, text: str = "EXPLANATION IN PROGRESS"):
+            if not name:
+                return
+            rem = TL.remaining(name)
+            if rem > 0.001:
+                hold_breathing(self, rem, focus=focus, text=text)
+                TL.consume(name, rem)
+
         # ==========================================
         # 1) INTRO (NO OVERLAP, NO RE-APPEAR)
         # ==========================================
+        hook_total = TL.seg_total(hook_seg, 2.6)
+        hook_action_target = max(0.90, hook_total * 0.82)
+        hook_scale = tclamp(hook_action_target / 2.55, 0.55, 1.45)
+        hook_t0 = float(self.time)
+
         cover = Rectangle(width=60, height=60).set_fill(color=BLACK, opacity=1).set_stroke(width=0)
         cover.set_z_index(999)
         self.add(cover)
@@ -947,23 +1089,26 @@ class CinematicLineRace(Scene):
         brand = Text("BIGDATA LEAK", font="Montserrat", weight=BOLD, font_size=48, color=Design.CYAN)
         brand.move_to([0, 0.10, 0]).set_z_index(1000)
 
-        self.play(FadeIn(breach, shift=UP * 0.08), run_time=0.18)
-        self.play(Flash(breach, color=WHITE, line_length=0.35, num_lines=10), run_time=0.18)
-        self.play(FadeOut(breach, shift=UP * 0.08), run_time=0.16)
+        sfx.mark("intro_glitch", gain_db=-9, meta={"at": "breach"})
+        self.play(FadeIn(breach, shift=UP * 0.08), run_time=0.18 * hook_scale)
+        self.play(Flash(breach, color=WHITE, line_length=0.35, num_lines=10), run_time=0.18 * hook_scale)
+        self.play(FadeOut(breach, shift=UP * 0.08), run_time=0.16 * hook_scale)
 
-        self.play(Write(brand), run_time=0.35)
-        self.play(Flash(brand, color=WHITE, line_length=0.55, num_lines=12), run_time=0.20)
-        self.play(FadeOut(brand, shift=UP * 0.06), run_time=0.18)
+        sfx.mark("intro_rise", gain_db=-8, meta={"at": "brand_in"})
+        self.play(Write(brand), run_time=0.35 * hook_scale)
+        self.play(Flash(brand, color=WHITE, line_length=0.55, num_lines=12), run_time=0.20 * hook_scale)
+        self.play(FadeOut(brand, shift=UP * 0.06), run_time=0.18 * hook_scale)
 
         top, right, bottom, left = get_branding_border_lines(stroke_w=6, opacity=1.0)
         overlay = get_cinematic_overlay(self, feed_text=meta.feed_text, footer_text=meta.footer_text)
         watermark = get_rotating_watermark()
         self.add(top, right, bottom, left, overlay, watermark)
 
+        sfx.mark("whoosh_soft", gain_db=-10, meta={"at": "frame_in"})
         self.play(
             FadeOut(cover),
             Create(top), Create(right), Create(bottom), Create(left),
-            run_time=0.75,
+            run_time=0.75 * hook_scale,
             rate_func=rf.ease_out_cubic
         )
 
@@ -1055,13 +1200,32 @@ class CinematicLineRace(Scene):
         except Exception:
             pass
 
+        # layered ambient glow textures (subtle, non-distracting)
+        glow_a = Circle(radius=max(2.8, sf["w"] * 0.36)).set_stroke(width=0)
+        glow_a.set_fill(color=Design.CYAN, opacity=0.045).set_z_index(2)
+        glow_a.move_to([sf["left"] + 1.0, sf["top"] - 1.4, 0])
+
+        glow_b = Circle(radius=max(3.2, sf["w"] * 0.40)).set_stroke(width=0)
+        glow_b.set_fill(color=Design.PINK, opacity=0.035).set_z_index(2)
+        glow_b.move_to([sf["right"] - 0.9, sf["bottom"] + 1.8, 0])
+
+        self.add(glow_a, glow_b)
+
+        glow_a.add_updater(lambda m, dt: m.rotate(0.03 * dt).shift(RIGHT * (0.01 * np.sin(self.time * 0.9))))
+        glow_b.add_updater(lambda m, dt: m.rotate(-0.025 * dt).shift(UP * (0.008 * np.cos(self.time * 1.1))))
+
         # ==========================================
         # 4) HEADER
         # ==========================================
         header_y = sf["top"] - 0.75
 
+        kicker = Text("LIVE ECONOMIC TRACKER", font="Montserrat", weight=BOLD, font_size=13, color=Design.GOLD)
+        kicker.set_opacity(0.82).set_z_index(60)
+        kicker.move_to([sf["cx"], header_y + 0.44, 0])
+
         title = Text(meta.title, font="Montserrat", weight=BOLD, font_size=42, color=Design.TEXT_MAIN)
         title.move_to([sf["cx"], header_y, 0]).set_z_index(60)
+        title_shadow = title.copy().set_color(BLACK).set_opacity(0.30).shift(DOWN * 0.05 + RIGHT * 0.04).set_z_index(59)
 
         underline = Line(LEFT * 2.8, RIGHT * 2.8)
         underline.set_stroke(width=4, color=[Design.PINK, Design.CYAN])
@@ -1077,17 +1241,28 @@ class CinematicLineRace(Scene):
 
         subtitle = Text(meta.subtitle, font="Montserrat", font_size=18, color=Design.TEXT_SUB)
         subtitle.next_to(underline, DOWN, buff=0.20).set_z_index(60)
+        subtitle_shadow = subtitle.copy().set_color(BLACK).set_opacity(0.24).shift(DOWN * 0.04 + RIGHT * 0.03).set_z_index(59)
+        self.add(title_shadow, subtitle_shadow)
 
+        sfx.mark("charge_up", gain_db=-10, meta={"at": "header"})
         self.play(
-            Write(title, run_time=0.55),
-            GrowFromCenter(underline, run_time=0.55),
-            FadeIn(scan_dot, run_time=0.2),
-            FadeIn(subtitle, shift=UP * 0.1, run_time=0.45),
+            FadeIn(kicker, shift=UP * 0.08, run_time=0.28 * hook_scale),
+            Write(title, run_time=0.55 * hook_scale),
+            GrowFromCenter(underline, run_time=0.55 * hook_scale),
+            FadeIn(scan_dot, run_time=0.20 * hook_scale),
+            FadeIn(subtitle, shift=UP * 0.1, run_time=0.45 * hook_scale),
         )
+        TL.consume(hook_seg, float(self.time) - hook_t0)
+        _pad_segment(hook_seg, focus=underline, text="SCANNING LIVE FEED")
 
         # ==========================================
         # 5) GLASS DOCK (TOP-LEFT under header)
         # ==========================================
+        setup_total = TL.seg_total(setup_seg or "setup", 2.0)
+        setup_action_target = max(0.80, setup_total * 0.82)
+        setup_scale = tclamp(setup_action_target / 1.45, 0.55, 1.45)
+        setup_t0 = float(self.time)
+
         dock_w = float(np.clip(sf["w"] * 0.45, 3.2, 4.2))
         dock_h = float(np.clip(sf["h"] * 0.34, 3.8, 4.8))
 
@@ -1121,7 +1296,15 @@ class CinematicLineRace(Scene):
         dock_title.set_z_index(42)
         dock_title.next_to(live_dot, RIGHT, buff=0.10).align_to(strip, LEFT)
 
-        self.play(FadeIn(panel_glow), FadeIn(panel), FadeIn(strip), FadeIn(live_dot), FadeIn(dock_title), run_time=0.45)
+        sfx.mark("ui_pop", gain_db=-12, meta={"at": "dock_in"})
+        self.play(
+            FadeIn(panel_glow),
+            FadeIn(panel),
+            FadeIn(strip),
+            FadeIn(live_dot),
+            FadeIn(dock_title),
+            run_time=0.45 * setup_scale,
+        )
 
         # rail inside panel
         rail_x = panel.get_left()[0] + 0.20
@@ -1180,7 +1363,7 @@ class CinematicLineRace(Scene):
             name_txt = Text("COUNTRY", font="Montserrat", weight=BOLD, font_size=13, color=WHITE).set_z_index(47)
             name_txt.move_to(body.get_left() + RIGHT * 0.95)
 
-            val_txt = Text(f"0.0{meta.unit_suffix}", font="Arial", weight=BOLD, font_size=13, color=Design.CYAN).set_z_index(47)
+            val_txt = Text(f"0.0{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=13, color=Design.CYAN).set_z_index(47)
             val_txt.move_to(body.get_right() + LEFT * 0.40)
 
             return {
@@ -1198,7 +1381,15 @@ class CinematicLineRace(Scene):
             }
 
         slot_cards = [make_slot_card(y) for y in slot_ys]
-        self.add(*[c["group"] for c in slot_cards])
+        sfx.mark("ui_tick", gain_db=-13, meta={"at": "slots_in"})
+        self.play(
+            LaggedStart(
+                *[FadeIn(c["group"], shift=RIGHT * 0.08) for c in slot_cards],
+                lag_ratio=0.08,
+                run_time=0.55 * setup_scale,
+                rate_func=rf.ease_out_cubic,
+            )
+        )
 
         # ==========================================
         # 6) FULL-WIDTH PLOT (UNDER DOCK)
@@ -1244,7 +1435,7 @@ class CinematicLineRace(Scene):
         x_labels = VGroup()
         for yr in range(int(min_year), int(max_year) + 1, 5):
             pos = ax.c2p(yr, 0)
-            lbl = Text(str(yr), font="Arial", weight=BOLD, font_size=13, color=Design.TEXT_SUB)
+            lbl = Text(str(yr), font="Montserrat", weight=BOLD, font_size=13, color=Design.TEXT_SUB)
             lbl.next_to(pos, DOWN, buff=0.20)
             x_labels.add(lbl)
 
@@ -1252,7 +1443,7 @@ class CinematicLineRace(Scene):
         for v in np.arange(0, y_max + 0.001, y_step):
             pos = ax.c2p(min_year, v)
             txt = f"{int(v)}{meta.unit_suffix}" if v > 0 else "0"
-            lbl = Text(txt, font="Arial", weight=BOLD, font_size=12, color=Design.TEXT_SUB)
+            lbl = Text(txt, font="Montserrat", weight=BOLD, font_size=12, color=Design.TEXT_SUB)
             lbl.next_to(pos, LEFT, buff=0.12)
             y_labels.add(lbl)
 
@@ -1272,13 +1463,16 @@ class CinematicLineRace(Scene):
 
         wm.add_updater(lambda m: wm_updater(m))
 
+        sfx.mark("scan_tick", gain_db=-14, meta={"at": "axes_in"})
         self.play(
-            FadeIn(ax, run_time=0.35),
-            Create(guides, run_time=0.45),
-            FadeIn(x_labels, run_time=0.35),
-            FadeIn(y_labels, run_time=0.35),
-            FadeIn(wm, run_time=0.35),
+            FadeIn(ax, run_time=0.35 * setup_scale),
+            Create(guides, run_time=0.45 * setup_scale),
+            FadeIn(x_labels, run_time=0.35 * setup_scale),
+            FadeIn(y_labels, run_time=0.35 * setup_scale),
+            FadeIn(wm, run_time=0.35 * setup_scale),
         )
+        TL.consume(setup_seg or "setup", float(self.time) - setup_t0)
+        _pad_segment(setup_seg, focus=ax, text="CALIBRATING RACE TRACK")
 
         plot_bounds = {"left": plot_left, "right": plot_right, "top": plot_top, "bottom": plot_bottom}
 
@@ -1357,7 +1551,7 @@ class CinematicLineRace(Scene):
             for (c, v) in top:
                 p = ax.c2p(t, v)
                 col = color_map[c]
-                txt = Text(f"{v:.1f}{meta.unit_suffix}", font="Arial", weight=BOLD, font_size=13, color=WHITE)
+                txt = Text(f"{v:.1f}{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=13, color=WHITE)
                 pad_x, pad_y = 0.18, 0.10
 
                 box = RoundedRectangle(
@@ -1447,7 +1641,7 @@ class CinematicLineRace(Scene):
                 nm = Text(str(c).upper(), font="Montserrat", weight=BOLD, font_size=13, color=WHITE)
                 nm.move_to(body.get_left() + RIGHT * 0.95)
 
-                vt = Text(f"{v:.1f}{meta.unit_suffix}", font="Arial", weight=BOLD, font_size=13, color=Design.CYAN)
+                vt = Text(f"{v:.1f}{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=13, color=Design.CYAN)
                 vt.move_to(body.get_right() + LEFT * 0.40)
 
                 max_w = (vt.get_left()[0] - nm.get_left()[0]) - 0.15
@@ -1477,14 +1671,76 @@ class CinematicLineRace(Scene):
         self.add(dock_driver)
 
         # ==========================================
-        # 8) LAUNCH
+        # 8) LAUNCH (timeline-driven segments)
         # ==========================================
-        self.play(
-            self.tracker.animate.set_value(max_year),
-            run_time=20,
-            rate_func=linear,
-        )
-        self.wait(2)
+        active_race_segments = list(race_segments)
+        if not active_race_segments:
+            fallback_seg = finish_seg or outro_seg
+            if fallback_seg:
+                active_race_segments = [fallback_seg]
+                if fallback_seg == finish_seg:
+                    finish_seg = None
+                elif fallback_seg == outro_seg:
+                    outro_seg = None
 
+        if active_race_segments:
+            year_targets = np.linspace(min_year, max_year, num=len(active_race_segments) + 1)[1:]
+            for i, (seg_name, target_year) in enumerate(zip(active_race_segments, year_targets), start=1):
+                seg_total = TL.seg_total(seg_name, 2.8)
+                run_t = max(0.35, min(float(seg_total), max(0.65, float(seg_total) * 0.84)))
+                sfx.mark("scan_tick", gain_db=-14, meta={"segment": seg_name, "lap": i})
+                self.play(
+                    self.tracker.animate.set_value(float(target_year)),
+                    run_time=run_t,
+                    rate_func=linear,
+                )
+                TL.consume(seg_name, run_t)
+                _pad_segment(seg_name, focus=ax, text="PROCESSING TREND SHIFT")
+        else:
+            self.play(self.tracker.animate.set_value(max_year), run_time=4.0, rate_func=linear)
 
+        if finish_seg:
+            finish_t0 = float(self.time)
+            final_scores = sorted([(c, float(series[c][-1])) for c in labels], key=lambda x: x[1], reverse=True)
+            winner_name = final_scores[0][0] if final_scores else "N/A"
 
+            winner_banner = RoundedRectangle(width=3.9, height=0.62, corner_radius=0.16).set_z_index(75)
+            winner_banner.set_fill(color="#000000", opacity=0.58)
+            winner_banner.set_stroke(color=Design.GOLD, width=2.0, opacity=0.90)
+            winner_banner.move_to([sf["cx"], sf["bottom"] + 0.85, 0])
+
+            winner_text = Text(
+                f"LEADER LOCKED: {str(winner_name).upper()}",
+                font="Montserrat",
+                weight=BOLD,
+                font_size=18,
+                color=WHITE,
+            ).set_z_index(76)
+            winner_text.move_to(winner_banner)
+
+            sfx.mark("winner_rise", gain_db=-10, meta={"segment": finish_seg})
+            self.play(FadeIn(winner_banner, shift=UP * 0.08), FadeIn(winner_text, shift=UP * 0.08), run_time=0.40)
+            sfx.mark("impact_soft", gain_db=-13, meta={"segment": finish_seg, "at": "lock_flash"})
+            self.play(Flash(slot_cards[0]["body"].get_right(), color=WHITE, line_length=0.45, num_lines=9), run_time=0.22)
+            self.play(FadeOut(winner_text, shift=UP * 0.05), FadeOut(winner_banner, shift=UP * 0.05), run_time=0.24)
+            TL.consume(finish_seg, float(self.time) - finish_t0)
+            _pad_segment(finish_seg, focus=slot_cards[0]["body"], text="LOCKING FINAL RANKS")
+
+        if outro_seg:
+            outro_t0 = float(self.time)
+            outro_total = TL.seg_total(outro_seg, 1.4)
+            outro_run = max(0.20, min(outro_total, 0.55))
+            sfx.mark("ui_pop", gain_db=-12, meta={"segment": outro_seg})
+            self.play(
+                FadeOut(scan_dot, shift=UP * 0.03),
+                FadeOut(kicker, shift=UP * 0.03),
+                run_time=outro_run,
+                rate_func=rf.ease_in_out_sine,
+            )
+            TL.consume(outro_seg, float(self.time) - outro_t0)
+            _pad_segment(outro_seg, focus=subtitle, text="FINALIZING OUTPUT")
+
+        for seg_name in audio_order:
+            _pad_segment(seg_name, focus=ax if seg_name in active_race_segments else None)
+
+        sfx.flush()

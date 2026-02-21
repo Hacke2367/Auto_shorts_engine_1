@@ -17,7 +17,32 @@ TEMPLATE_MAP = {
         "file": "src/templates/Bar_chart/bar_chart.py",
         "scene": "BarChartTemplate",
     },
+    "butterfly_chart": {
+        "file": "src/templates/chart_folder/butterfly_chart.py",
+        "scene": "ButterflyChart",
+    },
+    "geo_universal": {
+        "file": "src/templates/map_chart/geo_universal.py",
+        "scene": "GeoUniversalMap",
+    },
+    "scan_race": {
+        "file": "src/templates/line_chart/scan_race.py",
+        "scene": "CinematicLineRace",
+    },
+    "sort_card": {
+        "file": "src/templates/Sort_card/sort_card.py",
+        "scene": "SortCardTribunalFinal",
+    },
+    "vs_card": {
+        "file": "src/templates/Vs_card/vs_card.py",
+        "scene": "VsCardFinal",
+    },
+    "donut_breakdown": {
+        "file": "src/templates/pie_chart/donut_breakdown.py",
+        "scene": "DonutBreakdownFinal",
+    },
 }
+
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -62,7 +87,12 @@ def find_rendered_video(media_dir: Path, scene_name: str) -> Optional[Path]:
     return best
 
 
-def concat_audio_ffmpeg(ffmpeg: str, audio_paths: List[Path], out_path: Path) -> None:
+def concat_audio_ffmpeg(
+    ffmpeg: str,
+    audio_paths: List[Path],
+    out_path: Path,
+    trim_silence: bool = True,
+) -> None:
     """
     Concatenate multiple audio segment files in order into one AAC file.
     Output: out_path (AAC)
@@ -74,8 +104,27 @@ def concat_audio_ffmpeg(ffmpeg: str, audio_paths: List[Path], out_path: Path) ->
         cmd += ["-i", str(p)]
 
     n = len(audio_paths)
-    # concat filter joins audio inputs in order
-    filter_complex = "".join([f"[{i}:a]" for i in range(n)]) + f"concat=n={n}:v=0:a=1[a]"
+    if trim_silence:
+        # Conservative leading+trailing silence trim per segment before concat.
+        # We do not trim internal pauses to avoid harming speech rhythm.
+        parts: List[str] = []
+        refs: List[str] = []
+        for i in range(n):
+            parts.append(
+                f"[{i}:a]"
+                f"aformat=channel_layouts=stereo,aresample=44100,"
+                f"silenceremove=start_periods=1:start_threshold=-50dB,"
+                f"areverse,"
+                f"silenceremove=start_periods=1:start_threshold=-50dB,"
+                f"areverse"
+                f"[a{i}]"
+            )
+            refs.append(f"[a{i}]")
+        parts.append("".join(refs) + f"concat=n={n}:v=0:a=1[a]")
+        filter_complex = ";".join(parts)
+    else:
+        # legacy path: direct concat without silence trim
+        filter_complex = "".join([f"[{i}:a]" for i in range(n)]) + f"concat=n={n}:v=0:a=1[a]"
 
     cmd += [
         "-filter_complex", filter_complex,
@@ -571,7 +620,14 @@ def mix_voice_sfx_bgm_ffmpeg(
         f"acompressor=threshold=-18dB:ratio=3:attack=5:release=120:makeup=1"
         f"[v0]"
     )
-    filters.append("[v0]asplit=2[v_mix][v_sc]")
+    # Voice processing + split for sidechain (only if needed)
+    need_sc = (duck_sfx and (sfx_i is not None)) or (duck_bgm and (bgm_i is not None))
+
+    if need_sc:
+        filters.append("[v0]asplit=2[v_mix][v_sc]")
+    else:
+        # no ducking needed -> no sidechain branch
+        filters.append("[v0]anull[v_mix]")
 
     mix_inputs = ["[v_mix]"]
 
@@ -677,6 +733,7 @@ def main():
     ap.add_argument("-q", "--quality", default="h", help="manim quality: l/m/h/p (like manim -qh)")
     ap.add_argument("--open", action="store_true", help="open final video after render")
     ap.add_argument("--no_sfx", action="store_true", help="disable sfx mixing even if marks exist")
+    ap.add_argument("--no-trim-silence", action="store_true", help="disable silence trim on voice segments before concat")
     ap.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg binary (default: ffmpeg)")
     args = ap.parse_args()
 
@@ -706,10 +763,13 @@ def main():
     # -----------------------------
     # 1) Run Manim render
     # -----------------------------
+    # Keep the active interpreter path as-is; resolving symlinks can break venv module discovery.
+    py_exec = str(os.sys.executable)
     manim_cmd = [
-        str(Path(os.sys.executable).resolve()),
+        py_exec,
         "-m", "manim",
         f"-q{args.quality}",
+        "--disable_caching",
         str(scene_file),
         scene_name,
         "--media_dir",
@@ -773,7 +833,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     voice_aac = out_dir / "_voice.aac"
-    concat_audio_ffmpeg(ffmpeg, audio_paths, voice_aac)
+    concat_audio_ffmpeg(ffmpeg, audio_paths, voice_aac, trim_silence=(not args.no_trim_silence))
     print(f"[OK] Voice concat: {voice_aac}")
 
     # -----------------------------

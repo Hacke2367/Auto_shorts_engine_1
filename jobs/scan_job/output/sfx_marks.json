@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "template_id": "scan_race",
+  "marks": [
+    {
+      "t": 0.0,
+      "key": "intro_glitch",
+      "gain_db": -9.0,
+      "meta": {
+        "at": "breach"
+      }
+    },
+    {
+      "t": 0.754,
+      "key": "intro_rise",
+      "gain_db": -8.0,
+      "meta": {
+        "at": "brand_in"
+      }
+    },
+    {
+      "t": 1.8125,
+      "key": "whoosh_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "frame_in"
+      }
+    },
+    {
+      "t": 2.9,
+      "key": "charge_up",
+      "gain_db": -10.0,
+      "meta": {
+        "at": "header"
+      }
+    },
+    {
+      "t": 5.166666666666666,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "at": "dock_in"
+      }
+    },
+    {
+      "t": 5.83333333333333,
+      "key": "ui_tick",
+      "gain_db": -13.0,
+      "meta": {
+        "at": "slots_in"
+      }
+    },
+    {
+      "t": 6.6333333333333275,
+      "key": "scan_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "at": "axes_in"
+      }
+    },
+    {
+      "t": 10.233333333333315,
+      "key": "scan_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "lap_1",
+        "lap": 1
+      }
+    },
+    {
+      "t": 15.16666666666663,
+      "key": "scan_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "lap_2",
+        "lap": 2
+      }
+    },
+    {
+      "t": 20.699999999999946,
+      "key": "scan_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "sprint",
+        "lap": 3
+      }
+    },
+    {
+      "t": 26.03333333333326,
+      "key": "winner_rise",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "finish"
+      }
+    },
+    {
+      "t": 26.43333333333326,
+      "key": "impact_soft",
+      "gain_db": -13.0,
+      "meta": {
+        "segment": "finish",
+        "at": "lock_flash"
+      }
+    },
+    {
+      "t": 31.166666666666575,
+      "key": "ui_pop",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "outro"
+      }
+    }
+  ]
+}

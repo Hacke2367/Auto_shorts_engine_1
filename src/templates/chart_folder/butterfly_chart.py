@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import os
 import sys
+import json
+import subprocess
 from dataclasses import dataclass
-from typing import Tuple, List, Literal
+from pathlib import Path
+from typing import Tuple, List, Literal, Optional, Dict, Any
 
 import numpy as np
 import pandas as pd
@@ -19,8 +22,14 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 sys.path.append(project_root)
 
 # --- IMPORTS (Robust) ---
+# 1) config background (optional)
 try:
     from src.config import BACKGROUND_COLOR
+except Exception:
+    BACKGROUND_COLOR = "#050505"
+
+# 2) utils are REQUIRED for proper template behavior
+try:
     from src.utils import (
         IntroManager,
         Brand,
@@ -28,8 +37,7 @@ try:
         make_floating_particles,
     )
 except Exception:
-    BACKGROUND_COLOR = "#050505"
-
+    # Full fallback (same as your current except)
     class Brand:
         CYAN = "#00F0FF"
         PINK = "#FF0055"
@@ -62,6 +70,13 @@ except Exception:
         @staticmethod
         def play_intro(*args, **kwargs):
             return
+
+# 3) retention is OPTIONAL and must not kill Intro imports
+try:
+    from src.sync.retention import RetentionOverlay  # optional (preferred)
+except Exception:
+    RetentionOverlay = None
+
 
 
 # ==========================
@@ -139,9 +154,10 @@ class LayoutCfg:
     z_track: int = 20
     z_bar: int = 28
     z_node: int = 35
-    z_header: int = 60
     z_ui: int = 55
+    z_header: int = 60
     z_value: int = 85
+    z_retention: int = 110
     z_winner_dim: int = 120
     z_winner: int = 140
 
@@ -280,7 +296,6 @@ def _place_end_box(
         _clamp_x_into_safe(end_box, sf, policy.safe_pad)
         return "OUTSIDE"
 
-    # AUTO
     if _fits_safe_x(end_box, sf, policy.safe_pad):
         return "OUTSIDE"
 
@@ -289,18 +304,12 @@ def _place_end_box(
 
 
 # ==========================
-# ✅ NUMBER FIX (stable on Windows/Cairo): use Text + ValueTracker instead of Integer/DecimalNumber
+# NUMBER FIX (stable on Windows/Cairo): use Text + ValueTracker instead of Integer/DecimalNumber
 # ==========================
 def _fmt_compact_value(raw_value: float, spec: CompactSpec) -> str:
-    """
-    raw_value = original number (not divided)
-    spec.divisor/spec.decimals/spec.suffix control formatting.
-    """
     v = float(raw_value) / float(spec.divisor)
-    # For plain numbers, keep it integer-looking (your decision: integer is best)
     if spec.suffix == "":
         return str(int(round(v)))
-    # For K/M/B keep 1 decimal but trim trailing .0
     s = f"{v:.{spec.decimals}f}"
     s = s.rstrip("0").rstrip(".")
     return s
@@ -317,10 +326,6 @@ def _make_tracker_text(
     stroke_w: float = 1.0,
     stroke_op: float = 0.35,
 ) -> Text:
-    """
-    Creates a Text that updates from a ValueTracker (int rounded).
-    This avoids the "numbers vanish" issue from Integer/DecimalNumber rebuilds.
-    """
     t = Text("0", font=font, weight=weight, font_size=font_size, color=color).set_z_index(z)
     try:
         t.set_stroke(stroke_color, width=stroke_w, opacity=stroke_op)
@@ -341,14 +346,79 @@ def _make_tracker_text(
     return t
 
 
+# --- PIPELINE HELPERS (direct imports, NO try/except) ---
+from src.sync.job import load_job
+from src.sync.timeline import Timeline
+from src.sync.retention import hold_breathing, banner_scan_hold
+
+
+def clamp(v, lo, hi):
+    return float(np.clip(float(v), float(lo), float(hi)))
+
+# ==========================
+# SFX MARK RECORDER (writes sfx_marks.json)
+# ==========================
+class SFXMarksWriter:
+    def __init__(self, scene: Scene, job_dir: Optional[Path], template_id: str = "butterfly_chart"):
+        self.scene = scene
+        self.template_id = template_id
+        if job_dir:
+            self.out_path = job_dir / "output" / "sfx_marks.json"
+        else:
+            self.out_path = None
+        self.marks: List[Dict[str, Any]] = []
+
+    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: Optional[Dict[str, Any]] = None):
+        try:
+            t = float(self.scene.time) + float(offset)
+            ev: Dict[str, Any] = {"t": t, "key": str(key), "gain_db": float(gain_db)}
+            if isinstance(meta, dict) and meta:
+                ev["meta"] = meta
+            self.marks.append(ev)
+        except Exception:
+            pass
+
+    def flush(self):
+        if not self.out_path:
+            return
+        try:
+            self.out_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {"version": 1, "template_id": self.template_id, "marks": self.marks}
+            with self.out_path.open("w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            print(f"[OK] Wrote SFX marks: {self.out_path}")
+        except Exception:
+            pass
+
+
+
 class ButterflyChart(Scene):
     def construct(self):
         cfg = LayoutCfg()
         self.camera.background_color = Design.BG
         sf = get_safe_frame(margin=cfg.safe_margin)
+        # --- job dir / outputs ---
+        import os
+        from pathlib import Path
+        job_dir_env = os.environ.get("JOB_DIR", "").strip()
+        job_json_path = os.environ.get("JOB_JSON_PATH", "").strip()
+        job_dir = Path(job_dir_env) if job_dir_env else (Path(job_json_path).parent if job_json_path else None)
+        out_dir = (job_dir / "output") if job_dir else None
+
+        job = load_job(default={"template_id": "butterfly_chart", "timeline": {}})
+        timeline_dict = job.get("timeline", {}) if isinstance(job.get("timeline", {}), dict) else {}
+        
+        # Audio default timings based roughly on data size if missing
+        audio_order = job.get("audio", {}).get("order", [])
+        defaults = {"hook": 2.6, "setup": 1.5, "winner": 3.2, "outro": 1.2}
+        
+        # Will add item_X defaults later after data loads
+        
+        sfx = SFXMarksWriter(self, job_dir, template_id="butterfly_chart")
+
 
         # ==========================================
-        # 1) INTRO (utils IntroManager only)
+        # 1) INTRO (original preserved)
         # ==========================================
         try:
             IntroManager.play_intro(
@@ -361,16 +431,34 @@ class ButterflyChart(Scene):
         except Exception:
             pass
 
-        # ======================B====================
-        # 2) DATA
         # ==========================================
-        csv_candidates = [
+        # 2) DATA (original preserved)
+        # ==========================================
+        job_csv_candidates: List[str] = []
+        if job_dir:
+            job_json_path = job_dir / "job.json"
+            if job_json_path.exists():
+                try:
+                    job_cfg = _read_json(job_json_path)
+                    csv_rel = str(job_cfg.get("data_csv", "")).strip() if isinstance(job_cfg, dict) else ""
+                    if csv_rel:
+                        p = Path(csv_rel)
+                        if not p.is_absolute():
+                            p = (job_dir / p).resolve()
+                        job_csv_candidates.append(str(p))
+                except Exception:
+                    pass
+            job_csv_candidates.append(str((job_dir / "data" / "butterfly_data.csv").resolve()))
+
+        csv_candidates = job_csv_candidates + [
             os.path.join(project_root, "geo_data", "butterfly_data.csv"),
             os.path.join(current_dir, "geo_data", "butterfly_data.csv"),
             os.path.join(current_dir, "butterfly_data.csv"),
             os.path.join(project_root, "butterfly_data.csv"),
             "butterfly_data.csv",
         ]
+        seen = set()
+        csv_candidates = [p for p in csv_candidates if not (p in seen or seen.add(p))]
         csv_path = next((p for p in csv_candidates if os.path.exists(p)), None)
 
         if csv_path:
@@ -392,14 +480,12 @@ class ButterflyChart(Scene):
         p1_vals_raw = df["P1_Value"].astype(float).tolist()
         p2_vals_raw = df["P2_Value"].astype(float).tolist()
 
-        # Display as integer (simple), keep compare safe
         p1_vals = [float(int(round(v))) for v in p1_vals_raw]
         p2_vals = [float(int(round(v))) for v in p2_vals_raw]
 
         negative_possible = any(v < 0 for v in (p1_vals + p2_vals))
         max_val = float(max(100.0, np.max(np.abs(np.array(p1_vals + p2_vals + [0.0])))))
 
-        # Auto thin bars when many attributes (keeps code small; prevents breakage)
         n_attr = max(1, len(attrs))
         bar_h = cfg.bar_h
         if n_attr >= 13:
@@ -407,8 +493,14 @@ class ButterflyChart(Scene):
         if n_attr >= 17:
             bar_h = 0.40
 
+        # Now finalize TL defaults
+        for i in range(1, n_attr + 1):
+            defaults[f"item{i}"] = 2.0
+            defaults[f"item_{i}"] = 2.0  # Safe catchall
+        TL = Timeline.from_dict(timeline_dict, defaults=defaults)
+
         # ==========================================
-        # 3) ATMOSPHERE
+        # 3) ATMOSPHERE (original preserved)
         # ==========================================
         grid = NumberPlane(
             x_range=[-10, 10, 2],
@@ -443,9 +535,23 @@ class ButterflyChart(Scene):
         except Exception:
             pass
 
+        # Premium vignette (used for subtle pulse during bar grow)
+        vignette = VGroup(
+            Rectangle(width=sf["w"] + 3, height=2.2).set_fill(BLACK, 0.0).set_stroke(width=0).move_to([sf["cx"], sf["top"] + 0.9, 0]),
+            Rectangle(width=sf["w"] + 3, height=2.2).set_fill(BLACK, 0.0).set_stroke(width=0).move_to([sf["cx"], sf["bottom"] - 0.9, 0]),
+            Rectangle(width=2.2, height=sf["h"] + 3).set_fill(BLACK, 0.0).set_stroke(width=0).move_to([sf["left"] - 0.9, sf["cy"], 0]),
+            Rectangle(width=2.2, height=sf["h"] + 3).set_fill(BLACK, 0.0).set_stroke(width=0).move_to([sf["right"] + 0.9, sf["cy"], 0]),
+        ).set_z_index(cfg.z_value + 6)
+        vignette.set_opacity(0.0)
+        self.add(vignette)
+
         # ==========================================
-        # 4) HEADER (✅ score stable now)
+        # 4) HEADER (sync: hook)
         # ==========================================
+        hook_total = TL.seg_total("hook", 2.6)
+        hook_action = clamp(hook_total * 0.75, 1.2, 2.2)
+        scale = hook_action / 2.5
+
         header_top_y = sf["top"] - cfg.header_top_pad
         title = Text("WHO WILL DOMINATE?", font="Montserrat", weight=BOLD, font_size=26, color=Design.TEXT_SUB).set_z_index(cfg.z_header)
         title.move_to([sf["cx"], header_top_y, 0])
@@ -466,7 +572,7 @@ class ButterflyChart(Scene):
 
         scan_dot.add_updater(_scan)
 
-        # ✅ CHANGED: returns (grp, ring, score_text, score_tracker)
+        # returns (grp, ring, score_text, score_tracker)
         def player_card(name: str, accent: str, side: str) -> Tuple[VGroup, Circle, Text, ValueTracker]:
             plate_w = 3.10
             plate_h = 1.10
@@ -483,10 +589,8 @@ class ButterflyChart(Scene):
             ring.set_fill(color="#0A0A0A", opacity=1.0)
             ring.set_stroke(color=accent, width=3, opacity=0.95)
 
-            # ✅ FIX: stable score (Text + tracker)
             score_t = ValueTracker(0.0)
             score = _make_tracker_text(score_t, font_size=34, z=cfg.z_header + 9)
-            # keep it centered in ring
             score.add_updater(lambda m: m.move_to(ring.get_center()))
 
             name_txt = Text(name, font="Montserrat", weight=BOLD, font_size=22, color=WHITE).set_z_index(cfg.z_header + 9)
@@ -526,27 +630,40 @@ class ButterflyChart(Scene):
         _high_contrast_text(vs_txt)
         vs_txt.move_to(vs_chip)
 
+        hook_t0 = float(self.time)
+        sfx.mark("title_in")
         self.play(
             FadeIn(title, shift=UP * 0.12),
             Create(underline),
             FadeIn(scan_dot),
-            run_time=0.55,
+            run_time=clamp(0.55 * scale, 0.35, 0.85),
             rate_func=rf.ease_out_cubic,
         )
+
+        sfx.mark("cards_in")
         self.play(
             FadeIn(p1_card, shift=RIGHT * 0.25),
             FadeIn(p2_card, shift=LEFT * 0.25),
             Create(connector),
             FadeIn(vs_chip),
             FadeIn(vs_txt),
-            run_time=0.55,
+            run_time=clamp(0.55 * scale, 0.35, 0.85),
             rate_func=rf.ease_out_cubic,
         )
         self.bring_to_front(p1_score, p2_score)
 
+        TL.consume("hook", float(self.time) - hook_t0)
+        hold_breathing(self, TL.remaining("hook"), focus=underline)
+
+        setup_t0 = float(self.time)
+
         # ==========================================
-        # 5) TIMELINE
+        # 5) TIMELINE + SPINE (sync: setup)
         # ==========================================
+        setup_total = TL.seg_total("setup", 1.5)
+        setup_action = clamp(setup_total * 0.75, 0.9, 1.6)
+        setup_scale = setup_action / 1.5
+
         timeline = RoundedRectangle(width=sf["w"], height=cfg.timeline_h, corner_radius=0.18).set_z_index(cfg.z_ui)
         timeline.set_fill(color=Design.GLASS_FILL, opacity=0.60)
         timeline.set_stroke(color=Design.PANEL_STROKE, width=2, opacity=0.90)
@@ -574,7 +691,17 @@ class ButterflyChart(Scene):
         p2_fill.set_fill(color=Design.PINK, opacity=0.85).set_stroke(width=0)
         p2_fill.align_to(meter_bg, RIGHT)
 
-        self.add(timeline, tl_title, meter_bg, meter_mid, p1_fill, p2_fill)
+        sfx.mark("ui_in")
+        self.play(
+            FadeIn(timeline, shift=DOWN * 0.10),
+            FadeIn(tl_title),
+            FadeIn(meter_bg),
+            FadeIn(meter_mid),
+            FadeIn(p1_fill),
+            FadeIn(p2_fill),
+            run_time=clamp(0.50 * setup_scale, 0.30, 0.75),
+            rate_func=rf.ease_out_cubic,
+        )
         self.bring_to_front(p1_fill, p2_fill, meter_mid)
 
         n_rounds = max(1, len(attrs))
@@ -602,15 +729,12 @@ class ButterflyChart(Scene):
             grp.move_to([x, y, 0])
             round_chips.append(grp)
 
-        self.add(*round_chips)
+        self.play(*[FadeIn(rc, shift=UP * 0.05) for rc in round_chips], run_time=clamp(0.35 * setup_scale, 0.20, 0.50), rate_func=rf.ease_out_cubic)
 
-        # ==========================================
-        # 6) MAIN BUTTERFLY REGION
-        # ==========================================
+        # MAIN BUTTERFLY REGION bounds
         top_bound = (header_row_y - cfg.header_to_rows_pad) - cfg.rows_shift_down
         bottom_bound = (timeline.get_top()[1] + cfg.rows_to_timeline_pad) - cfg.rows_shift_down
         avail_h = max(2.2, top_bound - bottom_bound)
-
         row_gap = float(np.clip(avail_h / (n_attr + 0.35), cfg.row_gap_min, cfg.row_gap_max))
 
         center_x = sf["cx"]
@@ -624,8 +748,16 @@ class ButterflyChart(Scene):
 
         spine = Line([center_x, top_bound + 0.10, 0], [center_x, bottom_bound - 0.10, 0]).set_z_index(cfg.z_spine)
         spine.set_stroke(color=WHITE, width=2.2, opacity=0.10)
-        self.add(spine)
 
+        sfx.mark("spine_in")
+        self.play(Create(spine), run_time=clamp(0.40 * setup_scale, 0.25, 0.60), rate_func=rf.ease_out_cubic)
+
+        TL.consume("setup", float(self.time) - setup_t0)
+        hold_breathing(self, TL.remaining("setup"), focus=spine)
+
+        # ==========================================
+        # 6) BUILD HELPERS
+        # ==========================================
         def make_node(label: str, stroke_col: str) -> VGroup:
             hexagon = RegularPolygon(n=6, radius=cfg.node_radius)
             hexagon.rotate(90 * DEGREES)
@@ -694,7 +826,6 @@ class ButterflyChart(Scene):
         def tip_point(spear: VGroup) -> np.ndarray:
             return spear[1].get_vertices()[2]
 
-        # ✅ CHANGED: end-box uses Text+tracker; returns tracker too
         def make_end_box(accent: str, spec: CompactSpec) -> Tuple[VGroup, Text, Text, ValueTracker]:
             w = _nice_endbox_width(spec, negative_possible)
             h = cfg.endbox_h
@@ -711,7 +842,6 @@ class ButterflyChart(Scene):
             suffix = Text(spec.suffix, font="Montserrat", weight=BOLD, font_size=14, color=Design.TEXT_SUB).set_z_index(cfg.z_value + 2)
 
             def _layout(m_num: Text):
-                # Keep your previous layout style (same as DecimalNumber branch)
                 if spec.suffix:
                     m_num.next_to(box.get_left(), RIGHT, buff=cfg.endbox_text_pad).align_to(box, DOWN).shift(UP * 0.10)
                     suffix.next_to(m_num, RIGHT, buff=0.06).align_to(m_num, DOWN).shift(UP * 0.02)
@@ -728,16 +858,33 @@ class ButterflyChart(Scene):
                 _layout(m)
 
             num.add_updater(_upd_num)
-            # keep suffix always on top + in correct place (layout called by num updater too)
             suffix.add_updater(lambda m: m.set_z_index(cfg.z_value + 2))
-
             _layout(num)
 
             grp = VGroup(box, num, suffix)
             return grp, num, suffix, val_t
 
+        def chip_bounce_anim(chip_grp: VGroup, col) -> Tuple[Animation, Mobject]:
+            glow = SurroundingRectangle(chip_grp[0], corner_radius=0.16).set_fill(opacity=0)
+            glow.set_stroke(color=col, width=10, opacity=0.0).set_z_index(cfg.z_ui + 6)
+            self.add(glow)
+
+            up = AnimationGroup(
+                chip_grp.animate.scale(1.06),
+                glow.animate.set_opacity(0.35),
+                run_time=0.14,
+                rate_func=rf.ease_out_back,
+            )
+            down = AnimationGroup(
+                chip_grp.animate.scale(1 / 1.06),
+                glow.animate.set_opacity(0.0),
+                run_time=0.22,
+                rate_func=rf.ease_in_out_sine,
+            )
+            return Succession(up, down), glow
+
         # ==========================================
-        # 7) BATTLE LOOP
+        # 7) BATTLE LOOP (sync: item1..itemN)
         # ==========================================
         p1_wins = 0
         p2_wins = 0
@@ -748,6 +895,14 @@ class ButterflyChart(Scene):
         self.add(active_glow)
 
         for i, (attr, v1, v2) in enumerate(zip(attrs, p1_vals, p2_vals)):
+            seg_name = f"item{i+1}"
+            item_t0 = float(self.time)
+            
+            # Pattern A: Determine item runtime limits
+            item_total = TL.seg_total(seg_name, 2.0)
+            item_action = clamp(item_total * 0.85, 1.4, 2.8)
+            i_scale = item_action / 2.0  # normalize
+            
             y = start_y - i * row_gap
 
             stroke_col = Design.CYAN if i % 2 == 0 else Design.PINK
@@ -771,11 +926,10 @@ class ButterflyChart(Scene):
             end_l, end_l_num, end_l_suf, end_l_t = make_end_box(Design.CYAN, spec_l)
             end_r, end_r_num, end_r_suf, end_r_t = make_end_box(Design.PINK, spec_r)
 
-            # AUTO placement (fixes off-screen + "unknown box" clipping)
             _place_end_box("L", end_l, left_container[0], sf, cfg.endbox_policy)
             _place_end_box("R", end_r, right_container[0], sf, cfg.endbox_policy)
 
-            # Round start appear
+            sfx.mark("round_in")
             if i == 0:
                 self.play(
                     FadeIn(left_container, shift=LEFT * 0.18),
@@ -785,7 +939,7 @@ class ButterflyChart(Scene):
                     Create(stub_r),
                     FadeIn(end_l, scale=0.98),
                     FadeIn(end_r, scale=0.98),
-                    run_time=0.38,
+                    run_time=clamp(0.38 * i_scale, 0.25, 0.55),
                     rate_func=rf.ease_out_cubic,
                 )
             else:
@@ -803,11 +957,10 @@ class ButterflyChart(Scene):
                         .set_stroke(color=WHITE, width=3, opacity=0.25)
                         .set_z_index(cfg.z_ui + 3)
                     ),
-                    run_time=0.34,
+                    run_time=clamp(0.34 * i_scale, 0.22, 0.50),
                     rate_func=rf.ease_out_cubic,
                 )
 
-            # Spear targets (abs length)
             w1 = (abs(float(v1)) / max_val) * bar_max_w
             w2 = (abs(float(v2)) / max_val) * bar_max_w
 
@@ -823,11 +976,9 @@ class ButterflyChart(Scene):
 
             self.add(l_start, r_start)
 
-            # Cinematic count-up
             t1 = ValueTracker(0.0)
             t2 = ValueTracker(0.0)
 
-            # ✅ FIX: drive end-box tracker (Text updater handles rendering/layout)
             def upd_end_l(_, dt):
                 end_l_t.set_value(t1.get_value())
                 self.bring_to_front(end_l_num, end_l_suf, end_l)
@@ -839,11 +990,20 @@ class ButterflyChart(Scene):
             end_l.add_updater(upd_end_l)
             end_r.add_updater(upd_end_r)
 
+            # Micro premium FX tied to bar growth:
+            vignette_pulse = vignette.animate(rate_func=rf.there_and_back).set_opacity(0.18)
+            tick_l = end_l[0].animate(rate_func=rf.there_and_back).set_stroke(color=WHITE, width=4.0, opacity=0.55)
+            tick_r = end_r[0].animate(rate_func=rf.there_and_back).set_stroke(color=WHITE, width=4.0, opacity=0.55)
+
+            sfx.mark("bar_grow")
             self.play(
                 Transform(l_start, l_end),
                 Transform(r_start, r_end),
                 t1.animate.set_value(float(v1)),
                 t2.animate.set_value(float(v2)),
+                vignette_pulse,
+                tick_l,
+                tick_r,
                 run_time=0.88,
                 rate_func=rf.ease_out_back,
             )
@@ -851,7 +1011,6 @@ class ButterflyChart(Scene):
             end_l.remove_updater(upd_end_l)
             end_r.remove_updater(upd_end_r)
 
-            # Winner compare
             winner = 0
             if v1 > v2:
                 winner = 1
@@ -860,17 +1019,17 @@ class ButterflyChart(Scene):
                 winner = 2
                 p2_wins += 1
 
-            # Header scores (✅ FIX: animate tracker, not Text)
-            if winner == 1:
-                self.play(p1_score_t.animate.set_value(p1_wins), run_time=0.18, rate_func=rf.ease_out_cubic)
-                self.add_foreground_mobjects(p1_score)  # safe
+                tick_n_scale = clamp(0.18 * i_scale, 0.12, 0.28)
+                self.play(p1_score_t.animate.set_value(p1_wins), run_time=tick_n_scale, rate_func=rf.ease_out_cubic)
+                self.add_foreground_mobjects(p1_score)
             elif winner == 2:
-                self.play(p2_score_t.animate.set_value(p2_wins), run_time=0.18, rate_func=rf.ease_out_cubic)
-                self.add_foreground_mobjects(p2_score)  # safe
+                sfx.mark("score_tick")
+                tick_n_scale = clamp(0.18 * i_scale, 0.12, 0.28)
+                self.play(p2_score_t.animate.set_value(p2_wins), run_time=tick_n_scale, rate_func=rf.ease_out_cubic)
+                self.add_foreground_mobjects(p2_score)
 
             self.bring_to_front(p1_score, p2_score)
 
-            # Meter update (live)
             total_done = i + 1
             p1_ratio = p1_wins / max(1, total_done)
             p2_ratio = p2_wins / max(1, total_done)
@@ -878,15 +1037,15 @@ class ButterflyChart(Scene):
             wL = max(0.01, half * p1_ratio)
             wR = max(0.01, half * p2_ratio)
 
+            sfx.mark("meter_move")
             self.play(
                 p1_fill.animate.stretch_to_fit_width(wL).align_to(meter_bg, LEFT),
                 p2_fill.animate.stretch_to_fit_width(wR).align_to(meter_bg, RIGHT),
-                run_time=0.30,
+                run_time=clamp(0.30 * i_scale, 0.20, 0.45),
                 rate_func=rf.ease_out_back,
             )
             self.bring_to_front(p1_fill, p2_fill, meter_mid)
 
-            # Timeline chip mark + pulse
             chip_body = round_chips[i][0]
             if winner == 1:
                 chip_body.set_fill(color=Design.CYAN, opacity=0.22)
@@ -898,39 +1057,59 @@ class ButterflyChart(Scene):
                 chip_body.set_fill(color=WHITE, opacity=0.06)
                 chip_body.set_stroke(color=WHITE, width=1.8, opacity=0.30)
 
-            # Winner highlight
+            # Winner highlight + micro bounce glow decay
             if winner == 1:
+                sfx.mark("round_win")
                 end_l[0].set_fill(opacity=0.72)
+                bounce, glow = chip_bounce_anim(round_chips[i], Design.CYAN)
                 self.play(
                     Flash(tip_point(l_start), color=WHITE, line_length=0.55, num_lines=14),
                     Indicate(end_l[0], color=Design.CYAN, scale_factor=1.02),
-                    Indicate(round_chips[i][0], color=Design.CYAN, scale_factor=1.02),
+                    bounce,
                     run_time=0.36,
                     rate_func=rf.ease_out_cubic,
                 )
+                self.remove(glow)
             elif winner == 2:
+                sfx.mark("round_win")
                 end_r[0].set_fill(opacity=0.72)
+                bounce, glow = chip_bounce_anim(round_chips[i], Design.PINK)
                 self.play(
                     Flash(tip_point(r_start), color=WHITE, line_length=0.55, num_lines=14),
                     Indicate(end_r[0], color=Design.PINK, scale_factor=1.02),
-                    Indicate(round_chips[i][0], color=Design.PINK, scale_factor=1.02),
+                    bounce,
                     run_time=0.36,
                     rate_func=rf.ease_out_cubic,
                 )
+                self.remove(glow)
             else:
+                sfx.mark("round_tie")
+                bounce, glow = chip_bounce_anim(round_chips[i], WHITE)
                 self.play(
                     Indicate(node[1], color=WHITE, scale_factor=1.02),
-                    Indicate(round_chips[i][0], color=WHITE, scale_factor=1.02),
+                    bounce,
                     run_time=0.28,
                     rate_func=rf.ease_out_cubic,
                 )
+                self.remove(glow)
 
-            self.wait(0.08)
+            # Wrap up sequence
+            TL.consume(seg_name, float(self.time) - item_t0)
+            hold_breathing(self, TL.remaining(seg_name), focus=node)
+
+        # Pad missing segments safely
+        for ix in range(len(attrs) + 1, 15):
+            miss_key = f"item{ix}"
+            if TL.seg_total(miss_key) > 0.001:
+                hold_breathing(self, TL.seg_total(miss_key), focus=meter_bg)
 
         # ==========================================
-        # 8) WINNER ANNOUNCEMENT
+        # 8) WINNER ANNOUNCEMENT (sync: winner + outro)
         # ==========================================
-        self.wait(0.35)
+        winner_t0 = float(self.time)
+        winner_total = TL.seg_total("winner", 3.2)
+        winner_action = clamp(winner_total * 0.75, 1.8, 4.0)
+        w_scale = winner_action / 2.5
 
         if p1_wins > p2_wins:
             winner_name = p1_name
@@ -963,6 +1142,15 @@ class ButterflyChart(Scene):
         glow.set_fill(opacity=0)
         glow.set_stroke(color=border, width=16, opacity=0.08)
 
+        # tiny chroma glow (premium)
+        chroma_l = banner.copy().set_fill(opacity=0).set_z_index(cfg.z_winner - 2)
+        chroma_l.set_stroke(color=Design.CYAN, width=6, opacity=0.08)
+        chroma_l.shift(LEFT * 0.03)
+
+        chroma_r = banner.copy().set_fill(opacity=0).set_z_index(cfg.z_winner - 2)
+        chroma_r.set_stroke(color=Design.PINK, width=6, opacity=0.08)
+        chroma_r.shift(RIGHT * 0.03)
+
         tag = Text(f"{label}:", font="Montserrat", weight=BOLD, font_size=22, color=WHITE).set_z_index(cfg.z_winner + 1)
         _high_contrast_text(tag)
 
@@ -984,19 +1172,41 @@ class ButterflyChart(Scene):
         sweep.set_stroke(color=WHITE, width=3, opacity=0.20)
         sweep.move_to(banner.get_top() + DOWN * 0.26)
 
+        # scanline sweep
+        scanline = Rectangle(width=banner.width * 0.98, height=0.10).set_stroke(width=0).set_z_index(cfg.z_winner + 3)
+        scanline.set_fill(WHITE, opacity=0.10)
+        scanline.move_to(banner.get_top() + DOWN * 0.30)
+
+        sfx.mark("winner_banner")
         self.play(
+            FadeIn(chroma_l),
+            FadeIn(chroma_r),
             FadeIn(glow),
             GrowFromCenter(banner),
             FadeIn(headline, shift=UP * 0.18),
             FadeIn(score_line, shift=UP * 0.10),
-            run_time=0.55,
-            rate_func=rf.ease_out_cubic,
-        )
-        self.play(
-            sweep.animate.shift(DOWN * 1.25).set_opacity(0),
-            Flash(banner.get_top(), color=WHITE, line_length=0.55, num_lines=12),
-            run_time=0.40,
+            run_time=clamp(0.55 * w_scale, 0.40, 0.85),
             rate_func=rf.ease_out_cubic,
         )
 
-        self.wait(2.2)
+        self.add(scanline)
+        sfx.mark("winner_hit")
+        self.play(
+            scanline.animate.move_to(banner.get_bottom() + UP * 0.28).set_opacity(0.0),
+            sweep.animate.shift(DOWN * 1.25).set_opacity(0),
+            Flash(banner.get_top(), color=WHITE, line_length=0.55, num_lines=12),
+            run_time=clamp(0.40 * w_scale, 0.28, 0.60),
+            rate_func=rf.ease_out_cubic,
+        )
+        self.remove(scanline)
+
+        TL.consume("winner", float(self.time) - winner_t0)
+        pad_winner = max(0.0, TL.remaining("winner") - 0.2)
+        hold_breathing(self, pad_winner, focus=banner)
+
+        # OUTRO segment
+        outro_tot = TL.seg_total("outro", 1.2)
+        hold_breathing(self, outro_tot, focus=headline)
+
+        # Flush SFX marks to file
+        sfx.flush()

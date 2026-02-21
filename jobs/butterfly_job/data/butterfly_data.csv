@@ -1,0 +1,7 @@
+#P1=ITEM A,P2=ITEM B
+Attribute, P1_Value, P2_Value
+SPEED, 88, 92
+HANDLING, 95, 80
+ACCEL, 78, 88
+LUXURY, 90, 65
+TECH, 85, 95

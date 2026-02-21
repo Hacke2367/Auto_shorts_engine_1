@@ -1,0 +1,56 @@
+{
+    "template_id": "vs_card",
+    "data_source": "vs_data.csv (ABHISHEK vs PANDEY, 6 rounds: Net Worth, Over Confidence, Loyalty, Gay Supporter, Girlfriends, Backchod)",
+    "segments": [
+        {
+            "name": "hook",
+            "text": "A classified data leak just exposed two individuals head to head. Abhishek versus Pandey. The AI Arena is about to deliver the ultimate verdict.",
+            "file": "audio/hook.mp3"
+        },
+        {
+            "name": "setup",
+            "text": "Six brutal rounds. Every metric scanned and verified. Watch the scores stack up in real time. Let the arena decide.",
+            "file": "audio/setup.mp3"
+        },
+        {
+            "name": "round_1",
+            "text": "Round one. Net Worth. Abhishek comes in with ten lakhs on the board. Pandey shows a flat zero. Abhishek takes the first point with no resistance.",
+            "file": "audio/round_1.mp3"
+        },
+        {
+            "name": "round_2",
+            "text": "Round two. Over Confidence. Abhishek stays grounded with a no. Pandey lights up with a yes. And the point goes to Pandey for owning it.",
+            "file": "audio/round_2.mp3"
+        },
+        {
+            "name": "round_3",
+            "text": "Round three. Loyalty check. Both show a no. Neither side earns a point. A rare draw in the arena.",
+            "file": "audio/round_3.mp3"
+        },
+        {
+            "name": "round_4",
+            "text": "Round four. Gay Supporter. Both Abhishek and Pandey show a yes. Another draw. Respect to both sides.",
+            "file": "audio/round_4.mp3"
+        },
+        {
+            "name": "round_5",
+            "text": "Round five. Girlfriends count. Abhishek flexes with one on the board. Pandey hits zero. Abhishek takes the point clean.",
+            "file": "audio/round_5.mp3"
+        },
+        {
+            "name": "round_6",
+            "text": "Final round. Backchod level. Both sides show a confident yes. Another draw. These two are mirror images in the chaos department.",
+            "file": "audio/round_6.mp3"
+        },
+        {
+            "name": "winner",
+            "text": "All rounds processed. The final calculations are in. And the absolute winner of the AI Arena is revealed.",
+            "file": "audio/winner.mp3"
+        },
+        {
+            "name": "outro",
+            "text": "Arena session sealed. Data locked. Subscribe for the next classified matchup.",
+            "file": "audio/outro.mp3"
+        }
+    ]
+}

@@ -26,6 +26,9 @@ from manim import rate_functions as rf
 # ============================================================
 # PROJECT IMPORTS (preferred) + FALLBACK
 # ============================================================
+import json
+from pathlib import Path
+
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
@@ -35,7 +38,7 @@ try:
     from src.utils import IntroManager, get_branding_border  # type: ignore
 except Exception:
     project_root = os.getcwd()
-    DATA_DIR = os.path.join(project_root, "geo_data")
+    DATA_DIR = os.path.join(project_root, "data")
     ASSETS_DIR = os.path.join(project_root, "assets")
     BACKGROUND_COLOR = "#050505"
 
@@ -88,6 +91,43 @@ except Exception:
                 rate_func=rf.ease_in_out_sine,
             )
             return rec, hdr
+
+# --- SYNC HELPERS (direct imports, NO try/except) ---
+from src.sync.job import load_job
+from src.sync.timeline import Timeline, clamp as _tl_clamp
+from src.sync.retention import hold_breathing, banner_scan_hold
+
+# ============================================================
+# SFX MARKS WRITER  (matches bar_chart.py exactly)
+# - writes: jobs/<job>/output/sfx_marks.json
+# - main.py will pick this up and mix SFX
+# ============================================================
+class SFXMarksWriter:
+    def __init__(self, scene: Scene, job_dir, template_id="sort_card", out_rel="output/sfx_marks.json"):
+        self.scene = scene
+        self.template_id = template_id
+        self.out_path = Path(str(job_dir)) / out_rel if job_dir else None
+        self.marks = []
+
+    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: dict | None = None):
+        t = float(self.scene.time) + float(offset)
+        ev = {"t": t, "key": str(key), "gain_db": float(gain_db)}
+        if meta:
+            ev["meta"] = meta
+        self.marks.append(ev)
+
+    def flush(self):
+        if self.out_path is None:
+            return
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": 1,
+            "template_id": self.template_id,
+            "marks": self.marks,
+        }
+        with self.out_path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print(f"[OK] Wrote sfx_marks.json: {self.out_path} ({len(self.marks)} marks)")
 
 
 # ============================================================
@@ -724,6 +764,48 @@ class SortCardTribunalFinal(Scene):
         csv_path = os.path.join(DATA_DIR, "sort_data.csv")
         meta, df = load_csv_with_meta(csv_path)
 
+        # ============================================================
+        # JOB DATA & TIMELINE INJECTION (Audio Sync Pattern A)
+        # ============================================================
+        from pathlib import Path
+
+        JOB_DIR = os.environ.get("JOB_DIR")
+        JOB_JSON_PATH = os.environ.get("JOB_JSON_PATH", "")
+
+        job_dir_path = Path(JOB_DIR) if JOB_DIR else None
+        if not job_dir_path and JOB_JSON_PATH:
+            job_dir_path = Path(JOB_JSON_PATH).parent
+
+        sfx = SFXMarksWriter(self, job_dir_path, template_id="sort_card")
+
+        job_data = {}
+        if job_dir_path and job_dir_path.exists():
+            try:
+                job_data = load_job(job_dir_path)
+            except Exception:
+                pass
+
+        audio_timings = job_data.get("timeline", {})
+        
+        n_items = max(1, len(df))
+        item_segments = [f"card_{i+1}" for i in range(n_items)]
+        
+        defaults = {
+            "hook": 3.2,
+            "setup": 2.8,
+            "winner": 3.5,
+            "outro": 2.5
+        }
+        for seg in item_segments:
+            defaults[seg] = 5.0
+            
+        TL = Timeline.from_dict(audio_timings, defaults=defaults)
+        
+        hook_seg = "hook"
+        setup_seg = "setup"
+        winner_seg = "winner"
+        outro_seg = "outro"
+
         # Blueprint positions (locked)
         UI_DY = 0.28
         shift_vec = DOWN * UI_DY
@@ -783,7 +865,7 @@ class SortCardTribunalFinal(Scene):
         )
 
         # =====================================================
-        # PERFECT ENTRANCE (vs fixed)
+        # EXACT ENTRANCE (Dynamic Hook + Setup padding)
         # =====================================================
         tL, tVS, tR = title[0], title[1], title[2]
         tL_final = tL.get_center()
@@ -791,7 +873,6 @@ class SortCardTribunalFinal(Scene):
 
         tL.shift(LEFT * 3.0)
         tR.shift(RIGHT * 3.0)
-
         tVS.scale(0.72)
         tVS.set_opacity(0.0)
 
@@ -836,48 +917,71 @@ class SortCardTribunalFinal(Scene):
         hud_layer.add(scan_line)
         scan_line.set_opacity(0.0)
 
+        hook_total = TL.seg_total(hook_seg, 3.2)
+        hook_act = clamp(hook_total * 0.85, 1.25, 3.2)
+        
+        # ✅ FIX: Hook Delta Anchor
+        hook_t0 = float(self.time)
+
+        sfx.mark("ui_pop", gain_db=-10, meta={"segment": hook_seg, "at": "title_in"})
         self.play(
             LaggedStart(
                 AnimationGroup(
                     tL.animate.move_to(tL_final),
                     tR.animate.move_to(tR_final),
                     tVS.animate.set_opacity(1.0).scale(1 / 0.72),
-                    run_time=0.52,
+                    run_time=hook_act * 0.40,
                     rate_func=rf.ease_out_cubic,
                 ),
-                AnimationGroup(Restore(evidence["group"]), run_time=0.46, rate_func=rf.ease_out_cubic),
+                AnimationGroup(Restore(evidence["group"]), run_time=hook_act * 0.35, rate_func=rf.ease_out_cubic),
                 AnimationGroup(
                     Restore(scanner["group"]),
                     Restore(scanner["text_group"]),
                     FadeIn(scan_line),
                     scan_line.animate.move_to(scanner_center + DOWN * (float(scanner["radius"]) * 1.65)),
                     FadeOut(scan_line),
-                    run_time=0.56,
+                    run_time=hook_act * 0.45,
                     rate_func=rf.ease_in_out_sine,
                 ),
-                AnimationGroup(Restore(sub), run_time=0.22, rate_func=rf.ease_out_cubic),
-                AnimationGroup(Restore(underline), Restore(dot), run_time=0.24, rate_func=rf.ease_out_cubic),
+                AnimationGroup(Restore(sub), run_time=hook_act * 0.15, rate_func=rf.ease_out_cubic),
+                AnimationGroup(Restore(underline), Restore(dot), run_time=hook_act * 0.15, rate_func=rf.ease_out_cubic),
                 AnimationGroup(
                     Restore(line_ev),
                     Restore(line_lc),
                     Restore(line_rc),
                     Restore(line_lb),
                     Restore(line_rb),
-                    run_time=0.28,
+                    run_time=hook_act * 0.20,
                     rate_func=rf.ease_out_cubic,
                 ),
-                AnimationGroup(Restore(left_counter["group"]), Restore(right_counter["group"]), run_time=0.26, rate_func=rf.ease_out_cubic),
-                AnimationGroup(Restore(left_bin["group"]), Restore(right_bin["group"]), run_time=0.42, rate_func=rf.ease_out_cubic),
+                AnimationGroup(Restore(left_counter["group"]), Restore(right_counter["group"]), run_time=hook_act * 0.20, rate_func=rf.ease_out_cubic),
+                AnimationGroup(Restore(left_bin["group"]), Restore(right_bin["group"]), run_time=hook_act * 0.25, rate_func=rf.ease_out_cubic),
                 lag_ratio=0.06,
             ),
-            run_time=1.05,
+            run_time=hook_act,
         )
+        
+        # ✅ FIX: Hook Delta Math
+        TL.consume(hook_seg, float(self.time) - hook_t0)
+        hold_breathing(self, TL.remaining(hook_seg), focus=title, text="INITIALIZING SORT MATRICES")
+
+        setup_total = TL.seg_total(setup_seg, 2.8)
+        setup_act = clamp(setup_total * 0.60, 0.40, 1.20)
+        
+        # ✅ FIX: Setup Delta Anchor
+        setup_t0 = float(self.time)
+        
+        sfx.mark("scan_tick", gain_db=-14, meta={"segment": setup_seg, "at": "dot_travel"})
 
         self.play(
             MoveAlongPath(dot, Line(underline.get_left(), underline.get_right())),
-            run_time=0.38,
+            run_time=setup_act,
             rate_func=rf.ease_in_out_sine,
         )
+        
+        # ✅ FIX: Setup Delta Math
+        TL.consume(setup_seg, float(self.time) - setup_t0)
+        hold_breathing(self, TL.remaining(setup_seg), focus=underline, text="CALIBRATING EVIDENCE INTAKE")
 
         # Save baseline states for route glow restore
         line_lc.save_state()
@@ -985,14 +1089,14 @@ class SortCardTribunalFinal(Scene):
             # Worst case, ellipsize (still safe)
             return f">> {ellipsize(random.choice(scan_log_pool).strip(), max_len - 3)}"
 
-        # Timing: fixed 6s from card appear -> card reaches bin top
-        TOTAL_CARD_TIME = 6.0
-
+        # Timing constants no longer needed since we pad dynamically per card segment
         # =====================================================
         # SORT LOOP
         # =====================================================
-        for _, row in df.iterrows():
-            t_card_start = self.renderer.time  # manim internal time
+        for idx, row in df.iterrows():
+            seg_name = item_segments[idx] if idx < len(item_segments) else f"card_{idx+1}"
+            r_total = TL.seg_total(seg_name, 5.0)
+            card_t0 = float(self.time)
 
             img_name = str(row.get("Image", "")).strip()
             reason = str(row.get("Reason", "UNKNOWN")).strip()
@@ -1012,12 +1116,16 @@ class SortCardTribunalFinal(Scene):
             card = build_card(img_path, accent, fallback_label)
             card.move_to(entry).rotate(6 * DEGREES)
             items_layer.add(card)
-            self.play(FadeIn(card, shift=LEFT * 0.35), run_time=0.22, rate_func=rf.ease_out_cubic)
+            
+            sfx.mark("impact_soft", gain_db=-10, meta={"segment": seg_name, "action": "card_in"})
+            act_in = clamp(r_total * 0.08, 0.15, 0.35)
+            self.play(FadeIn(card, shift=LEFT * 0.35), run_time=act_in, rate_func=rf.ease_out_cubic)
 
             # Slide into evidence
+            act_slide = clamp(r_total * 0.12, 0.25, 0.60)
             self.play(
                 card.animate.rotate(-6 * DEGREES).move_to(evidence_hold),
-                run_time=0.45,
+                run_time=act_slide,
                 rate_func=rf.ease_out_cubic,
             )
 
@@ -1037,7 +1145,10 @@ class SortCardTribunalFinal(Scene):
             except Exception:
                 pass
             ui_layer.add(pill)
-            self.play(DrawBorderThenFill(pill_bg), Write(pill_txt), run_time=0.22, rate_func=rf.ease_out_cubic)
+            
+            sfx.mark("ui_pop", gain_db=-14, meta={"segment": seg_name, "action": "pill_reveal"})
+            act_pill = clamp(r_total * 0.10, 0.15, 0.35)
+            self.play(DrawBorderThenFill(pill_bg), Write(pill_txt), run_time=act_pill, rate_func=rf.ease_out_cubic)
 
             # -----------------------------
             # SCAN START (scanner never turns off)
@@ -1045,47 +1156,53 @@ class SortCardTribunalFinal(Scene):
             set_log(scanner["log1"], pick_short_log(), color=Theme.TEXT_SUB)
 
             ev_to_sc.set_stroke(scanner["neutral"], 3.0, 0.0)
+            
+            act_scan_start = clamp(r_total * 0.10, 0.15, 0.35)
+            sfx.mark("scan_tick", gain_db=-12, meta={"segment": seg_name, "action": "scan_start"})
             self.play(
                 ev_to_sc.animate.set_opacity(0.65),
                 evidence["glow"].animate.set_stroke(scanner["neutral"], 18, 0.16),
                 scanner["panel_glow"].animate.set_stroke(scanner["neutral"], 12, 0.14),
                 scanner["scan_strength"].animate.set_value(SPIKE_STRENGTH),
-                run_time=0.22,
+                run_time=act_scan_start,
                 rate_func=rf.ease_out_cubic,
             )
             self.play(
                 scanner["scan_strength"].animate.set_value(BASE_STRENGTH),
-                run_time=0.16,
+                run_time=act_scan_start * 0.6,
                 rate_func=rf.ease_in_out_sine,
             )
 
             # -----------------------------
-            # SCAN DWELL (readable log rotation for ~3.4s)
+            # SCAN DWELL (readable log rotation based on remaining segment time)
             # -----------------------------
-            dwell_total = 3.4
+            used_so_far = float(self.time) - card_t0
+            remaining_for_dwell = r_total - used_so_far - 1.50 # Reserve 1.5s for the routing & packaging exit anims
+            dwell_total = clamp(remaining_for_dwell, 0.8, 3.5)
+            
             hold = 0.95  # readable
             n_steps = max(1, int(dwell_total / hold))
 
             for i in range(n_steps):
                 set_log(scanner["log1"], pick_short_log(), color=Theme.TEXT_SUB)
-                # tiny "text refresh" motion (very subtle, no flicker)
                 self.wait(hold)
 
-            # Hide pill (scan continues; no decision flash)
+            # Hide pill 
+            act_hide = clamp(r_total * 0.05, 0.12, 0.25)
             self.play(
                 FadeOut(pill, shift=UP * 0.06),
-                run_time=0.16,
+                run_time=act_hide,
                 rate_func=rf.ease_in_cubic,
             )
             ui_layer.remove(pill)
 
             # -----------------------------
-            # ROUTE MOMENT (only lines show destination)
+            # ROUTE MOMENT
             # -----------------------------
-            # boost the correct route lines (scanner->counter and counter->bin)
-            self.play(*glow_route(is_left), run_time=0.18, rate_func=rf.ease_out_cubic)
+            act_route = clamp(r_total * 0.08, 0.15, 0.30)
+            sfx.mark("ui_tick", gain_db=-10, meta={"segment": seg_name, "action": "route_glow"})
+            self.play(*glow_route(is_left), run_time=act_route, rate_func=rf.ease_out_cubic)
 
-            # optionally update log line to “routing…” (still neutral)
             set_log(scanner["log1"], ">> routing packet…", color=Theme.TEXT_SUB)
 
             # Move to container
@@ -1094,20 +1211,22 @@ class SortCardTribunalFinal(Scene):
             bend = (evidence_hold + to_top) / 2 + DOWN * 0.60 + (LEFT if is_left else RIGHT) * 0.75
             path_move = CubicBezier(evidence_hold, bend, bend, to_top).set_stroke(width=0, opacity=0)
 
+            act_move = clamp(r_total * 0.25, 0.60, 1.40)
+            sfx.mark("impact_soft", gain_db=-12, meta={"segment": seg_name, "action": "card_store"})
             self.play(
                 MoveAlongPath(card, path_move),
                 card.animate.scale(0.80),
-                run_time=1.05,
+                run_time=act_move,
                 rate_func=rf.ease_in_out_sine,
             )
 
-            # restore baseline route lines + end scan link
+            act_restore = clamp(r_total * 0.08, 0.15, 0.35)
             self.play(
                 *restore_route(is_left),
                 ev_to_sc.animate.set_opacity(0.0),
                 evidence["glow"].animate.set_stroke(Theme.NEON_BLUE, 16, 0.10),
                 scanner["panel_glow"].animate.set_stroke(scanner["neutral"], 12, 0.08),
-                run_time=0.22,
+                run_time=act_restore,
                 rate_func=rf.ease_in_out_sine,
             )
 
@@ -1123,12 +1242,52 @@ class SortCardTribunalFinal(Scene):
                 c2 += 1
                 counter_pop(right_counter, c2, Theme.NEON_PINK)
 
-            # --- HARD guarantee: keep total time per card approx 6s
-            # If some machines render slightly faster, we pad with wait.
-            t_now = self.renderer.time
-            elapsed = float(t_now - t_card_start)
-            pad = TOTAL_CARD_TIME - elapsed
-            if pad > 0.01:
-                self.wait(pad)
+            used = float(self.time) - card_t0
+            TL.consume(seg_name, used)
+            
+            # Pad any strictly missing fractional timeline block up to seg target limits
+            hold_breathing(self, TL.remaining(seg_name), focus=scanner["group"], text="VERDICT CONFIRMED")
 
-        self.wait(2.0)
+        # =====================================================
+        # OUTRO / WINNER LOGIC
+        # =====================================================
+        w_total = TL.seg_total(winner_seg, 3.5)
+        
+        # ✅ FIX: Winner Delta Anchor
+        winner_t0 = float(self.time)
+        
+        act_fade = clamp(w_total * 0.30, 0.50, 1.2)
+        sfx.mark("outro_swipe", gain_db=-10, meta={"segment": winner_seg})
+        self.play(
+            hud_layer.animate.set_opacity(0.0),
+            title.animate.set_opacity(0.0),
+            sub.animate.set_opacity(0.0),
+            underline.animate.set_opacity(0.0),
+            dot.animate.set_opacity(0.0),
+            left_counter["group"].animate.set_opacity(0.0),
+            right_counter["group"].animate.set_opacity(0.0),
+            run_time=act_fade,
+            rate_func=rf.ease_in_out_sine,
+        )
+        
+        final_txt = safe_text("SORT COMPLETE", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
+        final_txt.set_z_index(600)
+        
+        act_end = clamp(w_total * 0.35, 0.60, 1.40)
+        sfx.mark("ui_pop", gain_db=-8, meta={"segment": winner_seg})
+        self.play(FadeIn(final_txt, shift=UP * 0.15), run_time=act_end, rate_func=rf.ease_out_cubic)
+        self.play(Flash(final_txt, color=Theme.NEON_BLUE, line_length=0.7, num_lines=12), run_time=0.35)
+        
+        # ✅ FIX: Winner Delta Math
+        TL.consume(winner_seg, float(self.time) - winner_t0)
+        hold_breathing(self, TL.remaining(winner_seg), focus=final_txt, text="FINALIZING RESULTS")
+        
+        # ✅ FIX: Outro implementation missing proper tracking
+        outro_t0 = float(self.time)
+        hold_breathing(self, TL.seg_total(outro_seg, 2.5), focus=final_txt, text="SYSTEM SHUTDOWN")
+        TL.consume(outro_seg, float(self.time) - outro_t0)
+        
+        try:
+            sfx.flush()
+        except Exception:
+            pass

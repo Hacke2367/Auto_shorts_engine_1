@@ -1,0 +1,46 @@
+{
+    "template_id": "sort_card",
+    "data_source": "sort_data.csv (4 items: python, java, html, cpp → Tier 1 vs Tier 2)",
+    "segments": [
+        {
+            "name": "hook",
+            "text": "A massive system leak just exposed the raw intelligence files. The AI Tribunal is about to sort the most controversial programming languages into their true tiers.",
+            "file": "audio/hook.mp3"
+        },
+        {
+            "name": "setup",
+            "text": "Four pieces of evidence are loaded into the scanner. Each one will be analyzed, classified, and routed to its tier. Let the tribunal begin.",
+            "file": "audio/setup.mp3"
+        },
+        {
+            "name": "card_1",
+            "text": "First up, Python. The AI king. No contest. Massive adoption, clean syntax, and dominance in machine learning. The tribunal routes it straight to Tier One.",
+            "file": "audio/card_1.mp3"
+        },
+        {
+            "name": "card_2",
+            "text": "Next, Java enters the scanner. Verbose, heavy, enterprise-locked. The tribunal flags it as Tier Two. Solid but not elite.",
+            "file": "audio/card_2.mp3"
+        },
+        {
+            "name": "card_3",
+            "text": "Now, HTML slides in. The tribunal scans it and immediately triggers a warning. Not even a real programming language. Tier Two, no appeal.",
+            "file": "audio/card_3.mp3"
+        },
+        {
+            "name": "card_4",
+            "text": "Finally, C plus plus. Raw power, blazing speed, zero hand-holding. The tribunal confirms: Tier One. A true veteran of the code battlefield.",
+            "file": "audio/card_4.mp3"
+        },
+        {
+            "name": "winner",
+            "text": "All evidence has been processed. The sort is complete. Tier One takes the crown with Python and C plus plus leading the grid.",
+            "file": "audio/winner.mp3"
+        },
+        {
+            "name": "outro",
+            "text": "Tribunal session ended. Data secured. Follow for the next system breach.",
+            "file": "audio/outro.mp3"
+        }
+    ]
+}

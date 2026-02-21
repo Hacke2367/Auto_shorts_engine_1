@@ -1449,6 +1449,46 @@ except Exception:
             "cy": 0.0,
         }
 
+import json
+from pathlib import Path
+
+# --- SYNC HELPERS (direct imports, NO try/except) ---
+from src.sync.job import load_job
+from src.sync.timeline import Timeline, clamp as _tl_clamp
+from src.sync.retention import hold_breathing, banner_scan_hold
+
+# ============================================================
+# SFX MARKS WRITER  (matches bar_chart.py exactly)
+# - writes: jobs/<job>/output/sfx_marks.json
+# - main.py will pick this up and mix SFX
+# ============================================================
+class SFXMarksWriter:
+    def __init__(self, scene: Scene, job_dir, template_id="donut_breakdown", out_rel="output/sfx_marks.json"):
+        self.scene = scene
+        self.template_id = template_id
+        self.out_path = Path(str(job_dir)) / out_rel if job_dir else None
+        self.marks = []
+
+    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: dict | None = None):
+        t = float(self.scene.time) + float(offset)
+        ev = {"t": t, "key": str(key), "gain_db": float(gain_db)}
+        if meta:
+            ev["meta"] = meta
+        self.marks.append(ev)
+
+    def flush(self):
+        if self.out_path is None:
+            return
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": 1,
+            "template_id": self.template_id,
+            "marks": self.marks,
+        }
+        with self.out_path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print(f"[OK] Wrote sfx_marks.json: {self.out_path} ({len(self.marks)} marks)")
+
 
 # ==========================
 # Helpers / constants
@@ -2378,6 +2418,23 @@ class DonutBreakdownFinal(Scene):
         self.camera.background_color = BACKGROUND_COLOR
         sf = get_safe_frame(margin=0.70)
 
+        # Timeline Initialization
+        job_dir = None
+        cmd_args = getattr(self, "camera", None)
+        # Attempt to grab job dir from environment if not passed
+        try:
+            env_job_dir = os.getenv("JOB_DIR")
+            if env_job_dir:
+                p = Path(env_job_dir).resolve()
+                if p.exists(): job_dir = p
+        except Exception: pass
+            
+        sys_job = load_job(default={"template_id": "donut_breakdown", "timeline": {}})
+        sfx = SFXMarksWriter(self, job_dir, template_id="donut_breakdown")
+        
+        timeline_dict = sys_job.get("timeline", {}) if isinstance(sys_job.get("timeline", {}), dict) else {}
+        defaults = {"hook": 2.5, "setup": 2.6, "winner": 3.0, "outro": 1.5}
+
         # Intro (LOCKED utils.py)
         if HAS_PROJECT:
             try:
@@ -2447,14 +2504,23 @@ class DonutBreakdownFinal(Scene):
         commentary = make_commentary(center, inner_r, "SCAN", "MARKET", "…", getattr(Theme, "NEON_BLUE", "#2DD4FF"))
         self.add(commentary)
 
+        # Add dynamic slice defaults
+        for i in range(1, len(names) + 1):
+            defaults[f"slice_{i}"] = 2.0
+            defaults[f"item{i}"] = 2.0  # fallback names
+        
+        TL = Timeline.from_dict(timeline_dict, defaults=defaults)
+
         # Edge case: no geo_data
         if not names or not raw_vals:
-            self.play(Write(title), run_time=0.45, rate_func=rf.ease_out_cubic)
-            self.play(Create(underline), run_time=0.30, rate_func=rf.ease_out_cubic)
+            t_h = TL.seg_total("hook", 2.0)
+            self.play(Write(title), run_time=clamp(t_h * 0.45, 0.25, 0.70), rate_func=rf.ease_out_cubic)
+            self.play(Create(underline), run_time=clamp(t_h * 0.30, 0.15, 0.40), rate_func=rf.ease_out_cubic)
             self.add(underline_dot)
             if sub_text:
-                self.play(FadeIn(sub, shift=UP * 0.06), run_time=0.25, rate_func=rf.ease_out_cubic)
-            self.wait(1.0)
+                self.play(FadeIn(sub, shift=UP * 0.06), run_time=clamp(t_h * 0.25, 0.10, 0.35), rate_func=rf.ease_out_cubic)
+            
+            hold_breathing(self, 1.5, focus=title)
             return
 
         # Percent + ranks
@@ -2500,6 +2566,16 @@ class DonutBreakdownFinal(Scene):
             print(f"[DonutBreakdownFinal] COLOR_SOURCE={src} | name={nm} | group={grp} | color={col}")
 
         # Donut build (sweep + reveal slices)
+        t_setup = TL.seg_total("setup", 2.6)
+        setup_action = clamp(t_setup * 0.85, 1.8, 3.5)
+        scale_setup = setup_action / 2.6
+        
+        # ✅ FIX 1.1: Anchor for delta time
+        setup_t0 = float(self.time)
+        
+        # Audio starts for setup
+        sfx.mark("ui_in", meta={"at": "setup_start"})
+        
         master_ring = Annulus(inner_radius=inner_r, outer_radius=outer_r).set_z_index(70)
         master_ring.set_fill("#0A1118", 0.62)
         master_ring.set_stroke(getattr(Theme, "NEON_BLUE", "#2DD4FF"), 2.0, 0.16)
@@ -2588,9 +2664,8 @@ class DonutBreakdownFinal(Scene):
                 stroke_color=WHITE,
                 stroke_width=2.0,
             ).set_z_index(72)
-            rim.set_fill(opacity=0)
             rim.set_stroke(opacity=0.10)
-
+            
             grp = VGroup(sh, sec, hi, rim).set_z_index(70)
             grp.save_state()
             grp.set_opacity(0.0)
@@ -2687,6 +2762,10 @@ class DonutBreakdownFinal(Scene):
         self.play(master_ring.animate.set_opacity(0.16), run_time=0.18, rate_func=rf.ease_out_cubic)
         self.play(FadeOut(sweep_band_m), FadeOut(sweep_arc_m), run_time=0.18, rate_func=rf.ease_out_cubic)
 
+        # ✅ FIX 1.2: Actually consume the setup time and pad it
+        TL.consume("setup", float(self.time) - setup_t0)
+        hold_breathing(self, TL.remaining("setup"), focus=master_ring, text="CALIBRATING SLICES")
+
         # Story loop
         scan_t = ValueTracker(0.0)
 
@@ -2705,7 +2784,10 @@ class DonutBreakdownFinal(Scene):
         scan_arc_m = always_redraw(scan_arc)
         self.add(scan_arc_m)
 
-        for idx in idx_asc:
+        for i_idx, idx in enumerate(idx_asc):
+            # ✅ FIX: Anchor time for this specific slice
+            slice_t0 = float(self.time)
+            
             grp = slice_groups[idx]
             sec = grp[1]
 
@@ -2716,19 +2798,30 @@ class DonutBreakdownFinal(Scene):
             pop = np.array([np.cos(slice_mids[idx]), np.sin(slice_mids[idx]), 0]) * 0.24
             pop_vec = np.array([np.cos(slice_mids[idx]), np.sin(slice_mids[idx]), 0]) * 0.22  # must match callout math
 
+            seg_key = f"slice_{i_idx + 1}"
+            t_item = TL.seg_total(seg_key, 2.0)
+            
+            # Action pacing rules
+            act_in = clamp(t_item * 0.35, 0.40, 1.25)
+            act_pop = clamp(t_item * 0.15, 0.15, 0.45)
+            act_out = clamp(t_item * 0.25, 0.30, 0.85)
+            
+            # ✅ FIX: Scope leak resolved (idx+1 instead of undefined i+1)
+            sfx.mark("whoosh", offset=0.0, meta={"at": "slice_reveal", "i": int(idx + 1)})
+
             new_comm = make_commentary(center, inner_r, "SEGMENT", str(names[idx]).upper(), f"{pct_int}%", col)
             self.play(
                 Transform(commentary, new_comm),
                 grp.animate.shift(pop).scale(1.03),
                 scan_t.animate.increment_value(TAU * 0.35),
-                run_time=0.55,
+                run_time=act_in,
                 rate_func=rf.ease_out_cubic,
             )
 
             c = callout_by_idx[idx]
             glow1, glow2, core1, core2, dot, chip = c  # stable order
 
-            # --- RETARGET lines to current slice position (FIX: winner callout missing/disconnect) ---
+            # --- RETARGET lines to current slice position ---
             dot_pos = dot.get_center()
             center_for_slice = center + pop  # slice is currently shifted by pop
             new_glow1, new_glow2, new_core1, new_core2 = _make_callout_lines_only(
@@ -2755,25 +2848,38 @@ class DonutBreakdownFinal(Scene):
                     FadeIn(chip, shift=0.06 * UP, rate_func=rf.ease_out_cubic),
                     lag_ratio=0.06,
                 ),
-                run_time=0.55,
+                run_time=act_in,
                 rate_func=rf.linear,
             )
+            
+            # ✅ FIX: Scope leak resolved
+            sfx.mark("pop_high", offset=0.0, meta={"at": "chip_pop", "i": int(idx + 1)})
 
             self.play(
                 Indicate(dot, scale_factor=1.18, color=lighten_hex(col, 0.15)),
-                run_time=0.18,
+                run_time=act_pop,
                 rate_func=rf.ease_out_cubic,
             )
 
-            self.wait(0.10)
+            # ✅ FIX: Delta time implementation replaces additive math
+            TL.consume(seg_key, float(self.time) - slice_t0)
+            hold_breathing(self, TL.remaining(seg_key), focus=chip)
+
+            # Anchor for exit animations
+            exit_t0 = float(self.time)
 
             if not is_winner:
+                # ✅ FIX: Scope leak resolved
+                sfx.mark("whoosh_low", offset=0.0, meta={"at": "winner_pop", "i": int(idx + 1)})
                 self.play(
                     grp.animate.shift(-pop).scale(1 / 1.03),
                     scan_t.animate.increment_value(TAU * 0.20),
-                    run_time=0.40,
+                    run_time=act_out,
                     rate_func=rf.ease_in_out_sine,
                 )
+                
+                # ✅ FIX: Delta time
+                TL.consume(seg_key, float(self.time) - exit_t0)
 
                 # retarget lines back to base center after slice returns
                 dot_pos = dot.get_center()
@@ -2796,14 +2902,20 @@ class DonutBreakdownFinal(Scene):
                 glow.set_stroke(color=lighten_hex(col, 0.10), width=18, opacity=0.10)
                 glow.set_z_index(73)
                 self.add(glow)
+                
+                # ✅ FIX: Scope leak resolved
+                sfx.mark("success", offset=0.0, meta={"at": "winner_glow", "i": int(idx + 1)})
                 self.play(
                     Indicate(sec, color=lighten_hex(col, 0.05), scale_factor=1.02),
                     FadeIn(glow),
-                    run_time=0.45,
+                    run_time=act_out,
                     rate_func=rf.ease_out_cubic,
                 )
+                # ✅ FIX: Delta time
+                TL.consume(seg_key, float(self.time) - exit_t0)
 
         # Final leader
+        t_win = TL.seg_total("winner", 3.0)
         winner_col = colors[winner_idx] if colors else getattr(Theme, "NEON_BLUE", "#2DD4FF")
         leader = make_commentary(
             center,
@@ -2813,6 +2925,14 @@ class DonutBreakdownFinal(Scene):
             f"{int(round(float(pct_vals[winner_idx])))}%",
             winner_col,
         )
-        self.play(Transform(commentary, leader), run_time=0.45, rate_func=rf.ease_out_cubic)
+        sfx.mark("success_major", offset=0.0, meta={"at": "winner_announce"})
+        self.play(Transform(commentary, leader), run_time=clamp(t_win * 0.25, 0.40, 0.90), rate_func=rf.ease_out_cubic)
 
-        self.wait(2.0)
+        TL.consume("winner", clamp(t_win * 0.25, 0.40, 0.90))
+        hold_breathing(self, TL.remaining("winner"), focus=commentary)
+        
+        # Outro padding
+        hold_breathing(self, TL.seg_total("outro", 1.5))
+        
+        # Write marks to disk
+        sfx.flush()

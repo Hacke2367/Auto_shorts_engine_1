@@ -1,42 +1,61 @@
 {
+  "template_id": "bar_chart",
+  "data_source": "ai_stats.csv (7 items: NVIDIA 95, Microsoft 88, Apple 82, Google 76, Amazon 70, Meta 65, Tesla 60)",
   "segments": [
     {
       "name": "hook",
-      "text": {
-        "hi": "Aaj hum dekhne wale hain top AI tools ka real comparison!",
-        "en": "Today we’re doing a real comparison of the top AI tools!"
-      }
+      "text": "A massive system breach just exposed the raw market leader scores. Seven tech giants are about to be ranked live.",
+      "file": "audio/hook.mp3"
     },
-
     {
       "name": "setup",
-      "text": {
-        "hi": "Data CSV se aata hai aur animation auto-sync hota hai.",
-        "en": "The data comes from CSV and the animation auto-syncs."
-      }
+      "text": "The bars are loading. Watch each leader's power score render in real time on the leaderboard.",
+      "file": "audio/setup.mp3"
     },
-
-    { "name": "item_1", "text": { "hi": "Item 1 dummy — pehla point.", "en": "Item 1 dummy — first point." } },
-    { "name": "item_2", "text": { "hi": "Item 2 dummy — doosra point.", "en": "Item 2 dummy — second point." } },
-    { "name": "item_3", "text": { "hi": "Item 3 dummy — teesra point.", "en": "Item 3 dummy — third point." } },
-    { "name": "item_4", "text": { "hi": "Item 4 dummy — chautha point.", "en": "Item 4 dummy — fourth point." } },
-    { "name": "item_5", "text": { "hi": "Item 5 dummy — paanchwa point.", "en": "Item 5 dummy — fifth point." } },
-    { "name": "item_6", "text": { "hi": "Item 6 dummy — chhatha point.", "en": "Item 6 dummy — sixth point." } },
-    { "name": "item_7", "text": { "hi": "Item 7 dummy — saatwa point.", "en": "Item 7 dummy — seventh point." } },
-
+    {
+      "name": "item_1",
+      "text": "NVIDIA enters with a crushing ninety five points. The undisputed AI chip king. No one else is even close.",
+      "file": "audio/item1.mp3"
+    },
+    {
+      "name": "item_2",
+      "text": "Microsoft follows at eighty eight. A cloud and AI powerhouse. Second place but still a titan.",
+      "file": "audio/item2.mp3"
+    },
+    {
+      "name": "item_3",
+      "text": "Apple locks in at eighty two. Premium hardware dominance keeping it firmly in the top three.",
+      "file": "audio/item3.mp3"
+    },
+    {
+      "name": "item_4",
+      "text": "Google comes in at seventy six. Search, AI, and Android ecosystem holding down a solid position.",
+      "file": "audio/item4.mp3"
+    },
+    {
+      "name": "item_5",
+      "text": "Amazon scores seventy points. AWS cloud infrastructure keeping it in the upper half of the board.",
+      "file": "audio/item5.mp3"
+    },
+    {
+      "name": "item_6",
+      "text": "Meta holds at sixty five. The metaverse bet is still being evaluated, but the social media empire stands strong.",
+      "file": "audio/item6.mp3"
+    },
+    {
+      "name": "item_7",
+      "text": "Tesla rounds out the list at sixty. Electric vehicles and autonomous driving pushing it into the tech leader conversation.",
+      "file": "audio/item7.mp3"
+    },
     {
       "name": "winner",
-      "text": {
-        "hi": "Winner final score se decide hota hai.",
-        "en": "The winner is decided by the final score."
-      }
+      "text": "The final rankings are locked. And the absolute market leader is NVIDIA, with a dominant ninety five point score.",
+      "file": "audio/winner.mp3"
     },
     {
       "name": "outro",
-      "text": {
-        "hi": "Agar video useful laga to follow zaroor karna!",
-        "en": "If this video helped, make sure to follow!"
-      }
+      "text": "System offline. Data sealed. Follow for the next intelligence leak.",
+      "file": "audio/outro.mp3"
     }
   ]
 }

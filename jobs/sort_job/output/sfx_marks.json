@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "template_id": "sort_card",
+  "marks": [
+    {
+      "t": 2.3,
+      "key": "ui_pop",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "hook",
+        "at": "title_in"
+      }
+    },
+    {
+      "t": 13.633333333333304,
+      "key": "scan_tick",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "setup",
+        "at": "dot_travel"
+      }
+    },
+    {
+      "t": 23.7666666666666,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "card_1",
+        "action": "card_in"
+      }
+    },
+    {
+      "t": 24.766666666666598,
+      "key": "ui_pop",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "card_1",
+        "action": "pill_reveal"
+      }
+    },
+    {
+      "t": 25.166666666666597,
+      "key": "scan_tick",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "card_1",
+        "action": "scan_start"
+      }
+    },
+    {
+      "t": 29.099999999999916,
+      "key": "ui_tick",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "card_1",
+        "action": "route_glow"
+      }
+    },
+    {
+      "t": 29.43333333333325,
+      "key": "impact_soft",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "card_1",
+        "action": "card_store"
+      }
+    },
+    {
+      "t": 35.50000000000008,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "card_2",
+        "action": "card_in"
+      }
+    },
+    {
+      "t": 36.50000000000013,
+      "key": "ui_pop",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "card_2",
+        "action": "pill_reveal"
+      }
+    },
+    {
+      "t": 36.90000000000015,
+      "key": "scan_tick",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "card_2",
+        "action": "scan_start"
+      }
+    },
+    {
+      "t": 40.83333333333368,
+      "key": "ui_tick",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "card_2",
+        "action": "route_glow"
+      }
+    },
+    {
+      "t": 41.16666666666703,
+      "key": "impact_soft",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "card_2",
+        "action": "card_store"
+      }
+    },
+    {
+      "t": 44.500000000000526,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "card_3",
+        "action": "card_in"
+      }
+    },
+    {
+      "t": 45.500000000000576,
+      "key": "ui_pop",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "card_3",
+        "action": "pill_reveal"
+      }
+    },
+    {
+      "t": 45.900000000000595,
+      "key": "scan_tick",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "card_3",
+        "action": "scan_start"
+      }
+    },
+    {
+      "t": 49.833333333334124,
+      "key": "ui_tick",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "card_3",
+        "action": "route_glow"
+      }
+    },
+    {
+      "t": 50.166666666667474,
+      "key": "impact_soft",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "card_3",
+        "action": "card_store"
+      }
+    },
+    {
+      "t": 55.63333333333441,
+      "key": "impact_soft",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "card_4",
+        "action": "card_in"
+      }
+    },
+    {
+      "t": 56.63333333333446,
+      "key": "ui_pop",
+      "gain_db": -14.0,
+      "meta": {
+        "segment": "card_4",
+        "action": "pill_reveal"
+      }
+    },
+    {
+      "t": 57.03333333333448,
+      "key": "scan_tick",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "card_4",
+        "action": "scan_start"
+      }
+    },
+    {
+      "t": 60.96666666666801,
+      "key": "ui_tick",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "card_4",
+        "action": "route_glow"
+      }
+    },
+    {
+      "t": 61.30000000000136,
+      "key": "impact_soft",
+      "gain_db": -12.0,
+      "meta": {
+        "segment": "card_4",
+        "action": "card_store"
+      }
+    },
+    {
+      "t": 68.83333333333455,
+      "key": "outro_swipe",
+      "gain_db": -10.0,
+      "meta": {
+        "segment": "winner"
+      }
+    },
+    {
+      "t": 70.03333333333448,
+      "key": "ui_pop",
+      "gain_db": -8.0,
+      "meta": {
+        "segment": "winner"
+      }
+    }
+  ]
+}

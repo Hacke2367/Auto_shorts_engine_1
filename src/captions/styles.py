@@ -2,6 +2,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Any
+import shutil
+import subprocess
 
 
 @dataclass
@@ -21,6 +23,26 @@ class AssStylePreset:
     margin_l: int = 80
     margin_r: int = 80
     margin_v: int = 90
+
+
+def _pick_font(candidates: list[str], default_font: str = "DejaVu Sans") -> str:
+    """
+    Pick first available font from candidates using fc-list when present.
+    """
+    if not candidates:
+        return default_font
+    fc = shutil.which("fc-list")
+    if not fc:
+        return candidates[0]
+    try:
+        out = subprocess.check_output([fc, ":", "family"], text=True, stderr=subprocess.DEVNULL)
+        catalog = out.lower()
+        for font_name in candidates:
+            if font_name.lower() in catalog:
+                return font_name
+    except Exception:
+        return candidates[0]
+    return default_font
 
 
 def get_style_preset(preset_name: str, safe_margin_px: int = 80) -> Dict[str, Any]:
@@ -44,6 +66,22 @@ def get_style_preset(preset_name: str, safe_margin_px: int = 80) -> Dict[str, An
 
     if preset_name == "modern_clean":
         return base.__dict__
+
+    if preset_name == "modern_premium":
+        font_candidates = ["Montserrat", "Segoe UI", "Liberation Sans", "DejaVu Sans"]
+        premium = AssStylePreset(
+            name=preset_name,
+            font=_pick_font(font_candidates),
+            font_size=52,
+            outline=3,
+            shadow=1,
+            margin_l=safe_margin_px,
+            margin_r=safe_margin_px,
+            margin_v=max(60, safe_margin_px),
+        )
+        out = premium.__dict__.copy()
+        out["font_candidates"] = font_candidates
+        return out
 
     # You can add more presets later (neon, minimal, etc.)
     return base.__dict__

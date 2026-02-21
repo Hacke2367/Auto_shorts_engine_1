@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "template_id": "geo_universal",
+  "marks": [
+    {
+      "t": 4.100000000000005,
+      "key": "map_intro",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "hook"
+      }
+    },
+    {
+      "t": 11.899999999999977,
+      "key": "node_reveal",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "node_1",
+        "node": 1
+      }
+    },
+    {
+      "t": 14.433333333333302,
+      "key": "node_reveal",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "node_2",
+        "node": 2
+      }
+    },
+    {
+      "t": 17.366666666666625,
+      "key": "node_reveal",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "node_3",
+        "node": 3
+      }
+    },
+    {
+      "t": 20.499999999999947,
+      "key": "node_reveal",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "node_4",
+        "node": 4
+      }
+    },
+    {
+      "t": 23.166666666666604,
+      "key": "node_reveal",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "node_5",
+        "node": 5
+      }
+    },
+    {
+      "t": 26.099999999999927,
+      "key": "node_reveal",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "node_6",
+        "node": 6
+      }
+    },
+    {
+      "t": 29.03333333333325,
+      "key": "node_reveal",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "node_7",
+        "node": 7
+      }
+    },
+    {
+      "t": 31.966666666666573,
+      "key": "node_reveal",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "node_8",
+        "node": 8
+      }
+    },
+    {
+      "t": 39.96666666666697,
+      "key": "winner_sting",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "winner",
+        "winner_index": 2
+      }
+    },
+    {
+      "t": 41.2333333333337,
+      "key": "outro_swipe",
+      "gain_db": 0.0,
+      "meta": {
+        "segment": "outro"
+      }
+    }
+  ]
+}

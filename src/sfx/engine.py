@@ -33,7 +33,7 @@ class SFXEngine:
         except Exception:
             return 0.0
 
-    def mark(self, event: str, offset: float = 0.0, vol: Optional[float] = None):
+    def mark(self, event: str, offset: float = 0.0, vol: Optional[float] = None, meta: Optional[Dict[str, Any]] = None):
         """
         Record an SFX event at current time (+ offset).
         vol override optional.
@@ -56,9 +56,13 @@ class SFXEngine:
         self._marks.append({
             "t": t,
             "event": event,
+            "key": event,
+            "gain_db": 0.0,
             "rel_path": rel_path,
             "vol": out_vol,
         })
+        if isinstance(meta, dict) and meta:
+            self._marks[-1]["meta"] = meta
 
     def flush(self, filename: str = "sfx_marks.json") -> str:
         """

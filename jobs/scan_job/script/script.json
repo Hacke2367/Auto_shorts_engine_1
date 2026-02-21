@@ -1,0 +1,41 @@
+{
+  "template_id": "scan_race",
+  "data_source": "race_data.csv (GDP Growth Race 2000-2024: US, China, Japan, Germany, UK, India, France, Brazil, Italy, Russia)",
+  "segments": [
+    {
+      "name": "hook",
+      "text": "System breach detected. We just intercepted twenty four years of classified GDP data. Ten economies are about to race live on the timeline.",
+      "file": "audio/hook.mp3"
+    },
+    {
+      "name": "setup",
+      "text": "The line chart is calibrating. Watch each economy's trajectory render in real time from year two thousand to twenty twenty four.",
+      "file": "audio/setup.mp3"
+    },
+    {
+      "name": "lap_1",
+      "text": "Lap one. The early two thousands. The United States starts strong at ten point two trillion. China is barely visible at one point two. Japan holds the number two position at four point nine. The gap is enormous.",
+      "file": "audio/lap_1.mp3"
+    },
+    {
+      "name": "lap_2",
+      "text": "Lap two. Moving through twenty ten to twenty sixteen. China explodes upward, crossing eleven trillion. India begins its ascent past two trillion. The rankings are shifting fast.",
+      "file": "audio/lap_2.mp3"
+    },
+    {
+      "name": "sprint",
+      "text": "The final sprint. Twenty eighteen to twenty twenty four. The United States surges to twenty eight trillion. China hits eighteen point five. India rockets to four point one trillion, overtaking multiple European economies.",
+      "file": "audio/sprint.mp3"
+    },
+    {
+      "name": "finish",
+      "text": "Race complete. The final standings are locked. United States finishes first. China second. India climbs to a historic position. The global economic map has been completely redrawn.",
+      "file": "audio/finish.mp3"
+    },
+    {
+      "name": "outro",
+      "text": "Race data archived. Feed secured. Subscribe for the next live economic intelligence drop.",
+      "file": "audio/outro.mp3"
+    }
+  ]
+}

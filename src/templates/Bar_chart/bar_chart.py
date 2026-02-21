@@ -1117,10 +1117,10 @@ class BarChartTemplate(Scene):
             run_time=clamp(setup_action * 0.55, 0.35, 0.75),
         )
 
-        milestones = [0, 25, 50, 75, 100]
+        milestone_fracs = [0.0, 0.25, 0.50, 0.75, 1.0]
         guide_group = VGroup()
-        for m in milestones:
-            x_pos = BAR_START_X + (m / 100) * BAR_MAX_WIDTH
+        for frac in milestone_fracs:
+            x_pos = BAR_START_X + frac * BAR_MAX_WIDTH
             v_line = DashedLine(
                 start=[x_pos, START_Y + 0.75, 0],
                 end=[x_pos, rail_bottom - 0.25, 0],
@@ -1128,7 +1128,8 @@ class BarChartTemplate(Scene):
                 dashed_ratio=0.6,
             ).set_stroke(Theme.NEON_BLUE, width=2, opacity=0.12)
 
-            label = Text(str(m), font="Arial", font_size=14, color=Theme.TEXT_SUB)
+            label_val = int(round(float(max_val) * frac))
+            label = Text(str(label_val), font="Montserrat", font_size=14, color=Theme.TEXT_SUB)
             label.move_to([x_pos, rail_bottom - 0.55, 0])
             guide_group.add(v_line, label)
 
@@ -1149,7 +1150,7 @@ class BarChartTemplate(Scene):
 
             y_pos = START_Y - (i * GAP_Y)
             denom = max(1e-6, float(max_val))
-            target_width = (float(value) / denom) * BAR_MAX_WIDTH
+            target_width = float(np.clip((float(value) / denom) * BAR_MAX_WIDTH, 0.0, BAR_MAX_WIDTH))
 
             branch = Line([RAIL_X, y_pos, 0], [RANK_X - 0.18, y_pos, 0]).set_stroke(
                 color=Theme.NEON_BLUE, width=2, opacity=0.25
@@ -1457,4 +1458,3 @@ class BarChartTemplate(Scene):
 
         # ✅ MOST IMPORTANT: write marks JSON so main.py can mix SFX
         sfx.flush()
-

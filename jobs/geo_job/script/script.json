@@ -1,0 +1,66 @@
+{
+  "template_id": "geo_universal",
+  "data_source": "map_data.csv (10 countries in 3 groups: West=USA/UK/France/Germany/Australia, Asia=China/Japan, East=India/Russia/Brazil)",
+  "segments": [
+    {
+      "name": "hook",
+      "text": "Global alliance data has been breached. We are tracking power indexes live across the world map. Ten nations. Three alliance blocs.",
+      "file": "audio/hook.mp3"
+    },
+    {
+      "name": "setup",
+      "text": "Scanning nodes globally. Watch the map calibrate to exact coordinates as each nation's power index loads in real time.",
+      "file": "audio/setup.mp3"
+    },
+    {
+      "name": "node_1",
+      "text": "First up, the United States. Ninety two points on the power index. The Western bloc's undisputed leader lighting up the map.",
+      "file": "audio/node_1.mp3"
+    },
+    {
+      "name": "node_2",
+      "text": "United Kingdom registers seventy four points. Strong Western alliance support keeping it firmly on the global grid.",
+      "file": "audio/node_2.mp3"
+    },
+    {
+      "name": "node_3",
+      "text": "France locks in at seventy points. A key European node in the Western bloc maintaining steady influence.",
+      "file": "audio/node_3.mp3"
+    },
+    {
+      "name": "node_4",
+      "text": "Germany shows seventy two points. Industrial power backing its position as a critical Western alliance member.",
+      "file": "audio/node_4.mp3"
+    },
+    {
+      "name": "node_5",
+      "text": "China surges to ninety five points. The Asia bloc's absolute powerhouse. The highest index on the entire map.",
+      "file": "audio/node_5.mp3"
+    },
+    {
+      "name": "node_6",
+      "text": "Japan holds at seventy eight. Asia bloc's second node, carrying significant technological weight on the grid.",
+      "file": "audio/node_6.mp3"
+    },
+    {
+      "name": "node_7",
+      "text": "India fires up at eighty points. The Eastern bloc's growing force with unprecedented rise in global metrics.",
+      "file": "audio/node_7.mp3"
+    },
+    {
+      "name": "node_8",
+      "text": "Russia registers seventy six, Brazil at sixty two, and Australia at sixty eight. The remaining nodes completing the global alliance map.",
+      "file": "audio/node_8.mp3"
+    },
+    {
+      "name": "winner",
+      "text": "Compiling the highest influence sector now. The number one power index on the entire global map belongs to China with ninety five points.",
+      "file": "audio/winner.mp3"
+    },
+    {
+      "name": "outro",
+      "text": "Transmission verified. All nodes secured. Follow for more live radar intelligence drops.",
+      "file": "audio/outro.mp3"
+    }
+  ]
+}

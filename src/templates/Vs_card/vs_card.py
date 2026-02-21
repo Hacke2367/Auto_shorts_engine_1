@@ -27,6 +27,9 @@ from manim import rate_functions as rf
 # ============================================================
 # 1) PROJECT PATH SETUP + IMPORTS (same style as sort_card)
 # ============================================================
+import json
+from pathlib import Path
+
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
@@ -34,10 +37,9 @@ try:
 
     from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme  # type: ignore
     from src.utils import IntroManager  # type: ignore
-    # IntroManager attaches border/overlay/watermark
 except Exception:
     project_root = os.getcwd()
-    DATA_DIR = os.path.join(project_root, "geo_data")
+    DATA_DIR = os.path.join(project_root, "data")
     ASSETS_DIR = os.path.join(project_root, "assets")
     BACKGROUND_COLOR = "#050505"
 
@@ -63,6 +65,43 @@ except Exception:
             scene.play(FadeIn(t2, shift=UP * 0.08), run_time=0.25)
             scene.play(FadeIn(t1, shift=UP * 0.10), run_time=0.35)
             scene.play(FadeOut(t1), FadeOut(t2), run_time=0.35)
+
+# --- SYNC HELPERS (direct imports, NO try/except) ---
+from src.sync.job import load_job
+from src.sync.timeline import Timeline, clamp as _tl_clamp
+from src.sync.retention import hold_breathing, banner_scan_hold
+
+# ============================================================
+# SFX MARKS WRITER  (matches bar_chart.py exactly)
+# - writes: jobs/<job>/output/sfx_marks.json
+# - main.py will pick this up and mix SFX
+# ============================================================
+class SFXMarksWriter:
+    def __init__(self, scene: Scene, job_dir, template_id="vs_card", out_rel="output/sfx_marks.json"):
+        self.scene = scene
+        self.template_id = template_id
+        self.out_path = Path(str(job_dir)) / out_rel if job_dir else None
+        self.marks = []
+
+    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: dict | None = None):
+        t = float(self.scene.time) + float(offset)
+        ev = {"t": t, "key": str(key), "gain_db": float(gain_db)}
+        if meta:
+            ev["meta"] = meta
+        self.marks.append(ev)
+
+    def flush(self):
+        if self.out_path is None:
+            return
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": 1,
+            "template_id": self.template_id,
+            "marks": self.marks,
+        }
+        with self.out_path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print(f"[OK] Wrote sfx_marks.json: {self.out_path} ({len(self.marks)} marks)")
 
 # ============================================================
 # 2) DATA LOADING (meta first line supported)
@@ -730,9 +769,53 @@ class VsCardFinal(Scene):
         C_GOLD = "#FFD700"
         C_HI = "#7CFFB8"
 
-        # geo_data
+        # ============================================================
+        # JOB DATA & TIMELINE INJECTION (Audio Sync Pattern A)
+        # ============================================================
+        from pathlib import Path
+
+        JOB_DIR = os.environ.get("JOB_DIR")
+        JOB_JSON_PATH = os.environ.get("JOB_JSON_PATH", "")
+
+        job_dir_path = Path(JOB_DIR) if JOB_DIR else None
+        if not job_dir_path and JOB_JSON_PATH:
+            job_dir_path = Path(JOB_JSON_PATH).parent
+
+        sfx = SFXMarksWriter(self, job_dir_path, template_id="vs_card")
+
+        job_data = {}
+        if job_dir_path and job_dir_path.exists():
+            try:
+                job_data = load_job(job_dir_path)
+            except Exception:
+                pass
+
+        audio_timings = job_data.get("timeline", {})
+
         csv_path = os.path.join(DATA_DIR, "vs_data.csv")
         meta, df = load_vs_csv(csv_path)
+
+        # Dynamic template segment discovery based on input rows.
+        n_rounds = max(1, len(df))
+        round_segments = [f"round_{i+1}" for i in range(n_rounds)]
+        audio_order = ["hook", "setup"] + round_segments + ["winner", "outro"]
+
+        # Default durations if json lacks entries
+        defaults = {
+            "hook": 3.8,
+            "setup": 3.2,
+            "winner": 3.8,
+            "outro": 2.2,
+        }
+        for seg in round_segments:
+            defaults[seg] = 4.2
+
+        TL = Timeline.from_dict(audio_timings, defaults=defaults)
+
+        hook_seg = audio_order[0]
+        setup_seg = audio_order[1]
+        winner_seg = "winner"
+        outro_seg = "outro"
 
         title_raw = (meta.get("TITLE", "ABHISHEK vs PANDEY") or "").strip()
         sub_raw = (meta.get("SUB", "AI ARENA // VS CARD") or "").strip()
@@ -953,16 +1036,11 @@ class VsCardFinal(Scene):
 
         fx_layer.add(conn_ann_spine, conn_spine_p1, conn_spine_p2, conn_p1_val, conn_p2_val, conn_term_notes)
 
-        # ----------------------------------------------------------------
-        # ENTRANCE
-        # ----------------------------------------------------------------
-        # ----------------------------------------------------------------
+        # ================================================================
         # ENTRANCE (PATCH: no flash + everything enters on-screen)
-        # ----------------------------------------------------------------
+        # ================================================================
 
         # 1) HARD FIX: intro खत्म होते ही UI "already visible" नहीं होना चाहिए
-        # => सबको पहले hidden कर दो (same frame), ताकि flash-glitch ना हो
-        # IMPORTANT: header ko hide mat karo, warna VS gayab hoga (parent opacity kills children)
         for mob in [
             sub, scan_line,
             ann["group"],
@@ -974,37 +1052,29 @@ class VsCardFinal(Scene):
         ]:
             mob.set_opacity(0.0)
 
-        # Title ke parts ko individually hide karo (safe)
         tL.set_opacity(0.0)
         tR.set_opacity(0.0)
         vs_grp.set_opacity(0.0)
-
-        # (optional) header opacity force 1 to avoid future issues
         header.set_opacity(1.0)
 
-        # Spine + connectors भी hidden from start
         spine.set_opacity(0.0)
         conn_alpha.set_value(0.0)
 
-        # 2) Prep: slide offsets (so we can animate back to exact position)
-        # Title parts (works with your current code: tL, tR, vs_grp)
+        # 2) Prep: slide offsets
         try:
             tL.shift(LEFT * 0.55)
             tR.shift(RIGHT * 0.55)
         except Exception:
             pass
 
-        # VS group exists in your current code (diamond+text)
         try:
             vs_grp.shift(UP * 0.28)
         except Exception:
             pass
 
-        # Line + subtitle slight offset
         scan_line.shift(DOWN * 0.10)
         sub.shift(DOWN * 0.12)
 
-        # Metrics + cards + bottom blocks offsets
         ann["group"].shift(UP * 0.22)
         p1["group"].shift(LEFT * 0.55)
         p2["group"].shift(RIGHT * 0.55)
@@ -1015,7 +1085,12 @@ class VsCardFinal(Scene):
         notes["group"].shift(DOWN * 0.14)
         scoreboard["group"].shift(DOWN * 0.14)
 
-        # 3) TITLE entrance: names slide in, VS comes from top
+        # ----------------------------------------------------------------
+        # [HOOK SEGMENT] -> 3) TITLE entrance
+        # ----------------------------------------------------------------
+        hook_total = TL.seg_total(hook_seg, 3.8)
+        hook_act = clamp(hook_total * 0.85, 0.60, 2.5)
+
         anims = []
         try:
             anims += [
@@ -1024,51 +1099,55 @@ class VsCardFinal(Scene):
                 vs_grp.animate.shift(DOWN * 0.28).set_opacity(1.0),
             ]
         except Exception:
-            # fallback if title variables differ
             anims += [header.animate.set_opacity(1.0)]
 
+        sfx.mark("ui_pop", gain_db=-10, meta={"segment": hook_seg, "at": "title_in"})
         self.play(
             *anims,
-            run_time=0.60,
+            run_time=hook_act * 0.5,
             rate_func=rf.ease_out_cubic,
         )
-
-        # 4) line first (under title), then subtitle
         self.play(
             scan_line.animate.shift(UP * 0.10).set_opacity(1.0),
-            run_time=0.28,
+            run_time=hook_act * 0.3,
             rate_func=rf.ease_out_cubic,
         )
         self.play(
             sub.animate.shift(UP * 0.12).set_opacity(0.90),
-            run_time=0.26,
+            run_time=hook_act * 0.2,
             rate_func=rf.ease_out_cubic,
         )
+        TL.consume(hook_seg, hook_act)
+        hold_breathing(self, TL.remaining(hook_seg), focus=header, text="INITIALIZING BOOT SEQUENCE")
 
-        # 5) Metrics box: top → settle
+        # ----------------------------------------------------------------
+        # [SETUP SEGMENT] -> 5-8) Metrics / Cards / Terminals
+        # ----------------------------------------------------------------
+        setup_total = TL.seg_total(setup_seg, 3.8)
+        setup_act = clamp(setup_total * 0.85, 0.80, 2.8)
+
+        sfx.mark("scan_tick", gain_db=-14, meta={"segment": setup_seg, "at": "metrics_down"})
         self.play(
             ann["group"].animate.shift(DOWN * 0.22).set_opacity(1.0),
-            run_time=0.42,
+            run_time=setup_act * 0.20,
             rate_func=rf.ease_out_cubic,
         )
-
-        # 6) Spine + connectors build
         self.play(
             spine.animate.set_opacity(1.0),
             conn_alpha.animate.set_value(1.0),
-            run_time=0.38,
+            run_time=setup_act * 0.15,
             rate_func=rf.ease_out_cubic,
         )
 
-        # 7) Cards slide in (main frame)
+        sfx.mark("impact_soft", gain_db=-12, meta={"segment": setup_seg, "at": "cards_in"})
         self.play(
             p1["group"].animate.shift(RIGHT * 0.55).set_opacity(1.0),
             p2["group"].animate.shift(LEFT * 0.55).set_opacity(1.0),
-            run_time=0.60,
+            run_time=setup_act * 0.35,
             rate_func=rf.ease_out_cubic,
         )
 
-        # 8) Bottom stack stagger (values + terminal + notes + scoreboard)
+        sfx.mark("ui_tick", gain_db=-15, meta={"segment": setup_seg, "at": "bottom_stack"})
         self.play(
             LaggedStart(
                 v1["group"].animate.shift(UP * 0.18).set_opacity(1.0),
@@ -1078,13 +1157,13 @@ class VsCardFinal(Scene):
                 scoreboard["group"].animate.shift(UP * 0.14).set_opacity(1.0),
                 lag_ratio=0.10,
             ),
-            run_time=0.75,
+            run_time=setup_act * 0.30,
             rate_func=rf.ease_out_cubic,
         )
 
-        # ----------------------------------------------------------------
+        TL.consume(setup_seg, setup_act)
+        
         # PATCH #2: SYSTEM STATUS TICKER (1-line)
-        # ----------------------------------------------------------------
         def set_status(msg: str, *, color=WHITE):
             msg = (msg or "").strip()
             if not msg:
@@ -1100,6 +1179,9 @@ class VsCardFinal(Scene):
             self.play(Transform(notes["line"], new_line), run_time=0.20, rate_func=rf.ease_out_cubic)
 
         set_status("system boot: ready | backend: online | awaiting round 1", color=C_SUB)
+        TL.consume(setup_seg, 0.20)
+        
+        hold_breathing(self, TL.remaining(setup_seg), focus=header, text="SYSTEM STATUS: ONLINE")
 
         # ----------------------------------------------------------------
         # ROUND LOOP
@@ -1156,6 +1238,10 @@ class VsCardFinal(Scene):
         terminal_scanning()
 
         for i, row in df.iterrows():
+            seg_name = round_segments[i] if i < len(round_segments) else f"round_{i+1}"
+            r_total = TL.seg_total(seg_name, 4.2)
+            metric_t0 = float(self.time)
+
             metric = str(row.get("Metric", "")).strip().upper()
             p1_val = str(row.get("P1_Value", "")).strip()
             p2_val = str(row.get("P2_Value", "")).strip()
@@ -1182,6 +1268,8 @@ class VsCardFinal(Scene):
             if new_v2.width > (v2["box"].width - 0.35):
                 new_v2.scale_to_fit_width(v2["box"].width - 0.35)
 
+            sfx.mark("ui_tick", gain_db=-14, meta={"segment": seg_name, "action": "metric_reveal"})
+            act_reveal = clamp(r_total * 0.15, 0.25, 0.45)
             self.play(
                 Transform(ann["top"], new_top),
                 Transform(ann["main"], new_main),
@@ -1189,10 +1277,10 @@ class VsCardFinal(Scene):
                 Transform(v1["txt"], new_v1),
                 Transform(v2["txt"], new_v2),
                 ann["glow"].animate.set_stroke(opacity=0.26),
-                run_time=0.30,
+                run_time=act_reveal * 0.65,
                 rate_func=rf.ease_out_cubic,
             )
-            self.play(ann["glow"].animate.set_stroke(opacity=0.22), run_time=0.16, rate_func=rf.ease_in_out_sine)
+            self.play(ann["glow"].animate.set_stroke(opacity=0.22), run_time=act_reveal * 0.35, rate_func=rf.ease_in_out_sine)
 
             # PATCH #2: status (backend/system feel)
             set_status(f"scanning: r{i+1}/{n_rounds} | stream: stable | parsing metric…", color=C_SUB)
@@ -1223,6 +1311,9 @@ class VsCardFinal(Scene):
                 WIN_SCALE = 1.08
                 LOSE_SCALE = 0.96
 
+                act_win = clamp(r_total * 0.25, 0.30, 0.60)
+                sfx.mark("impact_soft", gain_db=-8, meta={"segment": seg_name, "action": "winner_scale"})
+
                 self.play(
                     win_obj["group"].animate.scale(WIN_SCALE),
                     win_obj["glow"].animate.set_stroke(C_WIN, 26, 0.28),
@@ -1231,28 +1322,38 @@ class VsCardFinal(Scene):
                     lose_obj["group"].animate.scale(LOSE_SCALE).set_opacity(0.72),
                     lose_obj["glow"].animate.set_stroke(lose_obj["accent"], 20, 0.14),
                     lose_obj["frame"].animate.set_stroke(lose_obj["accent"], 2.8, 0.75),
-                    run_time=0.34,
+                    run_time=act_win * 0.65,
                     rate_func=rf.ease_out_cubic,
                 )
                 self.play(
                     Flash(win_obj["frame"], color=C_WIN, line_length=0.35, num_lines=10),
-                    run_time=0.18,
+                    run_time=act_win * 0.35,
                     rate_func=rf.ease_out_cubic,
                 )
 
                 update_score_text()
+                act_score = clamp(r_total * 0.15, 0.20, 0.40)
+                sfx.mark("ui_pop", gain_db=-10, meta={"segment": seg_name, "action": "score_update"})
                 self.play(
                     scoreboard["glow"].animate.set_stroke(opacity=0.26),
                     Flash(scoreboard["score"], color=C_WIN, line_length=0.40, num_lines=8),
-                    run_time=0.30,
+                    run_time=act_score * 0.65,
                     rate_func=rf.ease_out_cubic,
                 )
-                self.play(scoreboard["glow"].animate.set_stroke(opacity=0.20), run_time=0.16, rate_func=rf.ease_in_out_sine)
+                self.play(scoreboard["glow"].animate.set_stroke(opacity=0.20), run_time=act_score * 0.35, rate_func=rf.ease_in_out_sine)
 
                 # PATCH #2: status after decision
                 set_status("decision committed | backend: ok | preparing next round…", color=C_SUB)
 
-                self.wait(ROUND_HOLD)
+                # dynamic remaining wait
+                used = float(self.time) - metric_t0
+                TL.consume(seg_name, used)
+                
+                # Minimum reset runtime
+                reset_rt = 0.26
+                pad_time = max(0.0, TL.remaining(seg_name) - reset_rt)
+                
+                hold_breathing(self, pad_time, focus=win_obj["group"], text="VERIFYING ROUND METRICS")
 
                 # PATCH #4: reset to neutral (still alive, not dull)
                 self.play(
@@ -1263,9 +1364,10 @@ class VsCardFinal(Scene):
                     lose_obj["group"].animate.scale(1 / LOSE_SCALE).set_opacity(1.0),
                     lose_obj["glow"].animate.set_stroke(lose_obj["accent"], 20, 0.20),
                     lose_obj["frame"].animate.set_stroke(lose_obj["accent"], 2.8, 0.90),
-                    run_time=0.26,
+                    run_time=reset_rt,
                     rate_func=rf.ease_in_out_sine,
                 )
+                TL.consume(seg_name, reset_rt)
 
                 terminal_scanning()
 
@@ -1277,19 +1379,30 @@ class VsCardFinal(Scene):
                     C_GOLD,
                 )
 
+                act_draw = clamp(r_total * 0.15, 0.20, 0.35)
+                sfx.mark("impact_soft", gain_db=-14, meta={"segment": seg_name, "action": "draw_result"})
                 self.play(
                     p1["glow"].animate.set_stroke(C_P1, 22, 0.24),
                     p2["glow"].animate.set_stroke(C_P2, 22, 0.24),
-                    run_time=0.24,
+                    run_time=act_draw,
                     rate_func=rf.ease_out_cubic,
                 )
-                self.wait(ROUND_HOLD)
+                
+                used = float(self.time) - metric_t0
+                TL.consume(seg_name, used)
+                
+                reset_rt = 0.18
+                pad_time = max(0.0, TL.remaining(seg_name) - reset_rt)
+                
+                hold_breathing(self, pad_time, focus=ann["group"], text="PROCESSING DRAW LOGIC")
+                
                 self.play(
                     p1["glow"].animate.set_stroke(C_P1, 22, 0.22),
                     p2["glow"].animate.set_stroke(C_P2, 22, 0.22),
-                    run_time=0.18,
+                    run_time=reset_rt,
                     rate_func=rf.ease_in_out_sine,
                 )
+                TL.consume(seg_name, reset_rt)
 
                 # PATCH #2: status after draw
                 set_status("draw confirmed | backend: ok | preparing next round…", color=C_SUB)
@@ -1316,6 +1429,8 @@ class VsCardFinal(Scene):
             pass
 
         if final == 0:
+            act_fade = clamp(TL.seg_total(winner_seg, 3.8) * 0.30, 0.35, 0.75)
+            sfx.mark("outro_swipe", gain_db=-10, meta={"segment": winner_seg})
             self.play(
                 header.animate.set_opacity(0.0),
                 sub.animate.set_opacity(0.0),
@@ -1328,17 +1443,23 @@ class VsCardFinal(Scene):
                 scoreboard["group"].animate.set_opacity(0.0),
                 p1["group"].animate.set_opacity(0.0),
                 p2["group"].animate.set_opacity(0.0),
-                run_time=0.55,
+                run_time=act_fade,
                 rate_func=rf.ease_in_out_sine,
             )
             conn_alpha.set_value(0.0)
             spine.set_opacity(0.0)
+            TL.consume(winner_seg, act_fade)
 
             draw_txt = safe_text("IT'S A DRAW!", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
             draw_txt.set_z_index(380)
-            self.play(FadeIn(draw_txt, shift=UP * 0.10), run_time=0.60, rate_func=rf.ease_out_cubic)
+            act_draw = clamp(TL.seg_total(winner_seg) * 0.40, 0.45, 0.85)
+            sfx.mark("ui_pop", gain_db=-8, meta={"segment": winner_seg})
+            self.play(FadeIn(draw_txt, shift=UP * 0.10), run_time=act_draw, rate_func=rf.ease_out_cubic)
             self.play(Flash(draw_txt, color=C_GOLD, line_length=0.7, num_lines=12), run_time=0.35)
-            self.wait(2.0)
+            TL.consume(winner_seg, act_draw + 0.35)
+            
+            hold_breathing(self, TL.remaining(winner_seg) + TL.seg_total(outro_seg), focus=draw_txt, text="COMPILING DIAGNOSTICS")
+            sfx.flush()
             return
 
         win = p1 if final == 1 else p2
@@ -1346,7 +1467,11 @@ class VsCardFinal(Scene):
         win_color = win["accent"]
         loser_slot = lose["bg"].get_center()
 
+        w_total = TL.seg_total(winner_seg, 3.8)
+        act_fade = clamp(w_total * 0.20, 0.25, 0.60)
+        
         # fade UI fast
+        sfx.mark("outro_swipe", gain_db=-14, meta={"segment": winner_seg})
         self.play(
             header.animate.set_opacity(0.0),
             sub.animate.set_opacity(0.0),
@@ -1357,30 +1482,36 @@ class VsCardFinal(Scene):
             terminal["group"].animate.set_opacity(0.0),
             notes["group"].animate.set_opacity(0.0),
             scoreboard["group"].animate.set_opacity(0.0),
-            run_time=0.45,
+            run_time=act_fade,
             rate_func=rf.ease_in_out_sine,
         )
 
         # connectors/spine: fade + HARD remove (always_redraw safety)
-        self.play(conn_alpha.animate.set_value(0.0), spine.animate.set_opacity(0.0), run_time=0.30, rate_func=rf.ease_in_out_sine)
+        self.play(conn_alpha.animate.set_value(0.0), spine.animate.set_opacity(0.0), run_time=act_fade * 0.5, rate_func=rf.ease_in_out_sine)
         self.remove(conn_ann_spine, conn_spine_p1, conn_spine_p2, conn_p1_val, conn_p2_val, conn_term_notes, spine)
+        TL.consume(winner_seg, act_fade + act_fade * 0.5)
 
         # PATCH #3/#5: loser MUST disappear (FadeOut + remove)
+        act_lose = clamp(w_total * 0.15, 0.25, 0.55)
         self.play(
             FadeOut(lose["group"], scale=0.92),
-            run_time=0.45,
+            run_time=act_lose,
             rate_func=rf.ease_in_out_sine,
         )
         self.remove(lose["group"])
+        TL.consume(winner_seg, act_lose)
 
         # winner scale only (no move)
+        act_win = clamp(w_total * 0.25, 0.40, 0.80)
+        sfx.mark("winner_rise", gain_db=-8, meta={"segment": winner_seg})
         self.play(
             win["group"].animate.scale(1.16),
             win["frame"].animate.set_stroke(C_WIN, 3.8, 0.98),
             win["glow"].animate.set_stroke(C_WIN, 26, 0.26),
-            run_time=0.60,
+            run_time=act_win,
             rate_func=rf.ease_out_cubic,
         )
+        TL.consume(winner_seg, act_win)
 
         power1 = safe_text("WINNER CONFIRMED", font="Consolas", font_size=18, color=C_SUB, weight=BOLD)
         power2 = safe_text("YOUR WINNER", font="Montserrat", font_size=30, color=WHITE, weight=BOLD)
@@ -1390,9 +1521,23 @@ class VsCardFinal(Scene):
         power.move_to(loser_slot)
         power.set_z_index(390)
 
-        self.play(FadeIn(power1, shift=UP * 0.08), run_time=0.25, rate_func=rf.ease_out_cubic)
-        self.play(Write(power2), run_time=0.40, rate_func=rf.ease_out_cubic)
-        self.play(Write(power3), run_time=0.55, rate_func=rf.ease_out_cubic)
+        act_pow = clamp(w_total * 0.35, 0.55, 1.25)
+        sfx.mark("impact_soft", gain_db=-10, meta={"segment": winner_seg, "at": "winner_announcement"})
+        self.play(FadeIn(power1, shift=UP * 0.08), run_time=act_pow * 0.20, rate_func=rf.ease_out_cubic)
+        self.play(Write(power2), run_time=act_pow * 0.35, rate_func=rf.ease_out_cubic)
+        self.play(Write(power3), run_time=act_pow * 0.45, rate_func=rf.ease_out_cubic)
         self.play(Flash(power3, color=win_color, line_length=0.70, num_lines=14), run_time=0.35)
+        TL.consume(winner_seg, act_pow + 0.35)
 
-        self.wait(2.0)
+        hold_breathing(self, TL.remaining(winner_seg), focus=win["group"], text="LOCKING WINNER DATA")
+        
+        # FINAL OUTRO PAD
+        hold_breathing(self, TL.seg_total(outro_seg, 2.2), focus=win["group"], text="SYSTEM SHUTDOWN")
+
+        for seg in round_segments:
+            _ = TL.remaining(seg) 
+            
+        try:
+            sfx.flush()
+        except Exception:
+            pass

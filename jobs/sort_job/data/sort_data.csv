@@ -1,0 +1,6 @@
+# TITLE=TIER 1 vs TIER 2, SUB=AI TRIBUNAL SORT TEST, FEED=FEED_SORT // TRIBUNAL
+Image,Category,Reason
+python.jpg,1,AI KING
+java.jpg,2,VERBOSE
+html.jpg,2,NOT CODE
+cpp.jpg,1,FAST AF

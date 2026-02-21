@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "template_id": "donut_breakdown",
+  "marks": [
+    {
+      "t": 2.400000000000001,
+      "key": "ui_in",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "setup_start"
+      }
+    },
+    {
+      "t": 11.333333333333313,
+      "key": "whoosh",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "slice_reveal",
+        "i": 6
+      }
+    },
+    {
+      "t": 13.866666666666637,
+      "key": "pop_high",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "chip_pop",
+        "i": 6
+      }
+    },
+    {
+      "t": 21.13333333333328,
+      "key": "whoosh_low",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "winner_pop",
+        "i": 6
+      }
+    },
+    {
+      "t": 21.999999999999943,
+      "key": "whoosh",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "slice_reveal",
+        "i": 5
+      }
+    },
+    {
+      "t": 24.533333333333267,
+      "key": "pop_high",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "chip_pop",
+        "i": 5
+      }
+    },
+    {
+      "t": 31.533333333333243,
+      "key": "whoosh_low",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "winner_pop",
+        "i": 5
+      }
+    },
+    {
+      "t": 32.39999999999993,
+      "key": "whoosh",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "slice_reveal",
+        "i": 4
+      }
+    },
+    {
+      "t": 34.93333333333339,
+      "key": "pop_high",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "chip_pop",
+        "i": 4
+      }
+    },
+    {
+      "t": 44.666666666667204,
+      "key": "whoosh_low",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "winner_pop",
+        "i": 4
+      }
+    },
+    {
+      "t": 45.533333333333914,
+      "key": "whoosh",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "slice_reveal",
+        "i": 3
+      }
+    },
+    {
+      "t": 48.06666666666737,
+      "key": "pop_high",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "chip_pop",
+        "i": 3
+      }
+    },
+    {
+      "t": 53.06666666666762,
+      "key": "whoosh_low",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "winner_pop",
+        "i": 3
+      }
+    },
+    {
+      "t": 53.93333333333433,
+      "key": "whoosh",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "slice_reveal",
+        "i": 2
+      }
+    },
+    {
+      "t": 56.46666666666779,
+      "key": "pop_high",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "chip_pop",
+        "i": 2
+      }
+    },
+    {
+      "t": 61.06666666666802,
+      "key": "whoosh_low",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "winner_pop",
+        "i": 2
+      }
+    },
+    {
+      "t": 61.93333333333473,
+      "key": "whoosh",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "slice_reveal",
+        "i": 1
+      }
+    },
+    {
+      "t": 64.46666666666813,
+      "key": "pop_high",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "chip_pop",
+        "i": 1
+      }
+    },
+    {
+      "t": 73.26666666666763,
+      "key": "success",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "winner_glow",
+        "i": 1
+      }
+    },
+    {
+      "t": 74.13333333333425,
+      "key": "success_major",
+      "gain_db": 0.0,
+      "meta": {
+        "at": "winner_announce"
+      }
+    }
+  ]
+}

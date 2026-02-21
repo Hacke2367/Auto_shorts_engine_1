@@ -55,6 +55,10 @@ SFX_LIBRARY: Dict[str, SfxDef] = {
     "charge_up":    SfxDef(["ui_transition_sweep_01.wav"], vol=0.70),
     "impact_soft":  SfxDef(["impact_hit_soft_01.wav"], vol=0.80),
     "winner_rise":  SfxDef(["success_chime_01.wav"], vol=0.85),
+    "map_intro":    SfxDef(["ui_transition_sweep_01.wav"], vol=0.70),
+    "node_reveal":  SfxDef(["scan_beep_01.wav", "scan_beep_02.wav"], vol=0.58),
+    "winner_sting": SfxDef(["success_chime_01.wav"], vol=0.85),
+    "outro_swipe":  SfxDef(["ui_whoosh_soft_01.wav"], vol=0.70),
 }
 
 def resolve(event: str, count_index: int = 0) -> Optional[dict]:
