@@ -2274,6 +2274,8 @@ def make_callout(center: np.ndarray, outer_r: float, slice_mid: float, pop_vec: 
     core1 = Line(p0, p1)
     core2 = Line(p1, p2)
 
+    dot0 = Dot(p0, radius=0.035, color=col).set_z_index(166)
+
     for ln in (core1, core2):
         ln.set_fill(opacity=0)
         ln.set_z_index(165)
@@ -2294,7 +2296,7 @@ def make_callout(center: np.ndarray, outer_r: float, slice_mid: float, pop_vec: 
         except Exception:
             pass
 
-    return VGroup(glow1, glow2, core1, core2, dot, chip).set_z_index(165)
+    return VGroup(glow1, glow2, core1, core2, dot, chip, dot0).set_z_index(165)
 
 
 def _make_callout_lines_only(
@@ -2320,6 +2322,8 @@ def _make_callout_lines_only(
 
     core1 = Line(p0, p1)
     core2 = Line(p1, p2)
+    dot0 = Dot(p0, radius=0.035, color=col).set_z_index(166)
+
     for ln in (core1, core2):
         ln.set_fill(opacity=0)
         ln.set_z_index(165)
@@ -2340,7 +2344,7 @@ def _make_callout_lines_only(
         except Exception:
             pass
 
-    return glow1, glow2, core1, core2
+    return glow1, glow2, core1, core2, dot0
 
 
 # ==========================
@@ -2435,6 +2439,9 @@ class DonutBreakdownFinal(Scene):
         timeline_dict = sys_job.get("timeline", {}) if isinstance(sys_job.get("timeline", {}), dict) else {}
         defaults = {"hook": 2.5, "setup": 2.6, "winner": 3.0, "outro": 1.5}
 
+        # Anchor global start time before intro plays
+        global_start_t0 = float(self.time)
+
         # Intro (LOCKED utils.py)
         if HAS_PROJECT:
             try:
@@ -2510,6 +2517,9 @@ class DonutBreakdownFinal(Scene):
             defaults[f"item{i}"] = 2.0  # fallback names
         
         TL = Timeline.from_dict(timeline_dict, defaults=defaults)
+        
+        # Audio starts for hook
+        hook_t0 = global_start_t0
 
         # Edge case: no geo_data
         if not names or not raw_vals:
@@ -2520,7 +2530,8 @@ class DonutBreakdownFinal(Scene):
             if sub_text:
                 self.play(FadeIn(sub, shift=UP * 0.06), run_time=clamp(t_h * 0.25, 0.10, 0.35), rate_func=rf.ease_out_cubic)
             
-            hold_breathing(self, 1.5, focus=title)
+            TL.consume("hook", float(self.time) - hook_t0)
+            hold_breathing(self, TL.remaining("hook"), focus=title)
             return
 
         # Percent + ranks
@@ -2581,7 +2592,24 @@ class DonutBreakdownFinal(Scene):
         master_ring.set_stroke(getattr(Theme, "NEON_BLUE", "#2DD4FF"), 2.0, 0.16)
         master_ring.move_to(center)
         master_ring.set_opacity(0.0)
-        self.add(master_ring)
+        
+        inner_glow = Circle(radius=inner_r).set_z_index(72)
+        inner_glow.set_stroke(color=getattr(Theme, "NEON_BLUE", "#2DD4FF"), width=6.0, opacity=0.3)
+        inner_glow.move_to(center)
+        inner_glow.set_opacity(0.0)
+
+        inner_core = Circle(radius=inner_r).set_z_index(73)
+        inner_core.set_stroke(color=WHITE, width=1.5, opacity=0.8)
+        inner_core.move_to(center)
+        inner_core.set_opacity(0.0)
+
+        self.add(master_ring, inner_glow, inner_core)
+        
+        # Audio starts for hook
+        TL.consume("hook", float(self.time) - hook_t0)
+        hold_breathing(self, TL.remaining("hook"), focus=center)
+        
+        setup_t0 = float(self.time)
 
         sweep_t = ValueTracker(0.0)
         sweep_span = TAU * 0.18
@@ -2639,8 +2667,8 @@ class DonutBreakdownFinal(Scene):
                 angle=ang,
                 fill_color=col,
                 fill_opacity=0.90,
-                stroke_color="#0B0F12",
-                stroke_width=3.0,
+                stroke_color="#050505",
+                stroke_width=4.0,
             ).set_z_index(70)
 
             hi = AnnularSector(
@@ -2651,7 +2679,8 @@ class DonutBreakdownFinal(Scene):
                 angle=ang,
                 fill_color=WHITE,
                 fill_opacity=0.06,
-                stroke_width=0,
+                stroke_color="#050505",
+                stroke_width=4.0,
             ).set_z_index(71)
 
             rim = AnnularSector(
@@ -2752,14 +2781,28 @@ class DonutBreakdownFinal(Scene):
             self.play(FadeIn(sub, shift=UP * 0.06), run_time=0.25, rate_func=rf.ease_out_cubic)
 
         master_ring.set_opacity(1.0)
-        self.play(DrawBorderThenFill(master_ring), run_time=0.40, rate_func=rf.ease_out_cubic)
+        inner_glow.set_opacity(1.0)
+        inner_core.set_opacity(1.0)
+        self.play(
+            DrawBorderThenFill(master_ring),
+            DrawBorderThenFill(inner_glow),
+            DrawBorderThenFill(inner_core),
+            run_time=0.40,
+            rate_func=rf.ease_out_cubic
+        )
         self.play(sweep_t.animate.set_value(TAU), run_time=0.55, rate_func=rf.linear)
         self.play(
             LaggedStart(*[Restore(g) for g in slice_groups], lag_ratio=0.08),
             run_time=1.05,
             rate_func=rf.linear,
         )
-        self.play(master_ring.animate.set_opacity(0.16), run_time=0.18, rate_func=rf.ease_out_cubic)
+        self.play(
+            master_ring.animate.set_opacity(0.16),
+            inner_glow.animate.set_stroke(opacity=0.10),
+            inner_core.animate.set_stroke(opacity=0.30),
+            run_time=0.18,
+            rate_func=rf.ease_out_cubic
+        )
         self.play(FadeOut(sweep_band_m), FadeOut(sweep_arc_m), run_time=0.18, rate_func=rf.ease_out_cubic)
 
         # ✅ FIX 1.2: Actually consume the setup time and pad it
@@ -2819,12 +2862,12 @@ class DonutBreakdownFinal(Scene):
             )
 
             c = callout_by_idx[idx]
-            glow1, glow2, core1, core2, dot, chip = c  # stable order
+            glow1, glow2, core1, core2, dot, chip, dot0 = c  # stable order
 
             # --- RETARGET lines to current slice position ---
             dot_pos = dot.get_center()
             center_for_slice = center + pop  # slice is currently shifted by pop
-            new_glow1, new_glow2, new_core1, new_core2 = _make_callout_lines_only(
+            new_glow1, new_glow2, new_core1, new_core2, new_dot0 = _make_callout_lines_only(
                 center_for_slice=center_for_slice,
                 outer_r=outer_r,
                 slice_mid=slice_mids[idx],
@@ -2836,6 +2879,7 @@ class DonutBreakdownFinal(Scene):
             glow2.become(new_glow2)
             core1.become(new_core1)
             core2.become(new_core2)
+            dot0.become(new_dot0)
 
             c.set_opacity(1.0)
             self.play(
@@ -2845,6 +2889,7 @@ class DonutBreakdownFinal(Scene):
                     GrowFromPoint(core1, core1.get_start(), rate_func=rf.ease_out_cubic),
                     GrowFromPoint(core2, core2.get_start(), rate_func=rf.ease_out_cubic),
                     FadeIn(dot, shift=0.04 * UP, rate_func=rf.ease_out_cubic),
+                    FadeIn(dot0, shift=0.04 * DOWN, rate_func=rf.ease_out_cubic),
                     FadeIn(chip, shift=0.06 * UP, rate_func=rf.ease_out_cubic),
                     lag_ratio=0.06,
                 ),
@@ -2883,7 +2928,7 @@ class DonutBreakdownFinal(Scene):
 
                 # retarget lines back to base center after slice returns
                 dot_pos = dot.get_center()
-                back_glow1, back_glow2, back_core1, back_core2 = _make_callout_lines_only(
+                back_glow1, back_glow2, back_core1, back_core2, back_dot0 = _make_callout_lines_only(
                     center_for_slice=center,
                     outer_r=outer_r,
                     slice_mid=slice_mids[idx],
@@ -2895,6 +2940,7 @@ class DonutBreakdownFinal(Scene):
                 glow2.become(back_glow2)
                 core1.become(back_core1)
                 core2.become(back_core2)
+                dot0.become(back_dot0)
 
             else:
                 glow = sec.copy()
@@ -2914,7 +2960,15 @@ class DonutBreakdownFinal(Scene):
                 # ✅ FIX: Delta time
                 TL.consume(seg_key, float(self.time) - exit_t0)
 
+        # Ghost Padding Loop — absorb unused slice_N segments beyond actual data
+        for ghost_i in range(len(idx_asc) + 1, 16):
+            seg_key = f"slice_{ghost_i}"
+            g_t0 = float(self.time)
+            TL.consume(seg_key, float(self.time) - g_t0)
+            hold_breathing(self, TL.remaining(seg_key))
+
         # Final leader
+        win_t0 = float(self.time)
         t_win = TL.seg_total("winner", 3.0)
         winner_col = colors[winner_idx] if colors else getattr(Theme, "NEON_BLUE", "#2DD4FF")
         leader = make_commentary(
@@ -2928,11 +2982,13 @@ class DonutBreakdownFinal(Scene):
         sfx.mark("success_major", offset=0.0, meta={"at": "winner_announce"})
         self.play(Transform(commentary, leader), run_time=clamp(t_win * 0.25, 0.40, 0.90), rate_func=rf.ease_out_cubic)
 
-        TL.consume("winner", clamp(t_win * 0.25, 0.40, 0.90))
+        TL.consume("winner", float(self.time) - win_t0)
         hold_breathing(self, TL.remaining("winner"), focus=commentary)
         
         # Outro padding
-        hold_breathing(self, TL.seg_total("outro", 1.5))
+        outro_t0 = float(self.time)
+        TL.consume("outro", float(self.time) - outro_t0)
+        hold_breathing(self, TL.remaining("outro"))
         
         # Write marks to disk
         sfx.flush()

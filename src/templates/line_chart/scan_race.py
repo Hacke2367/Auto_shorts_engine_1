@@ -1688,13 +1688,14 @@ class CinematicLineRace(Scene):
             for i, (seg_name, target_year) in enumerate(zip(active_race_segments, year_targets), start=1):
                 seg_total = TL.seg_total(seg_name, 2.8)
                 run_t = max(0.35, min(float(seg_total), max(0.65, float(seg_total) * 0.84)))
+                lap_t0 = float(self.time)
                 sfx.mark("scan_tick", gain_db=-14, meta={"segment": seg_name, "lap": i})
                 self.play(
                     self.tracker.animate.set_value(float(target_year)),
                     run_time=run_t,
                     rate_func=linear,
                 )
-                TL.consume(seg_name, run_t)
+                TL.consume(seg_name, float(self.time) - lap_t0)
                 _pad_segment(seg_name, focus=ax, text="PROCESSING TREND SHIFT")
         else:
             self.play(self.tracker.animate.set_value(max_year), run_time=4.0, rate_func=linear)

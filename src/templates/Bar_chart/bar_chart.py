@@ -940,6 +940,9 @@ class BarChartTemplate(Scene):
         # ============================================================
         # 1) INTRO
         # ============================================================
+        # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
+        global_start_t0 = float(self.time)
+
         try:
             # (optional) intro SFX single mark at intro start
             sfx.mark("ui_pop", gain_db=-10, meta={"at": "intro_start"})
@@ -1034,6 +1037,8 @@ class BarChartTemplate(Scene):
         hook_total = TL.seg_total("hook", 2.6)
         hook_action = clamp(hook_total * 0.70, 1.2, 2.2)
         scale = hook_action / 2.5
+        
+        hook_t0 = global_start_t0
 
         rt_title = clamp(0.7 * scale, 0.35, 0.85)
         rt_line = clamp(0.7 * scale, 0.35, 0.85)
@@ -1051,8 +1056,8 @@ class BarChartTemplate(Scene):
             FadeIn(scanner_dot, run_time=rt_dot),
             FadeIn(subtitle, shift=UP * 0.2, run_time=rt_sub),
         )
-        TL.consume("hook", hook_action)
-
+        
+        TL.consume("hook", float(self.time) - hook_t0)
         hold_breathing(self, TL.remaining("hook"), focus=underline_core)
 
         # ============================================================
@@ -1078,6 +1083,7 @@ class BarChartTemplate(Scene):
         # ============================================================
         # SETUP segment (rail + guides)
         # ============================================================
+        setup_t0 = float(self.time)
         rail_top = START_Y + 0.55
         rail_bottom = START_Y - (num_items - 1) * GAP_Y - 0.55
 
@@ -1135,8 +1141,8 @@ class BarChartTemplate(Scene):
 
         sfx.mark("scan_tick", gain_db=-16, meta={"at": "setup_guides"})
         self.play(Create(guide_group, run_time=clamp(setup_action * 0.75, 0.55, 1.05), lag_ratio=0.08))
-        TL.consume("setup", setup_action)
-
+        
+        TL.consume("setup", float(self.time) - setup_t0)
         hold_breathing(self, TL.remaining("setup"), focus=rail)
 
         # ============================================================
@@ -1146,6 +1152,7 @@ class BarChartTemplate(Scene):
 
         for i, (name, value) in enumerate(zip(names, values)):
             seg = f"item_{i+1}"
+            item_t0 = float(self.time)
             item_total = TL.seg_total(seg, 2.0)
 
             y_pos = START_Y - (i * GAP_Y)
@@ -1195,7 +1202,6 @@ class BarChartTemplate(Scene):
                 FadeIn(rank_num, shift=RIGHT * 0.15, run_time=t_label),
                 FadeIn(label_group, shift=RIGHT * 0.15, run_time=t_label),
             )
-            TL.consume(seg, t_label)
 
             container = RoundedRectangle(corner_radius=0.12, width=BAR_MAX_WIDTH + 0.20, height=BAR_HEIGHT)
             container.set_stroke(Theme.NEON_BLUE, width=2, opacity=0.35)
@@ -1304,11 +1310,9 @@ class BarChartTemplate(Scene):
 
             line_group.add_updater(update_single_bar)
 
-            # ✅ SFX: scan tick at bar fill start
             sfx.mark("scan_tick", gain_db=-16, meta={"at": "item_fill", "i": i+1})
 
             self.play(tracker.animate.set_value(1.0), run_time=t_track, rate_func=linear)
-            TL.consume(seg, t_track)
 
             line_group.remove_updater(update_single_bar)
 
@@ -1332,23 +1336,30 @@ class BarChartTemplate(Scene):
                 rate_func=rf.ease_out_back,
             )
             self.remove(shockwave)
-            TL.consume(seg, t_morph)
 
             settle_rt = min(0.14, TL.remaining(seg) * 0.35)
             if settle_rt > 0.02:
-                TL.consume(seg, settle_rt)
                 _micro_settle(self, [final_bar, val_pill, val_num], settle_rt)
 
+            TL.consume(seg, float(self.time) - item_t0)
             hold_breathing(self, TL.remaining(seg), focus=final_bar)
 
             bar_groups.append(
                 VGroup(branch, bolt, rank_bg, rank_num, label_group, container, final_bar, sheen, val_pill, val_num)
             )
 
+        # Ghost Padding Loop 
+        for ghost_i in range(len(names), 15):
+            seg_key = f"item_{ghost_i+1}"
+            g_t0 = float(self.time)
+            TL.consume(seg_key, float(self.time) - g_t0)
+            hold_breathing(self, TL.remaining(seg_key))
+
         # ============================================================
         # 8) WINNER REVEAL
         # ============================================================
         winner_seg = "winner"
+        winner_t0 = float(self.time)
         winner_total = TL.seg_total(winner_seg, 3.2)
 
         banner = None
@@ -1361,7 +1372,6 @@ class BarChartTemplate(Scene):
 
             t_dim = clamp(winner_total * 0.12, 0.25, 0.45)
             self.play(*[g.animate.set_opacity(0.20) for g in others], run_time=t_dim)
-            TL.consume(winner_seg, t_dim)
 
             winner_bar = winner[6]
             winner_val = winner[9]
@@ -1369,7 +1379,6 @@ class BarChartTemplate(Scene):
 
             t_sweep = clamp(winner_total * 0.12, 0.22, 0.40)
             _winner_sweep(self, winner_bar, t_sweep, color_core=WHITE, color_glow=Theme.NEON_BLUE)
-            TL.consume(winner_seg, t_sweep)
 
             banner_h = 1.65
             banner = RoundedRectangle(width=sf["w"], height=banner_h, corner_radius=0.18)
@@ -1400,14 +1409,12 @@ class BarChartTemplate(Scene):
                 run_time=t_focus,
                 rate_func=rf.ease_out_back,
             )
-            TL.consume(winner_seg, t_focus)
 
             # ✅ SFX: winner rise when banner comes
             t_banner = clamp(winner_total * 0.28, 0.45, 0.85)
             sfx.mark("winner_rise", gain_db=-9, meta={"at": "winner_banner"})
             self.play(GrowFromCenter(banner), FadeIn(txt, shift=UP * 0.2),
                       run_time=t_banner, rate_func=rf.ease_out_cubic)
-            TL.consume(winner_seg, t_banner)
 
             t_flash = clamp(winner_total * 0.14, 0.25, 0.40)
             sfx.mark("impact_soft", gain_db=-12, meta={"at": "winner_flash"})
@@ -1416,13 +1423,14 @@ class BarChartTemplate(Scene):
                 Flash(winner_bar.get_right(), color=Theme.NEON_BLUE, line_length=0.6, num_lines=8),
                 run_time=t_flash,
             )
-            TL.consume(winner_seg, t_flash)
 
+            TL.consume(winner_seg, float(self.time) - winner_t0)
             banner_scan_hold(self, banner, TL.remaining(winner_seg), color=WHITE)
 
         # ============================================================
         # OUTRO
         # ============================================================
+        outro_t0 = float(self.time)
         outro_total = TL.seg_total("outro", 1.2)
         outro_action = clamp(outro_total * 0.55, 0.60, 1.35)
 
@@ -1446,8 +1454,7 @@ class BarChartTemplate(Scene):
             self.play(AnimationGroup(*pulses, lag_ratio=0.12), run_time=max(0.20, outro_action - min(0.22, outro_action * 0.35)), rate_func=rf.ease_out_cubic)
             self.play(FadeOut(tag_group, shift=UP * 0.10), run_time=0.18, rate_func=rf.ease_in_cubic)
 
-            TL.consume("outro", min(outro_action, outro_total))
-
+        TL.consume("outro", float(self.time) - outro_t0)
         try:
             if banner is not None:
                 banner_scan_hold(self, banner, TL.remaining("outro"), color=WHITE)

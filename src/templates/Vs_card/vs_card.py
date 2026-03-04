@@ -747,13 +747,19 @@ class VsCardFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
 
-        IntroManager.play_intro(
-            self,
-            brand_title="VS TRIBUNAL",
-            brand_sub="HEAD-TO-HEAD PROTOCOL",
-            feed_text="FEED_VS // TRIBUNAL",
-            footer_text="CONFIDENTIAL // VERIFIED",
-        )
+        # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
+        global_start_t0 = float(self.time)
+
+        try:
+            IntroManager.play_intro(
+                self,
+                brand_title="VS TRIBUNAL",
+                brand_sub="HEAD-TO-HEAD PROTOCOL",
+                feed_text="FEED_VS // TRIBUNAL",
+                footer_text="CONFIDENTIAL // VERIFIED",
+            )
+        except Exception:
+            pass
 
         W = float(config.frame_width)
         H = float(config.frame_height)
@@ -1039,6 +1045,7 @@ class VsCardFinal(Scene):
         # ================================================================
         # ENTRANCE (PATCH: no flash + everything enters on-screen)
         # ================================================================
+        hook_t0 = global_start_t0
 
         # 1) HARD FIX: intro खत्म होते ही UI "already visible" नहीं होना चाहिए
         for mob in [
@@ -1117,12 +1124,14 @@ class VsCardFinal(Scene):
             run_time=hook_act * 0.2,
             rate_func=rf.ease_out_cubic,
         )
-        TL.consume(hook_seg, hook_act)
+        
+        TL.consume(hook_seg, float(self.time) - hook_t0)
         hold_breathing(self, TL.remaining(hook_seg), focus=header, text="INITIALIZING BOOT SEQUENCE")
 
         # ----------------------------------------------------------------
         # [SETUP SEGMENT] -> 5-8) Metrics / Cards / Terminals
         # ----------------------------------------------------------------
+        setup_t0 = float(self.time)
         setup_total = TL.seg_total(setup_seg, 3.8)
         setup_act = clamp(setup_total * 0.85, 0.80, 2.8)
 
@@ -1161,8 +1170,6 @@ class VsCardFinal(Scene):
             rate_func=rf.ease_out_cubic,
         )
 
-        TL.consume(setup_seg, setup_act)
-        
         # PATCH #2: SYSTEM STATUS TICKER (1-line)
         def set_status(msg: str, *, color=WHITE):
             msg = (msg or "").strip()
@@ -1179,8 +1186,8 @@ class VsCardFinal(Scene):
             self.play(Transform(notes["line"], new_line), run_time=0.20, rate_func=rf.ease_out_cubic)
 
         set_status("system boot: ready | backend: online | awaiting round 1", color=C_SUB)
-        TL.consume(setup_seg, 0.20)
         
+        TL.consume(setup_seg, float(self.time) - setup_t0)
         hold_breathing(self, TL.remaining(setup_seg), focus=header, text="SYSTEM STATUS: ONLINE")
 
         # ----------------------------------------------------------------
@@ -1345,17 +1352,17 @@ class VsCardFinal(Scene):
                 # PATCH #2: status after decision
                 set_status("decision committed | backend: ok | preparing next round…", color=C_SUB)
 
-                # dynamic remaining wait
-                used = float(self.time) - metric_t0
-                TL.consume(seg_name, used)
+                # Consume time used by main animations
+                TL.consume(seg_name, float(self.time) - metric_t0)
                 
-                # Minimum reset runtime
+                # Reserve time for reset animation, pad remaining
                 reset_rt = 0.26
                 pad_time = max(0.0, TL.remaining(seg_name) - reset_rt)
                 
-                hold_breathing(self, pad_time, focus=win_obj["group"], text="VERIFYING ROUND METRICS")
+                hold_breathing(self, pad_time, focus=win_obj["group"])
 
                 # PATCH #4: reset to neutral (still alive, not dull)
+                reset_t0 = float(self.time)
                 self.play(
                     win_obj["group"].animate.scale(1 / WIN_SCALE),
                     win_obj["glow"].animate.set_stroke(win_obj["accent"], 20, 0.20),
@@ -1367,7 +1374,7 @@ class VsCardFinal(Scene):
                     run_time=reset_rt,
                     rate_func=rf.ease_in_out_sine,
                 )
-                TL.consume(seg_name, reset_rt)
+                TL.consume(seg_name, float(self.time) - reset_t0)
 
                 terminal_scanning()
 
@@ -1388,30 +1395,38 @@ class VsCardFinal(Scene):
                     rate_func=rf.ease_out_cubic,
                 )
                 
-                used = float(self.time) - metric_t0
-                TL.consume(seg_name, used)
+                TL.consume(seg_name, float(self.time) - metric_t0)
                 
                 reset_rt = 0.18
                 pad_time = max(0.0, TL.remaining(seg_name) - reset_rt)
                 
-                hold_breathing(self, pad_time, focus=ann["group"], text="PROCESSING DRAW LOGIC")
+                hold_breathing(self, pad_time, focus=ann["group"])
                 
+                reset_t0 = float(self.time)
                 self.play(
                     p1["glow"].animate.set_stroke(C_P1, 22, 0.22),
                     p2["glow"].animate.set_stroke(C_P2, 22, 0.22),
                     run_time=reset_rt,
                     rate_func=rf.ease_in_out_sine,
                 )
-                TL.consume(seg_name, reset_rt)
+                TL.consume(seg_name, float(self.time) - reset_t0)
 
                 # PATCH #2: status after draw
                 set_status("draw confirmed | backend: ok | preparing next round…", color=C_SUB)
 
                 terminal_scanning()
+        
+        # Ghost Padding Loop 
+        for ghost_i in range(len(df), len(round_segments)):
+            seg_key = round_segments[ghost_i]
+            g_t0 = float(self.time)
+            TL.consume(seg_key, float(self.time) - g_t0)
+            hold_breathing(self, TL.remaining(seg_key))
 
         # ----------------------------------------------------------------
         # OUTRO (PATCH #5: loser truly gone + winner scale + no floating VS)
         # ----------------------------------------------------------------
+        winner_t0 = float(self.time)
         final = 0
         if p1_pts > p2_pts:
             final = 1
@@ -1448,7 +1463,6 @@ class VsCardFinal(Scene):
             )
             conn_alpha.set_value(0.0)
             spine.set_opacity(0.0)
-            TL.consume(winner_seg, act_fade)
 
             draw_txt = safe_text("IT'S A DRAW!", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
             draw_txt.set_z_index(380)
@@ -1456,9 +1470,14 @@ class VsCardFinal(Scene):
             sfx.mark("ui_pop", gain_db=-8, meta={"segment": winner_seg})
             self.play(FadeIn(draw_txt, shift=UP * 0.10), run_time=act_draw, rate_func=rf.ease_out_cubic)
             self.play(Flash(draw_txt, color=C_GOLD, line_length=0.7, num_lines=12), run_time=0.35)
-            TL.consume(winner_seg, act_draw + 0.35)
             
-            hold_breathing(self, TL.remaining(winner_seg) + TL.seg_total(outro_seg), focus=draw_txt, text="COMPILING DIAGNOSTICS")
+            TL.consume(winner_seg, float(self.time) - winner_t0)
+            hold_breathing(self, TL.remaining(winner_seg), focus=draw_txt, text="COMPILING DIAGNOSTICS")
+            
+            outro_t0 = float(self.time)
+            TL.consume(outro_seg, float(self.time) - outro_t0)
+            hold_breathing(self, TL.remaining(outro_seg), focus=draw_txt, text="SYSTEM SHUTDOWN")
+            
             sfx.flush()
             return
 
@@ -1489,7 +1508,6 @@ class VsCardFinal(Scene):
         # connectors/spine: fade + HARD remove (always_redraw safety)
         self.play(conn_alpha.animate.set_value(0.0), spine.animate.set_opacity(0.0), run_time=act_fade * 0.5, rate_func=rf.ease_in_out_sine)
         self.remove(conn_ann_spine, conn_spine_p1, conn_spine_p2, conn_p1_val, conn_p2_val, conn_term_notes, spine)
-        TL.consume(winner_seg, act_fade + act_fade * 0.5)
 
         # PATCH #3/#5: loser MUST disappear (FadeOut + remove)
         act_lose = clamp(w_total * 0.15, 0.25, 0.55)
@@ -1499,7 +1517,6 @@ class VsCardFinal(Scene):
             rate_func=rf.ease_in_out_sine,
         )
         self.remove(lose["group"])
-        TL.consume(winner_seg, act_lose)
 
         # winner scale only (no move)
         act_win = clamp(w_total * 0.25, 0.40, 0.80)
@@ -1511,7 +1528,6 @@ class VsCardFinal(Scene):
             run_time=act_win,
             rate_func=rf.ease_out_cubic,
         )
-        TL.consume(winner_seg, act_win)
 
         power1 = safe_text("WINNER CONFIRMED", font="Consolas", font_size=18, color=C_SUB, weight=BOLD)
         power2 = safe_text("YOUR WINNER", font="Montserrat", font_size=30, color=WHITE, weight=BOLD)
@@ -1527,12 +1543,14 @@ class VsCardFinal(Scene):
         self.play(Write(power2), run_time=act_pow * 0.35, rate_func=rf.ease_out_cubic)
         self.play(Write(power3), run_time=act_pow * 0.45, rate_func=rf.ease_out_cubic)
         self.play(Flash(power3, color=win_color, line_length=0.70, num_lines=14), run_time=0.35)
-        TL.consume(winner_seg, act_pow + 0.35)
-
+        
+        TL.consume(winner_seg, float(self.time) - winner_t0)
         hold_breathing(self, TL.remaining(winner_seg), focus=win["group"], text="LOCKING WINNER DATA")
         
         # FINAL OUTRO PAD
-        hold_breathing(self, TL.seg_total(outro_seg, 2.2), focus=win["group"], text="SYSTEM SHUTDOWN")
+        outro_t0 = float(self.time)
+        TL.consume(outro_seg, float(self.time) - outro_t0)
+        hold_breathing(self, TL.remaining(outro_seg), focus=win["group"], text="SYSTEM SHUTDOWN")
 
         for seg in round_segments:
             _ = TL.remaining(seg) 

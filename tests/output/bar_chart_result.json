@@ -1,0 +1,29 @@
+{
+  "template_name": "bar_chart",
+  "rows": [
+    {
+      "name": "United States",
+      "value": 28.78
+    },
+    {
+      "name": "China",
+      "value": 18.53
+    },
+    {
+      "name": "Germany",
+      "value": 4.59
+    },
+    {
+      "name": "Japan",
+      "value": 4.11
+    },
+    {
+      "name": "India",
+      "value": 3.94
+    },
+    {
+      "name": "United Kingdom",
+      "value": 3.5
+    }
+  ]
+}

@@ -830,10 +830,9 @@ class GeoUniversalMap(Scene):
         # Absorb the unused audio segments (e.g., node_4 to node_8) if CSV data is shorter than audio.
         for ghost_i in range(len(all_dots) + 1, len(node_segments) + 1):
             ghost_seg = node_segments[ghost_i - 1]
-            ghost_total = TL.seg_total(ghost_seg)
-            if ghost_total > 0.001:
-                hold_breathing(self, ghost_total, focus=world, text="AWAITING SIGNAL...")
-                TL.consume(ghost_seg, ghost_total)
+            g_t0 = float(self.time)
+            TL.consume(ghost_seg, float(self.time) - g_t0)
+            hold_breathing(self, TL.remaining(ghost_seg), focus=world, text="AWAITING SIGNAL...")
 
         # =====================================================
         # ✅ STEP 3: ALLIANCE TRAFFIC / ENDING + WINNER

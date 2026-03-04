@@ -420,6 +420,9 @@ class ButterflyChart(Scene):
         # ==========================================
         # 1) INTRO (original preserved)
         # ==========================================
+        # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
+        global_start_t0 = float(self.time)
+
         try:
             IntroManager.play_intro(
                 self,
@@ -509,6 +512,13 @@ class ButterflyChart(Scene):
             axis_config={"stroke_width": 0},
         ).set_z_index(cfg.z_bg)
         self.add(grid)
+
+        # Structural Depth: Central spine
+        spine = Line([0, 10, 0], [0, -10, 0]).set_z_index(cfg.z_bg + 1)
+        spine.set_stroke(color=WHITE, width=1.5, opacity=0.15)
+        spine_glow = Line([0, 10, 0], [0, -10, 0]).set_z_index(cfg.z_bg)
+        spine_glow.set_stroke(color=Design.CYAN, width=8, opacity=0.08)
+        self.add(spine, spine_glow)
 
         ring1 = DashedVMobject(Circle(radius=3.2), num_dashes=36).set_z_index(cfg.z_atmo)
         ring1.set_stroke(color=Design.CYAN, width=2.2, opacity=0.14)
@@ -630,7 +640,8 @@ class ButterflyChart(Scene):
         _high_contrast_text(vs_txt)
         vs_txt.move_to(vs_chip)
 
-        hook_t0 = float(self.time)
+        # ✅ FIX: Hook Delta Anchor uses global_start_t0
+        hook_t0 = global_start_t0
         sfx.mark("title_in")
         self.play(
             FadeIn(title, shift=UP * 0.12),
@@ -851,6 +862,12 @@ class ButterflyChart(Scene):
             def _upd_num(m: Mobject):
                 raw = float(val_t.get_value())
                 s = _fmt_compact_value(raw, spec)
+                
+                # Logic Fix: String Cache to prevent memory leak/renderer crash
+                if getattr(m, "_last_str", None) == s:
+                    return
+                m._last_str = s
+                
                 new = Text(s, font="Montserrat", weight=BOLD, font_size=18, color=WHITE)
                 _high_contrast_text(new)
                 new.set_z_index(cfg.z_value + 2)
@@ -1097,11 +1114,12 @@ class ButterflyChart(Scene):
             TL.consume(seg_name, float(self.time) - item_t0)
             hold_breathing(self, TL.remaining(seg_name), focus=node)
 
-        # Pad missing segments safely
-        for ix in range(len(attrs) + 1, 15):
-            miss_key = f"item{ix}"
-            if TL.seg_total(miss_key) > 0.001:
-                hold_breathing(self, TL.seg_total(miss_key), focus=meter_bg)
+        # Ghost Padding Loop 
+        for ghost_i in range(len(attrs) + 1, 15):
+            seg_key = f"item{ghost_i}"
+            g_t0 = float(self.time)
+            TL.consume(seg_key, float(self.time) - g_t0)
+            hold_breathing(self, TL.remaining(seg_key), focus=meter_bg)
 
         # ==========================================
         # 8) WINNER ANNOUNCEMENT (sync: winner + outro)
@@ -1201,12 +1219,12 @@ class ButterflyChart(Scene):
         self.remove(scanline)
 
         TL.consume("winner", float(self.time) - winner_t0)
-        pad_winner = max(0.0, TL.remaining("winner") - 0.2)
-        hold_breathing(self, pad_winner, focus=banner)
+        hold_breathing(self, TL.remaining("winner"), focus=banner)
 
         # OUTRO segment
-        outro_tot = TL.seg_total("outro", 1.2)
-        hold_breathing(self, outro_tot, focus=headline)
+        outro_t0 = float(self.time)
+        TL.consume("outro", float(self.time) - outro_t0)
+        hold_breathing(self, TL.remaining("outro"), focus=headline)
 
         # Flush SFX marks to file
         sfx.flush()

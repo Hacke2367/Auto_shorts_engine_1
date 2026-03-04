@@ -1,0 +1,3 @@
+"""
+AutoShorts CLI Package.
+"""

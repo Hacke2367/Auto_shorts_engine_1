@@ -1,0 +1,3292 @@
+﻿python : 05:51:40 [INFO    ] 
+test.data_gen | Extraction 
+context contains 1 Primary, 1 
+Secondary, 0 Social sources.
+At line:1 char:76
++ ... IOENCODING='utf-8'; 
+python 
+tests\manual_test_data_gen.py 
+2>&1 | Out-F ...
++                         ~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~
+    + CategoryInfo          : 
+    NotSpecified: (05:51:40   
+  [INFO ...Social sources.:   
+ String) [], RemoteExcepti    
+on
+    + FullyQualifiedErrorId : 
+    NativeCommandError
+ 
+05:51:40 [WARNING ] 
+test.data_gen | Conflict 
+Note: Context mixes Primary 
+authoritative sources with 
+lower-tier sources. Gemini is 
+instructed to prefer Primary 
+truth if metrics conflict.
+05:51:40 [WARNING ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 429 
+(retries=0, 358ms)
+05:51:43 [WARNING ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 429 
+(retries=1, 330ms)
+05:51:48 [INFO    ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 200 
+(retries=2, 3579ms)
+05:51:48 [INFO    ] 
+test.data_gen | Gemini 
+successfully extracted 6 
+bar_chart rows.
+05:51:48 [INFO    ] 
+test.data_gen | Extraction 
+context contains 0 Primary, 1 
+Secondary, 0 Social sources.
+05:51:53 [INFO    ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 200 
+(retries=0, 4487ms)
+05:51:53 [INFO    ] 
+test.data_gen | Gemini 
+successfully extracted 8 
+butterfly_chart rows.
+05:51:53 [INFO    ] 
+test.data_gen | Extraction 
+context contains 1 Primary, 0 
+Secondary, 0 Social sources.
+05:51:57 [INFO    ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 200 
+(retries=0, 4061ms)
+05:51:57 [ERROR   ] 
+test.data_gen | Schema 
+validation failed for 
+scan_race: 114 validation 
+errors for TemplateDataset
+rows.0.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ScanRaceRow.year
+  Input should be a valid 
+string [type=string_type, 
+input_value=2019, 
+input_type=int]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.0.ScanRaceRow.entities
+  Input should be a valid 
+dictionary [type=dict_type, 
+input_value=[{'name': 
+'YouTube MAU', ...Tok MAU', 
+'value': 0.5}], 
+input_type=list]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/dict_type
+rows.0.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.DonutBreakdownRow.categ
+ory
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.SortCardRow.category
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'year': 2019, 
+'entities'...ok MAU', 
+'value': 0.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ScanRaceRow.year
+  Input should be a valid 
+string [type=string_type, 
+input_value=2020, 
+input_type=int]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.1.ScanRaceRow.entities
+  Input should be a valid 
+dictionary [type=dict_type, 
+input_value=[{'name': 
+'YouTube MAU', ...ok MAU', 
+'value': 0.85}], 
+input_type=list]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/dict_type
+rows.1.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.DonutBreakdownRow.categ
+ory
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.SortCardRow.category
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'year': 2020, 
+'entities'...k MAU', 'value': 
+0.85}]}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ScanRaceRow.year
+  Input should be a valid 
+string [type=string_type, 
+input_value=2021, 
+input_type=int]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.2.ScanRaceRow.entities
+  Input should be a valid 
+dictionary [type=dict_type, 
+input_value=[{'name': 
+'YouTube MAU', ...Tok MAU', 
+'value': 1.0}], 
+input_type=list]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/dict_type
+rows.2.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.DonutBreakdownRow.categ
+ory
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.SortCardRow.category
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'year': 2021, 
+'entities'...ok MAU', 
+'value': 1.0}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ScanRaceRow.year
+  Input should be a valid 
+string [type=string_type, 
+input_value=2022, 
+input_type=int]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.3.ScanRaceRow.entities
+  Input should be a valid 
+dictionary [type=dict_type, 
+input_value=[{'name': 
+'YouTube MAU', ...Tok MAU', 
+'value': 1.2}], 
+input_type=list]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/dict_type
+rows.3.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.DonutBreakdownRow.categ
+ory
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.SortCardRow.category
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'year': 2022, 
+'entities'...ok MAU', 
+'value': 1.2}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ScanRaceRow.year
+  Input should be a valid 
+string [type=string_type, 
+input_value=2023, 
+input_type=int]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.4.ScanRaceRow.entities
+  Input should be a valid 
+dictionary [type=dict_type, 
+input_value=[{'name': 
+'YouTube MAU', ...Tok MAU', 
+'value': 1.5}], 
+input_type=list]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/dict_type
+rows.4.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.DonutBreakdownRow.categ
+ory
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.SortCardRow.category
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'year': 2023, 
+'entities'...ok MAU', 
+'value': 1.5}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ScanRaceRow.year
+  Input should be a valid 
+string [type=string_type, 
+input_value=2024, 
+input_type=int]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.5.ScanRaceRow.entities
+  Input should be a valid 
+dictionary [type=dict_type, 
+input_value=[{'name': 
+'YouTube MAU', ...Tok MAU', 
+'value': 1.8}], 
+input_type=list]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/dict_type
+rows.5.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.DonutBreakdownRow.categ
+ory
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.SortCardRow.category
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'year': 2024, 
+'entities'...ok MAU', 
+'value': 1.8}]}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+05:51:57 [INFO    ] 
+test.data_gen | Extraction 
+context contains 1 Primary, 0 
+Secondary, 0 Social sources.
+05:52:00 [INFO    ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 200 
+(retries=0, 3366ms)
+05:52:00 [INFO    ] 
+test.data_gen | Gemini 
+successfully extracted 8 
+geo_universal rows.
+05:52:01 [INFO    ] 
+test.data_gen | Extraction 
+context contains 1 Primary, 0 
+Secondary, 0 Social sources.
+05:52:06 [INFO    ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 200 
+(retries=0, 4999ms)
+05:52:06 [ERROR   ] 
+test.data_gen | Schema 
+validation failed for 
+donut_breakdown: 98 
+validation errors for 
+TemplateDataset
+rows.0.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.GeoUniversalRow.group
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.0.DonutBreakdownRow.color
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.0.DonutBreakdownRow.group
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.0.DonutBreakdownRow.order
+  Input should be a valid 
+integer [type=int_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/int_type
+rows.0.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Samsung', '... held steady 
+at 19.4%.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.GeoUniversalRow.group
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.1.DonutBreakdownRow.color
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.1.DonutBreakdownRow.group
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.1.DonutBreakdownRow.order
+  Input should be a valid 
+integer [type=int_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/int_type
+rows.1.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Apple', 'va...hone 16 series 
+demand.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.DonutBreakdownRow.color
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.2.DonutBreakdownRow.order
+  Input should be a valid 
+integer [type=int_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/int_type
+rows.2.DonutBreakdownRow.note
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.2.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Xiaomi', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.DonutBreakdownRow.color
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.3.DonutBreakdownRow.order
+  Input should be a valid 
+integer [type=int_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/int_type
+rows.3.DonutBreakdownRow.note
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.3.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'category': 
+'OPPO', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.DonutBreakdownRow.color
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.4.DonutBreakdownRow.order
+  Input should be a valid 
+integer [type=int_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/int_type
+rows.4.DonutBreakdownRow.note
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.4.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'category': 
+'vivo', 'val...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.DonutBreakdownRow.color
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.5.DonutBreakdownRow.order
+  Input should be a valid 
+integer [type=int_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/int_type
+rows.5.DonutBreakdownRow.note
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.5.SortCardRow.image
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.SortCardRow.reason
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'category': 
+'Others', 'v...er': None, 
+'note': None}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+05:52:06 [INFO    ] 
+test.data_gen | Extraction 
+context contains 0 Primary, 1 
+Secondary, 0 Social sources.
+05:52:09 [INFO    ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 200 
+(retries=0, 3290ms)
+05:52:09 [ERROR   ] 
+test.data_gen | Schema 
+validation failed for 
+sort_card: 112 validation 
+errors for TemplateDataset
+rows.0.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.SortCardRow.image
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.0.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.0.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category... for 3 years 
+straight.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.SortCardRow.image
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.1.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.1.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...eb, massive 
+ecosystem.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.SortCardRow.image
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.2.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.2.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., Android 
+development.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.SortCardRow.image
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.3.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.3.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...nes, high 
+performance.'}, 
+input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.SortCardRow.image
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.4.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.4.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...ity), enterprise 
+.NET.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.SortCardRow.image
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.5.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.5.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category...vices, DevOps 
+tooling.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.BarChartRow.name
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.BarChartRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.ButterflyChartRow.attri
+bute
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.ButterflyChartRow.p1_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.ButterflyChartRow.p2_va
+lue
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.ScanRaceRow.year
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.ScanRaceRow.entities
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.GeoUniversalRow.country
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.GeoUniversalRow.group
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.GeoUniversalRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.DonutBreakdownRow.value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.SortCardRow.image
+  Input should be a valid 
+string [type=string_type, 
+input_value=None, 
+input_type=NoneType]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/string_type
+rows.6.VsCardRow.metric
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.VsCardRow.p1_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.VsCardRow.p2_value
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+rows.6.VsCardRow.winner
+  Field required 
+[type=missing, 
+input_value={'image': None, 
+'category..., memory safety 
+focus.'}, input_type=dict]
+    For further information 
+visit https://errors.pydantic.
+dev/2.11/v/missing
+05:52:10 [INFO    ] 
+test.data_gen | Extraction 
+context contains 0 Primary, 1 
+Secondary, 0 Social sources.
+05:52:10 [WARNING ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 429 
+(retries=0, 349ms)
+05:52:13 [WARNING ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 429 
+(retries=1, 334ms)
+05:52:15 [WARNING ] 
+test.data_gen | API 
+gemini.extract ΓåÆ 429 
+(retries=2, 335ms)
+
+================================================================
+  AutoShorts -- Manual Data Generation Test
+  Model: gemini-2.5-flash  |  RPM: 15
+================================================================
+
+[1/7] Testing: bar_chart
+        Topic: Top 5 Countries by GDP 2024
+        [PASS]  |  6 rows (ideal=6, max=10)
+        Saved -> tests\output\bar_chart_result.json
+
+[2/7] Testing: butterfly_chart
+        Topic: iPhone 16 Pro vs Samsung Galaxy S25 Ultra
+        [PASS]  |  8 rows (ideal=5, max=10)
+        Saved -> tests\output\butterfly_chart_result.json
+
+[3/7] Testing: scan_race
+        Topic: YouTube vs TikTok Monthly Active Users 2019-2024
+        [FAIL]  |  ValueError: schema_failure: Extracted data violates scan_race schema
+
+[4/7] Testing: geo_universal
+        Topic: Top 8 Military Spenders by Country 2024
+        [PASS]  |  8 rows (ideal=8, max=10)
+        Saved -> tests\output\geo_universal_result.json
+
+[5/7] Testing: donut_breakdown
+        Topic: Global Smartphone Market Share Q4 2024
+        [FAIL]  |  ValueError: schema_failure: Extracted data violates donut_breakdown schema
+
+[6/7] Testing: sort_card
+        Topic: Best Programming Languages 2024 Tier List
+        [FAIL]  |  ValueError: schema_failure: Extracted data violates sort_card schema
+
+[7/7] Testing: vs_card
+        Topic: Tesla Model 3 vs BMW i4 2024
+        [FAIL]  |  ClientResponseError: 429, message='Too Many Requests', url=URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyBOLXQA3WI9hklycRGCl4nOG2MMdbnMrY8')
+
+================================================================
+  RESULTS SUMMARY
+================================================================
+  [OK]  bar_chart             PASS
+  [OK]  butterfly_chart       PASS
+  [XX]  scan_race             FAIL: schema_failure: Extracted data violates scan_race schema
+  [OK]  geo_universal         PASS
+  [XX]  donut_breakdown       FAIL: schema_failure: Extracted data violates donut_breakdown schema
+  [XX]  sort_card             FAIL: schema_failure: Extracted data violates sort_card schema
+  [XX]  vs_card               FAIL: 429, message='Too Many Requests', url=URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyBOLXQA3WI9hklycRGCl4nOG2MMdbnMrY8')
+
+  Total: 3 passed, 4 failed out of 7
+================================================================

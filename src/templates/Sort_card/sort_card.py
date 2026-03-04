@@ -714,6 +714,9 @@ class SortCardTribunalFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
 
+        # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
+        global_start_t0 = float(self.time)
+
         # Intro
         try:
             IntroManager.play_intro(
@@ -921,7 +924,7 @@ class SortCardTribunalFinal(Scene):
         hook_act = clamp(hook_total * 0.85, 1.25, 3.2)
         
         # ✅ FIX: Hook Delta Anchor
-        hook_t0 = float(self.time)
+        hook_t0 = global_start_t0
 
         sfx.mark("ui_pop", gain_db=-10, meta={"segment": hook_seg, "at": "title_in"})
         self.play(
@@ -1247,6 +1250,13 @@ class SortCardTribunalFinal(Scene):
             
             # Pad any strictly missing fractional timeline block up to seg target limits
             hold_breathing(self, TL.remaining(seg_name), focus=scanner["group"], text="VERDICT CONFIRMED")
+
+        # Ghost Padding Loop 
+        for ghost_i in range(len(df), len(item_segments)):
+            seg_key = item_segments[ghost_i]
+            g_t0 = float(self.time)
+            TL.consume(seg_key, float(self.time) - g_t0)
+            hold_breathing(self, TL.remaining(seg_key))
 
         # =====================================================
         # OUTRO / WINNER LOGIC

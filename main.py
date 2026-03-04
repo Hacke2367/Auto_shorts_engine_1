@@ -104,27 +104,8 @@ def concat_audio_ffmpeg(
         cmd += ["-i", str(p)]
 
     n = len(audio_paths)
-    if trim_silence:
-        # Conservative leading+trailing silence trim per segment before concat.
-        # We do not trim internal pauses to avoid harming speech rhythm.
-        parts: List[str] = []
-        refs: List[str] = []
-        for i in range(n):
-            parts.append(
-                f"[{i}:a]"
-                f"aformat=channel_layouts=stereo,aresample=44100,"
-                f"silenceremove=start_periods=1:start_threshold=-50dB,"
-                f"areverse,"
-                f"silenceremove=start_periods=1:start_threshold=-50dB,"
-                f"areverse"
-                f"[a{i}]"
-            )
-            refs.append(f"[a{i}]")
-        parts.append("".join(refs) + f"concat=n={n}:v=0:a=1[a]")
-        filter_complex = ";".join(parts)
-    else:
-        # legacy path: direct concat without silence trim
-        filter_complex = "".join([f"[{i}:a]" for i in range(n)]) + f"concat=n={n}:v=0:a=1[a]"
+    # Phase 1: Aggressive silenceremove disabled. Standard pristine concat.
+    filter_complex = "".join([f"[{i}:a]" for i in range(n)]) + f"concat=n={n}:v=0:a=1[a]"
 
     cmd += [
         "-filter_complex", filter_complex,

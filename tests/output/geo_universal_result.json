@@ -1,0 +1,45 @@
+{
+  "template_name": "geo_universal",
+  "rows": [
+    {
+      "country": "United States",
+      "group": "NATO",
+      "value": 916.0
+    },
+    {
+      "country": "China",
+      "group": "Non-aligned",
+      "value": 296.0
+    },
+    {
+      "country": "Russia",
+      "group": "Non-aligned",
+      "value": 109.0
+    },
+    {
+      "country": "India",
+      "group": "Non-aligned",
+      "value": 83.6
+    },
+    {
+      "country": "Saudi Arabia",
+      "group": "Non-aligned",
+      "value": 75.8
+    },
+    {
+      "country": "United Kingdom",
+      "group": "NATO",
+      "value": 74.9
+    },
+    {
+      "country": "Germany",
+      "group": "NATO",
+      "value": 66.8
+    },
+    {
+      "country": "France",
+      "group": "NATO",
+      "value": 61.3
+    }
+  ]
+}
