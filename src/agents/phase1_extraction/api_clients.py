@@ -33,6 +33,7 @@ from src.agents.core.models import (
     SourceAudit,
     TemplateDataset,
     TemplateSpec,
+    TEMPLATE_META_KEYS,
 )
 
 
@@ -171,6 +172,8 @@ async def gemini_extract(
     ideal = template_spec.capacity.ideal
     maximum = template_spec.capacity.max
 
+    meta_keys = TEMPLATE_META_KEYS.get(template_name, ["TITLE", "SUB"])
+
     # ---------------- TEMPLATE-SPECIFIC EXAMPLES ----------------
     schema_examples: dict[str, str] = {
         "bar_chart": '{"name": "United States", "value": 28.78}',
@@ -182,6 +185,15 @@ async def gemini_extract(
         "vs_card": '{"metric": "Top Speed", "p1_value": "200 mph", "p2_value": "180 mph", "winner": "p1"}',
     }
     example_row = schema_examples.get(template_name, '{"key": "value"}')
+    example_meta = {k: "Example text..." for k in meta_keys}
+    
+    full_example_payload = f"""{{
+  "meta": {json.dumps(example_meta)},
+  "rows": [
+    {example_row},
+    {example_row}
+  ]
+}}"""
 
     # ---------------- 10/10 PROMPT ----------------
     prompt = f"""You are a strict Data Extraction Agent for AutoShorts.
@@ -191,9 +203,9 @@ The topic is: "{topic}"
 Try to extract {ideal} items safely without hallucinating. Do NOT exceed {maximum} items.
 
 OUTPUT SCHEMA CONSTRAINTS (CRITICAL)
-Your output MUST strictly be a JSON object containing a "template_name" and an array of "rows".
-Each object in the "rows" array MUST strictly follow this exact JSON structure and data types:
-{example_row}
+You MUST return a single JSON object with exactly two keys: 'meta' and 'rows'. The 'meta' object must contain these exact keys: {meta_keys}. Generate highly accurate, punchy YouTube Shorts titles/subtitles based directly on the topic and extracted data. Keep titles under 4 words. The 'rows' key must contain the array of extracted data objects.
+Your output MUST strictly follow this exact JSON structure and data types:
+{full_example_payload}
 
 Notice the data types in the example. If a value is a string, keep it a string. If it is a dictionary/object, keep it flat.
 For example, in scan_race, 'entities' MUST be a flat key-value dict, NOT a list of objects.
@@ -233,8 +245,8 @@ Read the following sourced Markdown texts and extract the relevant numerical/sta
         )
 
     prompt += f"""
-Return purely a JSON object with "template_name": "{template_name}" and a "rows" array.
-Each row MUST match the exact example structure shown above. Do NOT invent new keys.
+Return purely a JSON object with "meta" and "rows" keys.
+Each row in the "rows" array MUST match the exact example structure shown above. Do NOT invent new keys.
 DO NOT emit Markdown blocks like ```json ... ```, just emit the raw curly-brace JSON.
 
 Do not hallucinate data. Only extract facts found in the texts. If sources disagree, prefer Primary sources over Secondary/Social.
@@ -307,7 +319,11 @@ Do not hallucinate data. Only extract facts found in the texts. If sources disag
 
                 try:
                     # Validate the raw dict using our Pydantic schema
-                    dataset = TemplateDataset.model_validate(parsed)
+                    dataset = TemplateDataset.model_validate({
+                        "template_name": template_name,
+                        "meta": parsed.get("meta", {}),
+                        "rows": parsed.get("rows", [])
+                    })
                 except Exception as err:
                     log.error("Schema validation failed for %s: %s", template_name, err)
                     raise ValueError(f"schema_failure: Extracted data violates {template_name} schema") from err

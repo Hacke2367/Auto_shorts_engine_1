@@ -52,6 +52,7 @@ class ArchiveManager:
         self._saved_queue: list[QueuedTopic] = []
 
         self._load()
+        self.expire_stale_entries()  # ADDED: Instantly clean up garbage when system starts
 
     # ------------------------------------------------------------------
     # Public API
@@ -93,12 +94,11 @@ class ArchiveManager:
     def mark_produced(self, topic: str, reason: str | None = None) -> None:
         """Mark a topic as successfully produced into a video."""
         norm = self.normalize_topic(topic)
-        
+
         # Reconcile states
         if norm in self._rejected:
             del self._rejected[norm]
         self._saved_queue = [q for q in self._saved_queue if q.normalized_topic != norm]
-
         if norm not in self._produced:
             self._produced[norm] = ArchiveEntry(
                 topic=topic, normalized_topic=norm, reason=reason
@@ -112,6 +112,8 @@ class ArchiveManager:
 
         # Reconcile states
         self._saved_queue = [q for q in self._saved_queue if q.normalized_topic != norm]
+        if norm in self._produced:  # ADDED: Remove from produced if rejecting later
+            del self._produced[norm]
 
         if norm not in self._rejected:
             self._rejected[norm] = ArchiveEntry(
@@ -334,3 +336,86 @@ class ArchiveManager:
             except OSError:
                 pass
             raise
+
+
+if __name__ == "__main__":
+    import shutil
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import patch
+    from src.agents.core.job_manager import PROJECT_ROOT
+    from src.agents.core.models import QueuedTopic
+
+    print("🔥 Starting EXHAUSTIVE Archive Manager Test Suite...\n")
+    test_path = PROJECT_ROOT / "jobs" / "exhaustive_test_archive.json"
+
+    # Clean start
+    if test_path.exists(): test_path.unlink()
+    am = ArchiveManager(archive_path=test_path)
+
+    try:
+        # ---------------------------------------------------------
+        # Scenario 1: Aggressive Normalization Edge Cases
+        # ---------------------------------------------------------
+        print("▶ Scenario 1: Normalization Edge Cases")
+        assert am.normalize_topic("  AI   History  ") == "ai history", "Failed to strip extra spaces"
+        assert am.normalize_topic("AI\nHistory") == "ai history", "Failed to handle newline characters"
+        assert am.normalize_topic("ai history") == "ai history", "Failed lowercase handling"
+
+        # ---------------------------------------------------------
+        # Scenario 2: Time Travel & Lazy Expiration (TTL Check)
+        # ---------------------------------------------------------
+        print("▶ Scenario 2: Time Travel & Lazy Expiration")
+        # We temporarily hijack python's 'datetime' to simulate time passing
+        with patch('src.agents.phase1_discovery.archive_manager.datetime') as mock_dt:
+            # Set time to Day 1
+            mock_now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            mock_dt.now.return_value = mock_now
+
+            am.mark_produced("Future Tech")
+            assert am.is_duplicate("Future Tech") == True, "Should be blocked on Day 1"
+
+            # Fast forward time by 61 days!
+            mock_dt.now.return_value = mock_now + timedelta(days=61)
+
+            # This should trigger the lazy expiration automatically
+            assert am.is_duplicate("Future Tech") == False, "TTL Failed! The topic is still blocked after 61 days!"
+
+        # ---------------------------------------------------------
+        # Scenario 3: The State Conflict Battle (Flaw 1 Check)
+        # ---------------------------------------------------------
+        print("▶ Scenario 3: State Reconciliation")
+        am.mark_produced("Rust vs C++")
+        am.mark_rejected("Rust vs C++")  # User changed their mind
+
+        # If you didn't apply the fix I gave you, this will crash here.
+        assert "rust vs c++" not in am._produced, "❌ FLAW 1 NOT FIXED: Topic is still trapped in 'produced' list!"
+        assert "rust vs c++" in am._rejected, "Topic should be in 'rejected' list."
+
+        # ---------------------------------------------------------
+        # Scenario 4: Queue Deduplication & Popping
+        # ---------------------------------------------------------
+        print("▶ Scenario 4: Queue Dedupe & Popping")
+        qt1 = QueuedTopic(topic="Quantum Computing", normalized_topic="quantum computing",
+                          best_fit_template="bar_chart", final_score=9.0)
+        qt2 = QueuedTopic(topic="  Quantum   Computing ", normalized_topic="quantum computing",
+                          best_fit_template="vs_card", final_score=8.0)
+
+        am.add_to_queue(qt1)
+        am.add_to_queue(qt2)  # Should be completely ignored
+
+        queue = am.get_queue()
+        assert len(queue) == 1, "❌ Queue allowed a duplicate entry!"
+
+        popped = am.pop_queue(1)
+        assert len(popped) == 1, "Pop didn't return the item"
+        assert len(am.get_queue()) == 0, "Pop didn't remove the item from the queue!"
+
+        print("\n✅ ALL EXHAUSTIVE TESTS PASSED. Your fixes worked perfectly. Your memory engine is solid.")
+
+    except AssertionError as e:
+        print(f"\n❌ TEST FAILED: {e}")
+        print("Tumne fixes sahi se apply nahi kiye hain. Fix them before moving on.")
+
+    finally:
+        # Clean up the dummy file so we don't leave trash on your hard drive
+        if test_path.exists(): test_path.unlink()

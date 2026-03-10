@@ -710,7 +710,7 @@ def main():
     """
     ap = argparse.ArgumentParser()
     ap.add_argument("--job", required=True, help="jobs/job_0001")
-    ap.add_argument("--template", required=True, choices=sorted(TEMPLATE_MAP.keys()))
+    ap.add_argument("--template", required=False, choices=sorted(TEMPLATE_MAP.keys()))
     ap.add_argument("-q", "--quality", default="h", help="manim quality: l/m/h/p (like manim -qh)")
     ap.add_argument("--open", action="store_true", help="open final video after render")
     ap.add_argument("--no_sfx", action="store_true", help="disable sfx mixing even if marks exist")
@@ -729,8 +729,14 @@ def main():
     job = load_json(job_json)
     print(f"[OK] JOB_JSON_PATH={job_json}")
 
+    template_name = args.template or job.get("template_id")
+    if not template_name:
+        raise ValueError("--template flag not provided and template_id missing from job.json")
+    if template_name not in TEMPLATE_MAP:
+        raise ValueError(f"Unknown template: {template_name}. Must be one of {sorted(TEMPLATE_MAP.keys())}")
+
     # --- Pick template scene ---
-    tpl = TEMPLATE_MAP[args.template]
+    tpl = TEMPLATE_MAP[template_name]
     scene_file = (repo_root / tpl["file"]).resolve()
     scene_name = tpl["scene"]
 

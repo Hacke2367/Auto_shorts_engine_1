@@ -266,6 +266,9 @@ class JobManager:
             raise ValueError(f"Unknown template '{template_name}'.")
         self._template_name = template_name
 
+        for subdir in ("data", "audio", "script", "output"):
+            (self._job_dir / subdir).mkdir(parents=True, exist_ok=True)
+
         state = self._read_state()
         if state is not None:
             state["template"] = template_name

@@ -23,7 +23,7 @@ class TokenBucketRateLimiter:
             raise ValueError(f"RPM must be positive, got {rpm}.")
 
         self.capacity: float = float(rpm)
-        self.tokens: float = 1.0  # Cold-start: only 1 token available
+        self.tokens: float = self.capacity  # START FULL: No artificial waiting  # Cold-start: only 1 token available
         self.fill_rate: float = self.capacity / 60.0
         self.min_interval: float = 60.0 / self.capacity
         self.last_update: float = time.monotonic()
@@ -72,3 +72,37 @@ class TokenBucketRateLimiter:
 
             # Sleep OUTSIDE the lock
             await asyncio.sleep(wait_time)
+
+
+if __name__ == "__main__":
+    # --- ISOLATED MANUAL TESTING ---
+    print("🚀 Starting Async Rate Limiter Test...\n")
+
+
+    async def worker(worker_id: int, limiter: TokenBucketRateLimiter):
+        print(f"[{time.strftime('%X')}] Worker {worker_id}: Requesting token...")
+        await limiter.acquire(1)
+        print(f"✅ [{time.strftime('%X')}] Worker {worker_id}: Token acquired! Firing API.")
+
+
+    async def main():
+        # 60 RPM = exactly 1 request allowed per second
+        limiter = TokenBucketRateLimiter(rpm=60)
+
+        # Test 1: Fire 5 workers at the exact same time
+        print("Testing 1: 5 workers fighting for 60 RPM (1 req/sec)...")
+        tasks = [asyncio.create_task(worker(i, limiter)) for i in range(5)]
+        await asyncio.gather(*tasks)
+        print("\nNotice how they are strictly paced exactly ~1 second apart.\n")
+
+        # Test 2: Triggering the Circuit Breaker (The Flaw simulation)
+        print("Testing 2: Triggering a 3-second global penalty...")
+        await limiter.apply_penalty(3.0)
+
+        tasks2 = [asyncio.create_task(worker(i + 5, limiter)) for i in range(3)]
+        await asyncio.gather(*tasks2)
+        print("\nNotice how all workers wait 3 seconds, then immediately fight for tokens.")
+
+
+    # Run the async test
+    asyncio.run(main())

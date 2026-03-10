@@ -26,7 +26,7 @@ from src.agents.core.job_manager import JobManager
 from src.agents.phase1_discovery.archive_manager import ArchiveManager
 from src.agents.phase1_discovery.discovery_runner import run_discovery
 from src.agents.phase1_extraction.runner import run_extraction
-from src.agents.core.models import VALID_TEMPLATES
+from src.agents.core.models import VALID_TEMPLATES, QueuedTopic, TEMPLATE_FALLBACKS
 
 # Configure a basic terminal logger for the CLI itself
 logging.basicConfig(
@@ -113,19 +113,22 @@ def _record_decision(
     with open(path, "w", encoding="utf-8") as f:
         json.dump(decisions, f, indent=2)
         
-    # Update Archive
+    # Update Archive using the correct ArchiveManager API
     archive = ArchiveManager()
     if decision == "rejected":
-        archive.add_to_archive("rejected", candidate["topic"], "CLI Rejected")
+        archive.mark_rejected(candidate["topic"], reason="CLI Rejected")
     elif decision == "queued":
-        archive.add_to_queue(
+        norm = ArchiveManager.normalize_topic(candidate["topic"])
+        queued_topic = QueuedTopic(
             topic=candidate["topic"],
+            normalized_topic=norm,
             best_fit_template=candidate.get("best_fit_template", ""),
             fallback_template=candidate.get("fallback_template"),
             final_score=candidate.get("final_score", 0.0),
             fit_reason=candidate.get("fit_reason", ""),
-            source_hint=candidate.get("source_hint")
+            source_hint=candidate.get("source_hint"),
         )
+        archive.add_to_queue(queued_topic)
 
 # ---------------------------------------------------------------------------
 # Commands
@@ -207,11 +210,15 @@ async def cmd_auto(args: argparse.Namespace) -> None:
     que_input = input("Enter indices to QUEUE for later (comma-separated, or leave blank): ").strip()
     
     # Process decisions
-    _record_decision(jm, selected, "selected", selected["best_fit_template"])
+    chosen_template = selected["best_fit_template"]
+    _record_decision(jm, selected, "selected", chosen_template)
     jm.mark_step_completed("phase1_discovery", {
         "selected_topic": selected["topic"],
-        "fallback_template": selected.get("fallback_template")
+        "selected_template": chosen_template,
+        "fallback_template": selected.get("fallback_template"),
     })
+    # Lock the real template into auto-mode JobManager so runner.py sees it
+    jm.set_template(chosen_template)
     
     for r in rej_input.split(","):
         r = r.strip()
@@ -236,6 +243,7 @@ async def cmd_auto(args: argparse.Namespace) -> None:
             topic=selected["topic"]
         )
         print("\n[SUCCESS] Extraction completed.")
+        ArchiveManager().mark_produced(selected["topic"], reason="CLI Auto Extract Success")
         actual = jm.get_step_metadata("phase1b_extraction").get("template", selected["best_fit_template"])
         attempt_dir = jm.get_attempt_dir(actual, 1) # Note: simplify to show final resting place
         
@@ -265,19 +273,29 @@ async def cmd_approve(args: argparse.Namespace) -> None:
         print(f"Invalid template '{template}'")
         sys.exit(1)
         
+    if template == selected.get("best_fit_template"):
+        final_fallback = selected.get("fallback_template")
+    else:
+        fallbacks = TEMPLATE_FALLBACKS.get(template, [])
+        final_fallback = fallbacks[0] if fallbacks else None
+
     print(f"Approving: {selected['topic']}")
     print(f"Template:  {template}")
     
     jm.mark_step_completed("phase1_discovery", {
         "selected_topic": selected["topic"],
-        "fallback_template": selected.get("fallback_template")
+        "selected_template": template,
+        "fallback_template": final_fallback,
     })
     _record_decision(jm, selected, "selected", template)
+    # Lock the real template into auto-mode JobManager so runner.py sees it
+    jm.set_template(template)
     
     print("Running extraction...")
     try:
         await run_extraction(job_manager=jm, topic=selected["topic"])
         print("\n[SUCCESS] Extraction completed.")
+        ArchiveManager().mark_produced(selected["topic"], reason="CLI Approve Extract Success")
     except Exception as e:
         print(f"\n[ERROR] Extraction failed: {e}")
         
@@ -328,6 +346,7 @@ async def cmd_extract(args: argparse.Namespace) -> None:
     try:
         await run_extraction(job_manager=jm, topic=args.topic)
         print("\n[SUCCESS] Extraction completed.")
+        ArchiveManager().mark_produced(args.topic, reason="CLI Manual Extract Success")
     except Exception as e:
         print(f"\n[ERROR] Extraction failed: {e}")
 
@@ -362,9 +381,17 @@ async def cmd_inspect(args: argparse.Namespace) -> None:
         else:
             print("  (No attempts found)")
     else:
-        check_print("JSON Data", jm.data_dir / f"{template}_dataset.json")
-        check_print("CSV Data", jm.data_dir / f"{template}_data.csv")
-        check_print("Audit Trail", jm.data_dir / "sources_audit.json")
+        print("\n  Attempts:")
+        found_any = False
+        if jm.data_dir.exists():
+            for folder in jm.data_dir.iterdir():
+                if folder.is_dir() and folder.name in ("best_fit", "fallback"):
+                    found_any = True
+                    print(f"  - {folder.name}/")
+                    for file in folder.iterdir():
+                        print(f"      {file.name}")
+        if not found_any:
+            print("  (No attempts found)")
 
 
 async def cmd_queue_show(args: argparse.Namespace) -> None:

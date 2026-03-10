@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "C:\MANIM_VIDEOS_CODE_TEMPALTE\dump_err.py", line 7, in main
+    await run_integration_test()
+  File "C:\MANIM_VIDEOS_CODE_TEMPALTE\tests\phase2_scripting\test_phase2_integration.py", line 27, in run_integration_test
+    final_segments, raw_history = await write_script(plan, dataset, session, logger)
+  File "C:\MANIM_VIDEOS_CODE_TEMPALTE\src\agents\phase2_scripting\llm_writer.py", line 298, in write_script
+    system_prompt = _build_system_prompt(plan.persona_id)
+  File "C:\MANIM_VIDEOS_CODE_TEMPALTE\src\agents\phase2_scripting\llm_writer.py", line 87, in _build_system_prompt
+    sys_str = _load_text(sys_prompt_path)
+  File "C:\MANIM_VIDEOS_CODE_TEMPALTE\src\agents\phase2_scripting\llm_writer.py", line 78, in _load_text
+    raise FileNotFoundError(f"Missing required context file: {path}")
+FileNotFoundError: Missing required context file: C:\MANIM_VIDEOS_CODE_TEMPALTE\.agent\context\personas\system_prompts\witty_strategist_system.md

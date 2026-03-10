@@ -1,0 +1,8 @@
+=== AUTO-SHORTS PHASE 2 SINGLE-SHOT DEMO ===
+Template: vs_card | Persona: savage_roast_master | Segments: 7
+
+Calling Gemini directly bypassing all Tenacity retries to force 1 execution...
+
+
+ERROR EXPERIENCED:
+429, message='Too Many Requests', url=URL('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyA8f2VeLlbZrHTby0E09J2clrYaSE8dDcw')

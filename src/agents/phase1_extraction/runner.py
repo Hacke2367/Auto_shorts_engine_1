@@ -49,8 +49,19 @@ MAX_NULL_RATE: float = 0.30  # Allow up to 30% null/empty fields per dataset
 MIN_USABLE_ROWS: int = 2    # Minimum rows after cleaning
 
 
+# Sentinel value for mnd_sec when Phase 1 does not have timing truth.
+# Phase 2 (video engine) MUST hydrate real timing values before rendering.
+# This sentinel is intentionally non-empty so consumers can detect that
+# timing data has NOT been resolved yet.
+_MND_SEC_PENDING: dict[str, float] = {"_phase2_pending": 0.0}
+
+
 def _build_template_spec(template_name: str) -> TemplateSpec:
-    """Build a TemplateSpec on the fly from models.py definitions."""
+    """Build a TemplateSpec on the fly from models.py definitions.
+
+    Note: ``mnd_sec`` is set to a documented sentinel because Phase 1
+    does not own timing truth. Phase 2 MUST replace it before rendering.
+    """
     row_cls = TEMPLATE_ROW_MAP[template_name]
     expected_cols = list(row_cls.model_fields.keys())
 
@@ -58,7 +69,7 @@ def _build_template_spec(template_name: str) -> TemplateSpec:
         description=f"Auto-derived spec for {template_name}",
         capacity=TEMPLATE_CAPACITIES[template_name],
         data_schema=DataSchemaSpec(format="csv", expected_columns=expected_cols),
-        mnd_sec={},
+        mnd_sec=dict(_MND_SEC_PENDING),
     )
 
 
@@ -67,15 +78,36 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
     if not dataset.rows:
         return
 
+    static_tags = {
+        "bar_chart": {"MAX": "100", "SORT": "DESC", "TOP_N": "10"},
+        "scan_race": {"FEED": "FEED_RACE // LIVE", "FOOTER": "CONFIDENTIAL // VERIFIED", "TOPK": "5", "MAX_SERIES": "10"},
+        "donut_breakdown": {"TOP": "8", "PANEL_TOP": "6", "OTHERS_MIN_PCT": "2", "MODE": "DONUT"},
+        "sort_card": {"FEED": "FEED_SORT // TRIBUNAL"},
+        "vs_card": {"P1_IMG": "player1.png", "P2_IMG": "player2.png"},
+    }
+
+    combined_meta = dict(dataset.meta)
+    if dataset.template_name in static_tags:
+        combined_meta.update(static_tags[dataset.template_name])
+
     headers = list(dataset.rows[0].model_dump().keys())
 
     with path.open("w", newline="", encoding="utf-8") as f:
+        # Write Meta Tags
+        if dataset.template_name == "scan_race":
+            for k, v in combined_meta.items():
+                f.write(f"#{k}={v}\n")
+        else:
+            if combined_meta:
+                meta_line = ", ".join(f"{k}={v}" for k, v in combined_meta.items())
+                f.write(f"# {meta_line}\n")
+                
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
         for row in dataset.rows:
             writer.writerow(row.model_dump())
 
-    log.info("Saved CSV data to %s", path.name)
+    log.info("Saved CSV tags and data to %s", path.name)
 
 
 def _validate_dataset_quality(
@@ -141,8 +173,22 @@ async def run_extraction(
         RuntimeError: If all extraction attempts fail or yield invalid datasets.
     """
     log = job_manager.get_logger()
-    best_fit = job_manager.template_name
     step_name = "phase1b_extraction"
+
+    # -- 0. Resolve the real extraction template --
+    # In auto-mode, job_manager.template_name may still be 'auto' if
+    # set_template() was not called. We read the operator-selected
+    # template from trusted discovery metadata as the source of truth.
+    if job_manager.is_auto_mode:
+        discovery_meta = job_manager.get_step_metadata("phase1_discovery") or {}
+        best_fit = discovery_meta.get("selected_template")
+        if not best_fit or best_fit not in VALID_TEMPLATES:
+            raise RuntimeError(
+                f"Auto-mode extraction implies discovery was approved. "
+                f"Metadata missing/invalid selected_template: '{best_fit}'."
+            )
+    else:
+        best_fit = job_manager.template_name
 
     # -- 1. Early Return Idempotency Check --
     if job_manager.is_step_completed(step_name):

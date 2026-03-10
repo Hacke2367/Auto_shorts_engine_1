@@ -56,10 +56,13 @@ class _JSONLineFormatter(logging.Formatter):
 
         # Attach any structured extras the caller passed via ``extra={"data": ...}``
         extra_data: dict[str, Any] = {}
-        for key in ("data", "duration_ms", "retry_count", "status_code", "service",
-                     "operation", "step_name", "error"):
-            val = getattr(record, key, None)
-            if val is not None:
+        # Ignore Python's internal logging keys, grab everything else automatically
+        standard_keys = {"name", "msg", "args", "levelname", "levelno", "pathname", "filename", "module", "exc_info",
+                         "exc_text", "stack_info", "lineno", "funcName", "created", "msecs", "relativeCreated",
+                         "thread", "threadName", "processName", "process", "message", "asctime"}
+
+        for key, val in record.__dict__.items():
+            if key not in standard_keys and key != "job_id" and not key.startswith("_"):
                 extra_data[key] = val
         if extra_data:
             entry["extra"] = extra_data
@@ -255,3 +258,47 @@ def log_api_call(
             "duration_ms": duration_ms,
         },
     )
+
+
+if __name__ == "__main__":
+    import shutil
+
+    # --- ISOLATED MANUAL TESTING ---
+    print("🚀 Starting Logger Independent Test...\n")
+
+    test_dir = Path("test_job_logs")
+    test_id = "test_123"
+
+    # 1. Test Setup
+    print("Testing 1: Initializing logger...")
+    log = setup_job_logger(test_dir, test_id)
+    print(f"✅ Logger created. Check folder: {test_dir}\n")
+
+    # 2. Test Timed Operation
+    print("Testing 2: Running a timed operation (simulating a 1-second task)...")
+    with timed_operation(log, "fake_api_call"):
+        time.sleep(1)  # Simulate work
+    print("✅ Check your console, it should show ▶ START and ✔ DONE with ~1000ms duration.\n")
+
+    # 3. Test The Flaw (Silent Data Drop)
+    print("Testing 3: Logging a custom extra variable (Triggering the flaw)...")
+    log.info("I found a cool topic!", extra={"my_secret_topic": "AI History"})
+
+    # Let's read the JSON file to see if 'my_secret_topic' actually got saved
+    log_file = test_dir / "pipeline_execution.log"
+    print(f"Reading {log_file} to verify...")
+
+    found_secret = False
+    with open(log_file, "r") as f:
+        for line in f:
+            if "my_secret_topic" in line:
+                found_secret = True
+
+    if found_secret:
+        print("✅ SUCCESS: Custom data was saved.")
+    else:
+        print(
+            "❌ FATAL FLAW EXPOSED: The JSON log file completely ignored 'my_secret_topic' because it wasn't in the hardcoded tuple! You just lost critical debugging data.")
+
+    # Cleanup test dir
+    shutil.rmtree(test_dir, ignore_errors=True)
