@@ -1,5 +1,125 @@
+# ═══════════════════════════════════════════════════════════
+# AutoShorts — .gitignore
+# ═══════════════════════════════════════════════════════════
+
+# ─── Secrets & Environment ──────────────────────────────────
 .env
+.env.*
+!.env.example
+
+
+# ─── Python Virtual Environment ─────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+
+# ─── Python Bytecode & Cache ────────────────────────────────
 __pycache__/
-.agent/
-assets/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+
+
+# ─── Manim Generated Artifacts ──────────────────────────────
+# Render intermediates are fully regeneratable — never commit
+media/
+src/media/
+*/partial_movie_files/
+*.mp4
+*.aac
+Tex/
+
+
+# ─── Job Directories ────────────────────────────────────────
+# Per-job audio, output, media — share job.json separately if needed
 jobs/
+
+
+# ─── Assets (large binary files) ────────────────────────────
+# Fonts, images, SFX — too large / not source code
+assets/
+
+
+# ─── Knowledge Graph Output ─────────────────────────────────
+graphify-out/
+
+
+# ─── Agent Context & Rules ──────────────────────────────────
+.agent/
+
+
+# ─── IDE & Editor Settings ──────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+
+
+# ─── OS-Specific Files ──────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+
+# ─── Log Files ──────────────────────────────────────────────
+*.log
+*.log.*
+logs/
+test_job_logs/
+
+
+# ─── Debug & Temporary Output Files ─────────────────────────
+traceback.txt
+err.txt
+error_trace.txt
+handoff_err.txt
+repair_err.txt
+demo_output_result.txt
+project_structure.txt
+*.traceback
+
+
+# ─── Temp / Build / Cache Dirs ──────────────────────────────
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+
+# ─── Test Coverage Artifacts ────────────────────────────────
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+
+# ─── Jupyter (future-proofing) ──────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
