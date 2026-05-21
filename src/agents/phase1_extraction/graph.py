@@ -63,22 +63,37 @@ class ExtractionState(TypedDict):
 
 
 def _build_smart_query(topic: str, template_name: str, attempt: int = 0) -> str:
-    """Formulate a search query based on the template type."""
-    base_queries = {
-        "vs_card": f"{topic} comparison specifications revenue differences",
-        "bar_chart": f"{topic} ranking statistics top list",
-        "butterfly_chart": f"{topic} versus comparison detailed stats",
-        "scan_race": f"{topic} historical data year by year growth",
-        "geo_universal": f"{topic} global distribution countries map data",
-        "donut_breakdown": f"{topic} market share percentage breakdown",
-        "sort_card": f"{topic} tier list ranking categories",
-    }
-    query = base_queries.get(template_name, f"{topic} latest statistics data facts")
+    """Formulate a semantic search query based on the template type and retry attempt."""
+    
+    # Attempt 0: Direct template-aware query
+    if attempt == 0:
+        base_queries = {
+            "vs_card": f"{topic} comparison specifications revenue differences",
+            "bar_chart": f"{topic} ranking statistics top list",
+            "butterfly_chart": f"{topic} versus comparison detailed stats",
+            "scan_race": f"{topic} historical data year by year timeline",
+            "geo_universal": f"{topic} global distribution countries map data",
+            "donut_breakdown": f"{topic} market share percentage breakdown",
+            "sort_card": f"{topic} tier list ranking categories",
+        }
+        return base_queries.get(template_name, f"{topic} latest statistics data facts")
 
-    if attempt > 0:
-        query += " detailed metrics quantitative evidence"
+    # Semantic Pivots for Retries
+    if attempt == 1:
+        # Pivot A: Official sources & reports
+        return f"{topic} official report research statistics whitepaper"
+    elif attempt == 2:
+        # Pivot B: Historical data to bypass noisy recent-news
+        return f"{topic} historical data trend timeline analysis"
+    elif attempt == 3:
+        # Pivot C: Market share breakdown
+        return f"{topic} market share industry breakdown report"
+    elif attempt == 4:
+        # Pivot D: Direct comparison
+        return f"{topic} comparison versus detailed metrics"
 
-    return query
+    # Default generic fallback
+    return f"{topic} deeper quantitative evidence facts"
 
 
 async def node_search(state: ExtractionState) -> ExtractionState:

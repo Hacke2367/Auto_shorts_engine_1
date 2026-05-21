@@ -1,291 +1,353 @@
-{
-  "version": 1,
-  "template_id": "bar_chart",
-  "marks": [
-    {
-      "t": 0.0,
-      "key": "ui_pop",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "intro_start"
-      }
-    },
-    {
-      "t": 0.0,
-      "key": "intro_glitch",
-      "gain_db": -8.0,
-      "meta": {
-        "at": "intro_sub_in"
-      }
-    },
-    {
-      "t": 0.9333333333333332,
-      "key": "intro_rise",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "intro_title_in"
-      }
-    },
-    {
-      "t": 1.3333333333333333,
-      "key": "intro_hit",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "intro_flash"
-      }
-    },
-    {
-      "t": 2.400000000000001,
-      "key": "charge_up",
-      "gain_db": -8.0,
-      "meta": {
-        "at": "hook_title_start"
-      }
-    },
-    {
-      "t": 2.821498000000001,
-      "key": "ui_pop",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "hook_title_end"
-      }
-    },
-    {
-      "t": 2.5735580000000007,
-      "key": "scan_tick",
-      "gain_db": -14.0,
-      "meta": {
-        "at": "hook_scan_begin"
-      }
-    },
-    {
-      "t": 3.0000000000000027,
-      "key": "ui_pop",
-      "gain_db": -11.0,
-      "meta": {
-        "at": "setup_rail_in"
-      }
-    },
-    {
-      "t": 3.800000000000005,
-      "key": "scan_tick",
-      "gain_db": -16.0,
-      "meta": {
-        "at": "setup_guides"
-      }
-    },
-    {
-      "t": 5.799999999999999,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "item_label",
-        "i": 1
-      }
-    },
-    {
-      "t": 6.399999999999997,
-      "key": "scan_tick",
-      "gain_db": -16.0,
-      "meta": {
-        "at": "item_fill",
-        "i": 1
-      }
-    },
-    {
-      "t": 7.999999999999991,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "item_impact",
-        "i": 1
-      }
-    },
-    {
-      "t": 8.799999999999988,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "item_label",
-        "i": 2
-      }
-    },
-    {
-      "t": 9.399999999999986,
-      "key": "scan_tick",
-      "gain_db": -16.0,
-      "meta": {
-        "at": "item_fill",
-        "i": 2
-      }
-    },
-    {
-      "t": 10.866666666666648,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "item_impact",
-        "i": 2
-      }
-    },
-    {
-      "t": 11.666666666666645,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "item_label",
-        "i": 3
-      }
-    },
-    {
-      "t": 12.266666666666643,
-      "key": "scan_tick",
-      "gain_db": -16.0,
-      "meta": {
-        "at": "item_fill",
-        "i": 3
-      }
-    },
-    {
-      "t": 13.866666666666637,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "item_impact",
-        "i": 3
-      }
-    },
-    {
-      "t": 15.066666666666633,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "item_label",
-        "i": 4
-      }
-    },
-    {
-      "t": 15.66666666666663,
-      "key": "scan_tick",
-      "gain_db": -16.0,
-      "meta": {
-        "at": "item_fill",
-        "i": 4
-      }
-    },
-    {
-      "t": 17.19999999999996,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "item_impact",
-        "i": 4
-      }
-    },
-    {
-      "t": 17.999999999999957,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "item_label",
-        "i": 5
-      }
-    },
-    {
-      "t": 18.599999999999955,
-      "key": "scan_tick",
-      "gain_db": -16.0,
-      "meta": {
-        "at": "item_fill",
-        "i": 5
-      }
-    },
-    {
-      "t": 20.19999999999995,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "item_impact",
-        "i": 5
-      }
-    },
-    {
-      "t": 21.799999999999944,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "item_label",
-        "i": 6
-      }
-    },
-    {
-      "t": 22.39999999999994,
-      "key": "scan_tick",
-      "gain_db": -16.0,
-      "meta": {
-        "at": "item_fill",
-        "i": 6
-      }
-    },
-    {
-      "t": 23.999999999999936,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "item_impact",
-        "i": 6
-      }
-    },
-    {
-      "t": 24.799999999999933,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "item_label",
-        "i": 7
-      }
-    },
-    {
-      "t": 25.333333333333265,
-      "key": "scan_tick",
-      "gain_db": -16.0,
-      "meta": {
-        "at": "item_fill",
-        "i": 7
-      }
-    },
-    {
-      "t": 26.73333333333326,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "item_impact",
-        "i": 7
-      }
-    },
-    {
-      "t": 28.933333333333252,
-      "key": "winner_rise",
-      "gain_db": -9.0,
-      "meta": {
-        "at": "winner_banner"
-      }
-    },
-    {
-      "t": 29.799999999999915,
-      "key": "impact_soft",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "winner_flash"
-      }
-    },
-    {
-      "t": 30.99999999999991,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "outro_tag"
-      }
+[
+  {
+    "t": 0.0,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "intro_start"
     }
-  ]
-}
+  },
+  {
+    "t": 2.400000000000001,
+    "event": "charge_up",
+    "key": "charge_up",
+    "gain_db": -8.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_transition_sweep_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "hook_title_start"
+    }
+  },
+  {
+    "t": 2.522500000000001,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -14.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "hook_scan_begin"
+    }
+  },
+  {
+    "t": 2.6975000000000007,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "hook_title_end"
+    }
+  },
+  {
+    "t": 2.800000000000002,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -11.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "setup_rail_in"
+    }
+  },
+  {
+    "t": 3.6000000000000045,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -16.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "setup_guides"
+    }
+  },
+  {
+    "t": 5.6,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "item_label",
+      "i": 1
+    }
+  },
+  {
+    "t": 6.1999999999999975,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -16.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "item_fill",
+      "i": 1
+    }
+  },
+  {
+    "t": 7.799999999999992,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "item_impact",
+      "i": 1
+    }
+  },
+  {
+    "t": 8.599999999999989,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "item_label",
+      "i": 2
+    }
+  },
+  {
+    "t": 9.199999999999987,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -16.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "item_fill",
+      "i": 2
+    }
+  },
+  {
+    "t": 10.666666666666648,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "item_impact",
+      "i": 2
+    }
+  },
+  {
+    "t": 11.466666666666645,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "item_label",
+      "i": 3
+    }
+  },
+  {
+    "t": 12.066666666666643,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -16.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "item_fill",
+      "i": 3
+    }
+  },
+  {
+    "t": 13.666666666666638,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "item_impact",
+      "i": 3
+    }
+  },
+  {
+    "t": 14.866666666666633,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "item_label",
+      "i": 4
+    }
+  },
+  {
+    "t": 15.466666666666631,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -16.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "item_fill",
+      "i": 4
+    }
+  },
+  {
+    "t": 16.99999999999996,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "item_impact",
+      "i": 4
+    }
+  },
+  {
+    "t": 17.799999999999958,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "item_label",
+      "i": 5
+    }
+  },
+  {
+    "t": 18.399999999999956,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -16.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "item_fill",
+      "i": 5
+    }
+  },
+  {
+    "t": 19.99999999999995,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "item_impact",
+      "i": 5
+    }
+  },
+  {
+    "t": 21.599999999999945,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "item_label",
+      "i": 6
+    }
+  },
+  {
+    "t": 22.199999999999942,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -16.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "item_fill",
+      "i": 6
+    }
+  },
+  {
+    "t": 23.799999999999937,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "item_impact",
+      "i": 6
+    }
+  },
+  {
+    "t": 24.599999999999934,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "item_label",
+      "i": 7
+    }
+  },
+  {
+    "t": 25.133333333333265,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -16.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "item_fill",
+      "i": 7
+    }
+  },
+  {
+    "t": 26.53333333333326,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "item_impact",
+      "i": 7
+    }
+  },
+  {
+    "t": 28.733333333333253,
+    "event": "winner_rise",
+    "key": "winner_rise",
+    "gain_db": -9.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\success_chime_01.wav",
+    "vol": 0.85,
+    "meta": {
+      "at": "winner_banner"
+    }
+  },
+  {
+    "t": 29.599999999999916,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "winner_flash"
+    }
+  },
+  {
+    "t": 30.799999999999912,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "outro_tag"
+    }
+  }
+]

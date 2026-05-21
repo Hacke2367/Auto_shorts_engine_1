@@ -2,7 +2,7 @@
 from __future__ import annotations
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Optional
 
 
 def _guess_ffprobe_path(ffmpeg_path: str) -> str:
@@ -20,6 +20,7 @@ def _guess_ffprobe_path(ffmpeg_path: str) -> str:
 def ffprobe_duration_seconds(ffmpeg_path: str, audio_path: Path) -> float:
     """
     Returns duration in seconds using ffprobe.
+    Raises RuntimeError (with ffprobe's stderr) if the probe fails or times out.
     """
     ffprobe = _guess_ffprobe_path(ffmpeg_path)
 
@@ -31,11 +32,25 @@ def ffprobe_duration_seconds(ffmpeg_path: str, audio_path: Path) -> float:
         str(audio_path),
     ]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        r = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
         s = (r.stdout or "").strip()
         return float(s)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"ffprobe timed out after 10s for {audio_path}"
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(
+            f"ffprobe failed for {audio_path}: {e}\nstderr: {e.stderr or ''}"
+        ) from e
     except Exception as e:
-        raise RuntimeError(f"ffprobe failed for {audio_path}: {e}")
+        raise RuntimeError(f"ffprobe failed for {audio_path}: {e}") from e
 
 
 def resolve_timeline_segments(
@@ -92,9 +107,11 @@ def resolve_timeline_segments(
                 raise FileNotFoundError(f"Audio file missing for segment '{name}': {audio_path}")
             dur = ffprobe_duration_seconds(ffmpeg_path, audio_path)
 
-        dur = max(0.0, float(dur))
-        start = t
-        end = t + dur
+        # Round to centiseconds before accumulating to prevent IEEE 754 drift
+        # across many segments (raw float addition loses ~0.2 ms per operation).
+        dur = round(max(0.0, float(dur)), 2)
+        start = round(t, 2)
+        end = round(start + dur, 2)
         out.append({"name": name, "start": start, "end": end, "dur": dur})
         t = end
 

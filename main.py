@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import os
 import json
+import shutil
 import argparse
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -12,37 +14,51 @@ from typing import Dict, Any, List, Optional
 from src.captions import run_captions_pipeline
 
 
-TEMPLATE_MAP = {
-    "bar_chart": {
-        "file": "src/templates/Bar_chart/bar_chart.py",
-        "scene": "BarChartTemplate",
-    },
-    "butterfly_chart": {
-        "file": "src/templates/chart_folder/butterfly_chart.py",
-        "scene": "ButterflyChart",
-    },
-    "geo_universal": {
-        "file": "src/templates/map_chart/geo_universal.py",
-        "scene": "GeoUniversalMap",
-    },
-    "scan_race": {
-        "file": "src/templates/line_chart/scan_race.py",
-        "scene": "CinematicLineRace",
-    },
-    "sort_card": {
-        "file": "src/templates/Sort_card/sort_card.py",
-        "scene": "SortCardTribunalFinal",
-    },
-    "vs_card": {
-        "file": "src/templates/Vs_card/vs_card.py",
-        "scene": "VsCardFinal",
-    },
-    "donut_breakdown": {
-        "file": "src/templates/pie_chart/donut_breakdown.py",
-        "scene": "DonutBreakdownFinal",
-    },
+# Built-in fallback registry — used when templates.json is absent or unreadable.
+_BUILTIN_TEMPLATE_MAP: Dict[str, Dict[str, str]] = {
+    "bar_chart":       {"file": "src/templates/Bar_chart/bar_chart.py",        "scene": "BarChartTemplate"},
+    "butterfly_chart": {"file": "src/templates/chart_folder/butterfly_chart.py","scene": "ButterflyChart"},
+    "geo_universal":   {"file": "src/templates/map_chart/geo_universal.py",     "scene": "GeoUniversalMap"},
+    "scan_race":       {"file": "src/templates/line_chart/scan_race.py",        "scene": "CinematicLineRace"},
+    "sort_card":       {"file": "src/templates/Sort_card/sort_card.py",         "scene": "SortCardTribunalFinal"},
+    "vs_card":         {"file": "src/templates/Vs_card/vs_card.py",             "scene": "VsCardFinal"},
+    "donut_breakdown": {"file": "src/templates/pie_chart/donut_breakdown.py",   "scene": "DonutBreakdownFinal"},
 }
 
+
+def _load_template_map(repo_root: Path) -> Dict[str, Dict[str, str]]:
+    """Load template registry from templates.json (project root), merged over built-ins.
+    Add new templates to templates.json without editing this file."""
+    tpl_file = repo_root / "templates.json"
+    if tpl_file.exists():
+        try:
+            with tpl_file.open("r", encoding="utf-8") as f:
+                loaded: Dict[str, Any] = json.load(f)
+            # Strip meta keys (e.g. _comment), then merge over built-ins
+            entries = {k: v for k, v in loaded.items()
+                       if not k.startswith("_") and isinstance(v, dict)
+                       and "file" in v and "scene" in v}
+            if entries:
+                merged = dict(_BUILTIN_TEMPLATE_MAP)
+                merged.update(entries)
+                print(f"[OK] Loaded template registry from templates.json ({len(merged)} templates)")
+                return merged
+        except Exception as e:
+            print(f"[WARN] Could not read templates.json: {e} — falling back to built-in registry")
+    return dict(_BUILTIN_TEMPLATE_MAP)
+
+
+
+def _run_ffmpeg(cmd: list) -> None:
+    """Run an FFmpeg command. On failure, raise with the captured stderr output."""
+    result = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        cmd_str = " ".join(str(c) for c in cmd)
+        raise RuntimeError(
+            f"FFmpeg failed (exit {result.returncode}).\n"
+            f"CMD: {cmd_str}\n"
+            f"STDERR:\n{result.stderr[-3000:]}"
+        )
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -66,23 +82,47 @@ def resolve_job_path(job_dir: Path, maybe_rel: str) -> Path:
     return (job_dir / p).resolve()
 
 
-def find_rendered_video(media_dir: Path, scene_name: str) -> Optional[Path]:
+def find_rendered_video(media_dir: Path, scene_name: str, quality: str = "") -> Optional[Path]:
     """
     Find the most recently created rendered mp4 for the given Manim scene name.
     Manim writes files under: media_dir/videos/**/<scene_name>.mp4
+
+    Excludes Manim's partial_movie_files/ fragment cache so animation chunks
+    are never mistaken for the final render.  If `quality` is provided, emits
+    a warning when the resolved file lives in a different quality folder.
     """
     videos = media_dir / "videos"
     if not videos.exists():
         return None
 
+    # Manim quality flag → expected folder name substring
+    _QUALITY_MAP = {
+        "l": ("480p",),
+        "m": ("720p",),
+        "h": ("1080p", "1920p"),
+        "p": ("2160p", "4K"),
+    }
+
     best: Optional[Path] = None
     best_mtime = -1.0
 
     for p in videos.rglob(f"{scene_name}.mp4"):
+        # Skip animation fragment cache — Manim stores chunks here, not final renders
+        if "partial_movie_files" in p.parts:
+            continue
         mt = p.stat().st_mtime
         if mt > best_mtime:
             best_mtime = mt
             best = p
+
+    if best is not None and quality:
+        expected = _QUALITY_MAP.get(quality, ())
+        path_str = str(best)
+        if expected and not any(q in path_str for q in expected):
+            print(
+                f"[WARN] Resolved render quality may not match --quality={quality!r}: {best}. "
+                "If this is a stale render from a previous run, delete media/ and re-run."
+            )
 
     return best
 
@@ -104,8 +144,16 @@ def concat_audio_ffmpeg(
         cmd += ["-i", str(p)]
 
     n = len(audio_paths)
-    # Phase 1: Aggressive silenceremove disabled. Standard pristine concat.
-    filter_complex = "".join([f"[{i}:a]" for i in range(n)]) + f"concat=n={n}:v=0:a=1[a]"
+    if trim_silence:
+        # Strip leading/trailing silence from each segment before concat.
+        # Threshold -50dB, min silence duration 0.02s — removes dead-air gaps
+        # between TTS clips without cutting into actual speech.
+        _SR = "silenceremove=start_periods=1:start_duration=0.02:start_threshold=-50dB:stop_periods=-1:stop_duration=0.02:stop_threshold=-50dB"
+        trim_parts = ";".join([f"[{i}:a]{_SR}[tr{i}]" for i in range(n)])
+        concat_inputs = "".join([f"[tr{i}]" for i in range(n)])
+        filter_complex = f"{trim_parts};{concat_inputs}concat=n={n}:v=0:a=1[a]"
+    else:
+        filter_complex = "".join([f"[{i}:a]" for i in range(n)]) + f"concat=n={n}:v=0:a=1[a]"
 
     cmd += [
         "-filter_complex", filter_complex,
@@ -115,7 +163,7 @@ def concat_audio_ffmpeg(
         str(out_path),
     ]
 
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg(cmd)
 
 
 def build_sfx_mix_ffmpeg(
@@ -157,7 +205,7 @@ def build_sfx_mix_ffmpeg(
                 "-c:a", "aac", "-b:a", "192k",
                 str(out_path),
             ]
-            subprocess.run(cmd, check=True)
+            _run_ffmpeg(cmd)
             print(f"[NOTE] No sfx_marks.json -> wrote silence: {out_path}")
             return
 
@@ -183,7 +231,7 @@ def build_sfx_mix_ffmpeg(
             "-c:a", "aac", "-b:a", "192k",
             str(out_path),
         ]
-        subprocess.run(cmd, check=True)
+        _run_ffmpeg(cmd)
         print(f"[NOTE] sfx_marks.json empty/invalid -> wrote silence: {out_path}")
         return
 
@@ -330,7 +378,7 @@ def build_sfx_mix_ffmpeg(
             "-c:a", "aac", "-b:a", "192k",
             str(out_path),
         ]
-        subprocess.run(cmd, check=True)
+        _run_ffmpeg(cmd)
         uniq = sorted(set(missing))
         if uniq:
             print(f"[WARN] No SFX resolved. Missing keys/path: {uniq}")
@@ -366,7 +414,7 @@ def build_sfx_mix_ffmpeg(
         str(out_path),
     ]
 
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg(cmd)
 
     uniq = sorted(set(missing))
     if uniq:
@@ -401,7 +449,7 @@ def build_bgm_track_ffmpeg(
             "-c:a", "aac", "-b:a", "192k",
             str(out_path),
         ]
-        subprocess.run(cmd, check=True)
+        _run_ffmpeg(cmd)
         print(f"[NOTE] BGM disabled -> wrote silence: {out_path}")
         return
 
@@ -476,7 +524,7 @@ def build_bgm_track_ffmpeg(
             "-c:a", "aac", "-b:a", "192k",
             str(out_path),
         ]
-        subprocess.run(cmd, check=True)
+        _run_ffmpeg(cmd)
         print(f"[WARN] No BGM events resolved -> wrote silence: {out_path}")
         return
 
@@ -526,7 +574,7 @@ def build_bgm_track_ffmpeg(
         str(out_path),
     ]
 
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg(cmd)
     print(f"[OK] Built BGM track: {out_path} (events={len(events)}, dur={total_duration:.2f}s)")
 
 
@@ -673,7 +721,7 @@ def mix_voice_sfx_bgm_ffmpeg(
         print("[DEBUG] filter_complex =", filter_complex)
         print("[DEBUG] cmd =", cmd)
 
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg(cmd)
 
 
 def mux_av_ffmpeg(ffmpeg: str, video_path: Path, audio_path: Path, out_path: Path) -> None:
@@ -694,7 +742,7 @@ def mux_av_ffmpeg(ffmpeg: str, video_path: Path, audio_path: Path, out_path: Pat
         "-shortest",
         str(out_path),
     ]
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg(cmd)
 
 
 def main():
@@ -710,16 +758,23 @@ def main():
     """
     ap = argparse.ArgumentParser()
     ap.add_argument("--job", required=True, help="jobs/job_0001")
-    ap.add_argument("--template", required=False, choices=sorted(TEMPLATE_MAP.keys()))
+    ap.add_argument("--template", required=False,
+                    help="Template key (see templates.json or RUNBOOK.md). "
+                         "Overrides job.json template_id.")
     ap.add_argument("-q", "--quality", default="h", help="manim quality: l/m/h/p (like manim -qh)")
     ap.add_argument("--open", action="store_true", help="open final video after render")
     ap.add_argument("--no_sfx", action="store_true", help="disable sfx mixing even if marks exist")
     ap.add_argument("--no-trim-silence", action="store_true", help="disable silence trim on voice segments before concat")
     ap.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg binary (default: ffmpeg)")
+    ap.add_argument("--keep-intermediates", action="store_true",
+                    help="keep Manim media/ renders and audio intermediate files after mux")
     args = ap.parse_args()
 
-    # --- Resolve paths ---
+    # --- Resolve repo root + load dynamic template registry ---
     repo_root = Path(__file__).resolve().parent
+    TEMPLATE_MAP = _load_template_map(repo_root)
+
+    # --- Resolve job paths ---
     job_dir = (repo_root / args.job).resolve()
     job_json = job_dir / "job.json"
 
@@ -727,13 +782,36 @@ def main():
         raise FileNotFoundError(f"job.json not found: {job_json}")
 
     job = load_json(job_json)
+
+    # --- Validate job.json schema (Pydantic) ---
+    try:
+        from src.sync.job_config import JobConfig
+        cfg = JobConfig.model_validate(job)
+        print(f"[OK] job.json valid — template_id={cfg.template_id}, "
+              f"segments={len(cfg.audio.segments)}, timeline_keys={len(cfg.timeline)}")
+    except Exception as _val_err:
+        raise ValueError(
+            f"job.json failed schema validation:\n{_val_err}\n"
+            f"Check {job_json} against the schema in RUNBOOK.md"
+        ) from _val_err
+
+    # --- Extract validated path overrides (backwards-compatible defaults) ---
+    _paths = cfg.paths
+    media_dir  = (job_dir / _paths.media_dir).resolve()
+    out_dir    = (job_dir / _paths.output_dir).resolve()
+    sfx_marks  = (job_dir / _paths.sfx_marks).resolve()
     print(f"[OK] JOB_JSON_PATH={job_json}")
 
+    # --- Resolve template ---
     template_name = args.template or job.get("template_id")
     if not template_name:
         raise ValueError("--template flag not provided and template_id missing from job.json")
     if template_name not in TEMPLATE_MAP:
-        raise ValueError(f"Unknown template: {template_name}. Must be one of {sorted(TEMPLATE_MAP.keys())}")
+        raise ValueError(
+            f"Unknown template: {template_name!r}. "
+            f"Available: {sorted(TEMPLATE_MAP.keys())} "
+            f"(add new entries to templates.json)"
+        )
 
     # --- Pick template scene ---
     tpl = TEMPLATE_MAP[template_name]
@@ -744,7 +822,6 @@ def main():
         raise FileNotFoundError(f"Template file not found: {scene_file}")
 
     # --- Media dir for manim output ---
-    media_dir = job_dir / "media"
     media_dir.mkdir(parents=True, exist_ok=True)
 
     # -----------------------------
@@ -770,10 +847,18 @@ def main():
     print("[RUN]", " ".join(manim_cmd))
     subprocess.run(manim_cmd, check=True, env=env)
 
-    video_path = find_rendered_video(media_dir, scene_name)
+    video_path = find_rendered_video(media_dir, scene_name, quality=args.quality)
     if not video_path:
         raise FileNotFoundError("Rendered video not found under job/media/videos")
     print(f"[OK] Rendered video: {video_path}")
+
+    # Stage the raw Manim render to a flat, predictable path so the rest of
+    # the pipeline is insulated from Manim's deep videos/{module}/{quality}/
+    # directory nesting.  The staged file is the single source of truth for mux.
+    staged_video = media_dir / "_staged_render.mp4"
+    shutil.copy2(video_path, staged_video)
+    video_path = staged_video
+    print(f"[OK] Staged render: {staged_video}")
 
     # -----------------------------
     # 2) Voice concat
@@ -816,7 +901,7 @@ def main():
             raise FileNotFoundError(f"Audio file missing: {p}")
 
     ffmpeg = args.ffmpeg
-    out_dir = job_dir / "output"
+    # out_dir and sfx_marks already resolved from job["paths"] above
     out_dir.mkdir(parents=True, exist_ok=True)
 
     voice_aac = out_dir / "_voice.aac"
@@ -846,7 +931,7 @@ def main():
     sfx_enabled = bool(sfx_cfg.get("enabled", True)) and (not args.no_sfx)
 
     sfx_aac: Optional[Path] = None
-    sfx_marks = out_dir / "sfx_marks.json"
+    # sfx_marks path is already resolved from job["paths"]["sfx_marks"] above
 
     if sfx_enabled and sfx_marks.exists():
         print(f"[OK] SFX marks found: {sfx_marks}")
@@ -932,6 +1017,43 @@ def main():
     print(f"[OK] Final muxed video: {out_path}")
 
     # -----------------------------
+    # 7b) Versioned archive copy (non-destructive)
+    # -----------------------------
+    # Canonical path (output/final.mp4) is always overwritten — required by the
+    # Phase 3 → 4 handoff contract.  We also write a timestamped copy so every
+    # run is individually preserved without breaking any downstream pipeline.
+    _run_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    _archive_dir = out_dir / "renders"
+    _archive_dir.mkdir(exist_ok=True)
+    _archive_path = _archive_dir / f"final_{_run_stamp}.mp4"
+    shutil.copy2(out_path, _archive_path)
+    print(f"[OK] Archived render: {_archive_path}")
+
+    # -----------------------------
+    # 7c) Intermediate cleanup (opt-out with --keep-intermediates)
+    # -----------------------------
+    if not args.keep_intermediates:
+        _intermediates = [voice_aac, mixed_aac]
+        if sfx_aac:
+            _intermediates.append(sfx_aac)
+        if bgm_aac:
+            _intermediates.append(bgm_aac)
+        for _f in _intermediates:
+            try:
+                if _f and Path(_f).exists():
+                    Path(_f).unlink()
+            except Exception:
+                pass
+        # Remove Manim's nested videos/ tree (staged render already copied)
+        _videos_dir = media_dir / "videos"
+        if _videos_dir.exists():
+            try:
+                shutil.rmtree(_videos_dir)
+            except Exception:
+                pass
+        print("[OK] Intermediates cleaned up (use --keep-intermediates to retain them).")
+
+    # -----------------------------
     # 8) Captions (optional) -> captioned video
     # -----------------------------
     captioned_video: Optional[str] = None
@@ -950,6 +1072,13 @@ def main():
                 if cap_res.get("captioned_video"):
                     captioned_video = str(cap_res["captioned_video"])
                     print(f"[OK] Captioned video: {captioned_video}")
+                    # Archive the captioned version alongside the raw render archive
+                    try:
+                        _cap_archive = _archive_dir / f"final_captioned_{_run_stamp}.mp4"
+                        shutil.copy2(captioned_video, _cap_archive)
+                        print(f"[OK] Archived captioned: {_cap_archive}")
+                    except Exception:
+                        pass
         except Exception as e:
             print(f"[WARN] Captions failed (ignored): {e}")
     else:

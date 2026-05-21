@@ -1,13 +1,13 @@
 # src/sync/timeline.py
 from __future__ import annotations
+import warnings
 from dataclasses import dataclass, field
 from typing import Dict, Any
 
 
 def clamp(v: float, lo: float, hi: float) -> float:
     """
-    clamp(v, lo, hi)
-    v ko lo..hi ke beech lock kar deta hai.
+    Clamps v to the range [lo, hi].
     Example: clamp(0.2, 0.35, 0.85) => 0.35
              clamp(0.9, 0.35, 0.85) => 0.85
              clamp(0.7, 0.35, 0.85) => 0.7
@@ -46,7 +46,11 @@ class Timeline:
                 try:
                     totals[str(k)] = float(v)
                 except Exception:
-                    pass
+                    warnings.warn(
+                        f"Timeline.from_dict: skipping key '{k}' — value {v!r} "
+                        "cannot be converted to float",
+                        stacklevel=2,
+                    )
 
         used = {k: 0.0 for k in totals.keys()}
         return cls(totals=totals, used=used)
@@ -54,12 +58,23 @@ class Timeline:
     def seg_total(self, name: str, fallback: float = 0.0) -> float:
         return float(self.totals.get(name, fallback))
 
-    def consume(self, name: str, seconds: float) -> None:
+    def consume(self, name: str, seconds: float) -> float:
+        """Consume time from a segment. Returns how much was actually consumed.
+        Warns when the requested amount exceeds the remaining budget (>10ms tolerance)."""
         if name not in self.used:
             self.used[name] = 0.0
         total = self.seg_total(name, 0.0)
         s = max(0.0, float(seconds))
-        self.used[name] = min(total, self.used[name] + s)
+        remaining = max(0.0, total - self.used[name])
+        actually_consumed = min(remaining, s)
+        if s > remaining + 0.01:
+            warnings.warn(
+                f"Timeline.consume('{name}', {s:.3f}s): overrun by {s - remaining:.3f}s "
+                f"(budget={total:.3f}s, used={self.used[name]:.3f}s)",
+                stacklevel=2,
+            )
+        self.used[name] += actually_consumed
+        return actually_consumed
 
     def remaining(self, name: str) -> float:
         total = self.seg_total(name, 0.0)
@@ -70,6 +85,3 @@ class Timeline:
         rem = self.remaining(name)
         self.consume(name, rem)
         return rem
-
-
-  

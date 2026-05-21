@@ -346,49 +346,32 @@ def _make_tracker_text(
     return t
 
 
-# --- PIPELINE HELPERS (direct imports, NO try/except) ---
+# --- PIPELINE HELPERS ---
 from src.sync.job import load_job
 from src.sync.timeline import Timeline
-from src.sync.retention import hold_breathing, banner_scan_hold
+from src.sfx.engine import SFXEngine
+try:
+    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention_accents import retain_accent_butterfly
+except Exception:
+    # Fallback stubs so the scene can still be imported/rendered without retention.py
+    def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
+        if seconds > 0:
+            scene.wait(seconds)
+
+    def banner_scan_hold(scene, banner, seconds: float, color=None):
+        if seconds > 0:
+            scene.wait(seconds)
+
+    def register_template_accent(scene, fn):
+        pass
+
+    def retain_accent_butterfly(scene, focus, seconds, **kw):
+        return lambda: None
 
 
 def clamp(v, lo, hi):
     return float(np.clip(float(v), float(lo), float(hi)))
-
-# ==========================
-# SFX MARK RECORDER (writes sfx_marks.json)
-# ==========================
-class SFXMarksWriter:
-    def __init__(self, scene: Scene, job_dir: Optional[Path], template_id: str = "butterfly_chart"):
-        self.scene = scene
-        self.template_id = template_id
-        if job_dir:
-            self.out_path = job_dir / "output" / "sfx_marks.json"
-        else:
-            self.out_path = None
-        self.marks: List[Dict[str, Any]] = []
-
-    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: Optional[Dict[str, Any]] = None):
-        try:
-            t = float(self.scene.time) + float(offset)
-            ev: Dict[str, Any] = {"t": t, "key": str(key), "gain_db": float(gain_db)}
-            if isinstance(meta, dict) and meta:
-                ev["meta"] = meta
-            self.marks.append(ev)
-        except Exception:
-            pass
-
-    def flush(self):
-        if not self.out_path:
-            return
-        try:
-            self.out_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {"version": 1, "template_id": self.template_id, "marks": self.marks}
-            with self.out_path.open("w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
-            print(f"[OK] Wrote SFX marks: {self.out_path}")
-        except Exception:
-            pass
 
 
 
@@ -414,7 +397,7 @@ class ButterflyChart(Scene):
         
         # Will add item_X defaults later after data loads
         
-        sfx = SFXMarksWriter(self, job_dir, template_id="butterfly_chart")
+        sfx = SFXEngine(self, str(job_dir) if job_dir else str(Path.cwd()))
 
 
         # ==========================================
@@ -422,6 +405,13 @@ class ButterflyChart(Scene):
         # ==========================================
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)
+
+        # Spine-pulse accent — spine_mobject injected after setup via late binding
+        # so we use a lambda that reads spine from scene scope at call time
+        register_template_accent(
+            self,
+            lambda s, f, t: retain_accent_butterfly(s, f, t),
+        )
 
         try:
             IntroManager.play_intro(
@@ -500,6 +490,11 @@ class ButterflyChart(Scene):
         for i in range(1, n_attr + 1):
             defaults[f"item{i}"] = 2.0
             defaults[f"item_{i}"] = 2.0  # Safe catchall
+        # Ensure all item* segments from audio.order have a default (covers ghost padding slots)
+        _item_segs_audio = [s for s in audio_order if isinstance(s, str) and s.startswith("item")]
+        for seg in _item_segs_audio:
+            if seg not in defaults:
+                defaults[seg] = 2.0
         TL = Timeline.from_dict(timeline_dict, defaults=defaults)
 
         # ==========================================
@@ -1114,8 +1109,9 @@ class ButterflyChart(Scene):
             TL.consume(seg_name, float(self.time) - item_t0)
             hold_breathing(self, TL.remaining(seg_name), focus=node)
 
-        # Ghost Padding Loop 
-        for ghost_i in range(len(attrs) + 1, 15):
+        # Ghost Padding Loop — cap derived from audio.order, not hardcoded 15.
+        _ghost_cap = max(len(_item_segs_audio), n_attr)
+        for ghost_i in range(n_attr + 1, _ghost_cap + 1):
             seg_key = f"item{ghost_i}"
             g_t0 = float(self.time)
             TL.consume(seg_key, float(self.time) - g_t0)

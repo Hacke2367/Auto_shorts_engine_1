@@ -1,14 +1,12 @@
 """
-AutoShorts Phase 1A — The Scouring Engine (Topic-First)
-=======================================================
-Discovers raw topic candidates from the web across multiple verticals.
+AutoShorts Phase 1A — The Scouring Engine (Idea-First Validator)
+================================================================
+Validates topic hypotheses using targeted search to gather evidence.
 
 Design Principles:
-  - Topic-first, template-second: search broadly, not through a template lens.
+  - Takes specific topic hypotheses (ideas).
+  - Uses Tavily to validate if data/evidence exists for the hypothesis.
   - Returns raw candidate snippets for downstream scoring.
-  - Does NOT assign templates or compute final scores (that is candidate_score.py).
-  - Does NOT persist archive state (that is discovery_runner.py).
-  - Uses Tavily for broad web search across multiple discovery buckets.
 """
 
 from __future__ import annotations
@@ -41,69 +39,27 @@ def _get_retry_policy() -> AsyncRetrying:
     )
 
 
-# ---------------------------------------------------------------------------
-# Discovery Buckets — broad topic verticals
-# ---------------------------------------------------------------------------
-
-# Each bucket is a search query designed to surface topics across a vertical.
-# These are intentionally broad and NOT template-specific.
-DISCOVERY_BUCKETS: list[dict[str, str]] = [
-    {
-        "name": "trending_data",
-        "query": "trending statistics data rankings comparisons",
-        "topic": "news",
-    },
-    {
-        "name": "ai_tech",
-        "query": "AI tools products market share growth comparison",
-        "topic": "news", 
-    },
-    {
-        "name": "business_finance",
-        "query": "business revenue market cap rankings richest companies",
-        "topic": "finance",
-    },
-    {
-        "name": "gaming_entertainment",
-        "query": "gaming most popular players statistics esports",
-        "topic": "general",
-    },
-    {
-        "name": "pop_culture",
-        "query": "most followed celebrities creators subscribers views",
-        "topic": "general",
-    },
-    {
-        "name": "internet_trends",
-        "query": "viral internet trends creator economy social media statistics",
-        "topic": "general",
-    },
-    {
-        "name": "wildcard",
-        "query": "surprising statistics data you didn't know interesting facts",
-        "topic": "general",
-    },
-]
-
-
-async def _fetch_bucket(
-    bucket: dict[str, str],
+async def _validate_hypothesis(
+    hypothesis: str,
     session: aiohttp.ClientSession,
     log: logging.Logger,
-    max_results: int = 5,
-) -> list[dict[str, str]]:
-    """Fetch raw candidates from a single discovery bucket via Tavily."""
+    max_results: int = 4,
+) -> dict[str, Any] | None:
+    """Fetch evidence for a specific topic hypothesis via Tavily."""
     url = "https://api.tavily.com/search"
+    
+    # We append data-seeking terms to validate if the topic has buildable numbers
+    query = f"{hypothesis} statistics data market share ranking comparison"
+    
     payload = {
         "api_key": settings.tavily_api_key.get_secret_value(),
-        "query": bucket["query"],
+        "query": query,
         "search_depth": "basic",
         "max_results": max_results,
         "include_raw_content": False,
-        "topic": bucket.get("topic", "general"),
+        "topic": "general",
     }
 
-    bucket_name = bucket["name"]
     async for attempt in _get_retry_policy():
         with attempt:
             t0 = time.perf_counter()
@@ -111,7 +67,7 @@ async def _fetch_bucket(
                 elapsed = (time.perf_counter() - t0) * 1000
                 log_api_call(
                     log,
-                    service=f"tavily.search.scour.{bucket_name}",
+                    service="tavily.search.validate",
                     status_code=resp.status,
                     retry_count=attempt.retry_state.attempt_number - 1,
                     duration_ms=elapsed,
@@ -119,32 +75,40 @@ async def _fetch_bucket(
                 resp.raise_for_status()
                 data = await resp.json()
 
-                results = []
+                snippets = []
+                urls = []
                 for res in data.get("results", []):
                     title = (res.get("title") or "").strip()
                     content = (res.get("content") or "").strip()
                     source_url = (res.get("url") or "").strip()
-                    if title and content:
-                        results.append({
-                            "title": title,
-                            "snippet": content,
-                            # We store sources as a list from the start
-                            "source_urls": [source_url] if source_url else [],
-                            "bucket": bucket_name,
-                        })
+                    
+                    if content:
+                        snippets.append(f"Source: {title}\n{content}")
+                        if source_url:
+                            urls.append(source_url)
 
-                log.debug(
-                    "Bucket '%s' returned %d candidates.", bucket_name, len(results)
-                )
-                return results
+                if not snippets:
+                    log.debug("No evidence found for hypothesis: '%s'", hypothesis)
+                    return None
 
-    log.warning("Failed to fetch bucket '%s' after retries.", bucket_name)
-    return []
+                # Combine the snippets into one pool of evidence
+                combined_snippet = "\n\n".join(snippets)
+                
+                log.debug("Validated hypothesis '%s' with %d sources.", hypothesis, len(urls))
+                return {
+                    "title": hypothesis,
+                    "snippet": combined_snippet,
+                    "source_urls": list(set(urls)),
+                    "bucket": "hypothesis_validation",
+                }
+
+    log.warning("Failed to validate hypothesis '%s' after retries.", hypothesis)
+    return None
 
 
 def _dedupe_raw_candidates(
-    candidates: list[dict[str, str]],
-) -> list[dict[str, str]]:
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Smart deduplication merging URLs and keeping the longest snippet."""
     from src.agents.phase1_discovery.archive_manager import ArchiveManager
 
@@ -157,7 +121,6 @@ def _dedupe_raw_candidates(
         if norm not in unique_map:
             unique_map[norm] = dict(c) # copy
         else:
-            # Merge logic: if we have a duplicate, keep the longest snippet
             existing = unique_map[norm]
             curr_len = len(existing.get("snippet", ""))
             new_len = len(c.get("snippet", ""))
@@ -165,7 +128,6 @@ def _dedupe_raw_candidates(
             if new_len > curr_len:
                 existing["snippet"] = c.get("snippet", "")
             
-            # Preserve source diversity: merge URLs
             new_urls = c.get("source_urls", [])
             for url in new_urls:
                 if url not in existing["source_urls"]:
@@ -178,66 +140,55 @@ def _dedupe_raw_candidates(
 # Public API
 # ---------------------------------------------------------------------------
 
-
 async def fetch_raw_candidates(
+    hypotheses: list[str],
     session: aiohttp.ClientSession,
     log: logging.Logger,
-    niche_hint: str | None = None,
-    max_per_bucket: int = 5,
-    max_concurrency: int = 3,
-) -> list[dict[str, str]]:
-    """Fetch raw topic candidates from all discovery buckets.
+    max_per_bucket: int = 4,
+    max_concurrency: int = 5,
+) -> list[dict[str, Any]]:
+    """Validate topic hypotheses by gathering evidence from the web.
 
-    This function is topic-first: it searches broadly across verticals
-    and does NOT filter by template. Template assignment happens downstream
-    in the scoring layer.
+    This function represents the search verification step. It no longer invents
+    topics from broad buckets, but instead tries to prove whether an ideated 
+    hypothesis actually has data backing it.
 
     Args:
+        hypotheses: List of topic ideas to validate.
         session: Active aiohttp ClientSession.
         log: Job logger.
-        niche_hint: Optional niche to add to every query (e.g. "AI tools").
-        max_per_bucket: Max results per bucket.
+        max_per_bucket: Max search results per hypothesis.
         max_concurrency: Max concurrent Tavily calls.
 
     Returns:
         Deduplicated list of raw candidate dicts with 'title', 'snippet',
         'source_url', and 'bucket' keys.
     """
-    buckets = DISCOVERY_BUCKETS.copy()
-
-    # If niche_hint is provided, add it as an extra focused bucket
-    if niche_hint:
-        buckets.append({
-            "name": "niche_focused",
-            "query": f"{niche_hint} statistics data rankings comparison",
-            "topic": "general",
-        })
-
     sem = asyncio.Semaphore(max_concurrency)
 
-    async def _fetch_wrapped(bucket: dict[str, str]) -> list[dict[str, str]]:
+    async def _validate_wrapped(hypothesis: str) -> dict[str, Any] | None:
         async with sem:
-            return await _fetch_bucket(bucket, session, log, max_per_bucket)
+            return await _validate_hypothesis(hypothesis, session, log, max_per_bucket)
 
     log.info(
-        "Scouring %d discovery buckets (max_concurrency=%d)...",
-        len(buckets), max_concurrency,
+        "Validating %d topic hypotheses via search (max_concurrency=%d)...",
+        len(hypotheses), max_concurrency,
     )
 
-    tasks = [_fetch_wrapped(b) for b in buckets]
-    all_results = await asyncio.gather(*tasks, return_exceptions=True)
+    tasks = [_validate_wrapped(h) for h in hypotheses]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    combined: list[dict[str, str]] = []
-    for idx, result in enumerate(all_results):
+    valid_candidates: list[dict[str, Any]] = []
+    for idx, result in enumerate(results):
         if isinstance(result, Exception):
-            log.error("Bucket %d failed: %s", idx, result)
-        elif isinstance(result, list):
-            combined.extend(result)
+            log.error("Validation failed for hypothesis '%s': %s", hypotheses[idx], result)
+        elif result is not None:
+            valid_candidates.append(result)
 
     # Deduplicate before returning
-    unique = _dedupe_raw_candidates(combined)
+    unique = _dedupe_raw_candidates(valid_candidates)
     log.info(
-        "Scouring complete: %d raw → %d unique candidates.",
-        len(combined), len(unique),
+        "Validation complete: %d hypotheses -> %d valid candidates with evidence.",
+        len(hypotheses), len(unique),
     )
     return unique

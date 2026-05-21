@@ -70,6 +70,15 @@ def update_script_with_audio(
             s_copy["audio_relpath"] = audio_data.audio_relpath
             s_copy["duration_ms"] = audio_data.duration_ms
             s_copy["duration_sec"] = audio_data.duration_sec
+        else:
+            # BUG-C4: a missing audio segment produces a corrupt script.json that
+            # Phase 4 cannot render. Fail hard here rather than silently writing
+            # an incomplete payload to disk.
+            raise ValueError(
+                f"Audio synthesis missing for segment '{tag}'. "
+                f"Synthesized tags: {sorted(audio_map.keys())}. "
+                "Phase 4 cannot render without complete audio coverage."
+            )
 
         updated_segs.append(s_copy)
 

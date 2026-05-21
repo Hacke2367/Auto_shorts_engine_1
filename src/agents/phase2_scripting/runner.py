@@ -37,10 +37,94 @@ def _hash_file(path: Path) -> str:
 
 
 def _get_dataset_path(jm: JobManager, template_name: str) -> Path:
-    candidates = list(jm.job_dir.rglob(f"{template_name}_dataset.json"))
+    """Resolve the dataset JSON path deterministically.
+
+    Priority:
+    1. Explicit ``dataset_relpath`` in ``data_manifest.json`` — written by Phase 1B,
+       always points to the correct attempt directory.
+    2. Filesystem search sorted by mtime descending — most recently written file wins.
+       Used only when the manifest is absent or unreadable.
+    """
+    manifest_path = jm.data_dir / "data_manifest.json"
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            rel = manifest.get("dataset_relpath", "")
+            if rel:
+                resolved = (jm.job_dir / rel).resolve()
+                if resolved.exists():
+                    logger.debug("Dataset path from data_manifest.json: %s", resolved)
+                    return resolved
+                logger.warning(
+                    "data_manifest.json dataset_relpath points to missing file: %s — falling back to search.",
+                    resolved,
+                )
+        except Exception as exc:
+            logger.warning("Failed to read data_manifest.json: %s — falling back to search.", exc)
+
+    # Fallback: sort by mtime so the most recently extracted attempt always wins.
+    candidates = sorted(
+        jm.job_dir.rglob(f"{template_name}_dataset.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     if not candidates:
-        raise FileNotFoundError(f"Could not locate {template_name}_dataset.json in {jm.job_dir}")
+        raise FileNotFoundError(
+            f"Could not locate {template_name}_dataset.json anywhere under {jm.job_dir}. "
+            "Ensure Phase 1B extraction completed successfully."
+        )
+    logger.info(
+        "Dataset path resolved via filesystem search (manifest unavailable): %s", candidates[0]
+    )
     return candidates[0]
+
+
+def _validate_phase2_inputs(jm: JobManager, log: logging.Logger) -> None:
+    """Validate Phase 1B outputs are present and readable before any Phase 2 work begins.
+
+    Raises:
+        FileNotFoundError: If required input files are missing on disk.
+        ValueError: If ``data_manifest.json`` is malformed or has stale paths.
+    """
+    manifest_path = jm.data_dir / "data_manifest.json"
+    if not manifest_path.exists():
+        raise FileNotFoundError(
+            f"Phase 2 validation failed: data_manifest.json not found at {manifest_path}. "
+            "Run Phase 1B extraction before Phase 2."
+        )
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError(
+            f"Phase 2 validation failed: data_manifest.json is not valid JSON: {exc}"
+        ) from exc
+
+    for required_key in ("template_name", "dataset_relpath"):
+        if not manifest.get(required_key):
+            raise ValueError(
+                f"Phase 2 validation failed: data_manifest.json missing required field '{required_key}'."
+            )
+
+    dataset_path = (jm.job_dir / manifest["dataset_relpath"]).resolve()
+    if not dataset_path.exists():
+        raise FileNotFoundError(
+            f"Phase 2 validation failed: dataset file not found at {dataset_path}. "
+            "data_manifest.json may reference a stale extraction attempt."
+        )
+
+    csv_relpath = manifest.get("csv_relpath", "")
+    if csv_relpath:
+        csv_path = (jm.job_dir / csv_relpath).resolve()
+        if not csv_path.exists():
+            raise FileNotFoundError(
+                f"Phase 2 validation failed: CSV file not found at {csv_path}. "
+                "data_manifest.json may reference a stale extraction attempt."
+            )
+
+    log.info(
+        "Phase 2 input validation passed — manifest OK, dataset and CSV present."
+    )
 
 
 def _resolve_phase1_template(jm: JobManager) -> str:
@@ -114,6 +198,9 @@ async def run_scripting(
     step_name = "phase2_scripting"
     log = job_manager.get_logger()
     log.info(f"Starting Phase 2 Scripting for Job {job_manager.job_id} using persona '{persona_id}'")
+
+    # BUG-C5: validate all Phase 1B outputs exist before doing any work
+    _validate_phase2_inputs(job_manager, log)
 
     template_name = _resolve_phase1_template(job_manager)
 

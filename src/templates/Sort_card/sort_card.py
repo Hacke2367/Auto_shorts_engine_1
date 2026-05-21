@@ -35,7 +35,7 @@ try:
     sys.path.append(project_root)
 
     from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme  # type: ignore
-    from src.utils import IntroManager, get_branding_border  # type: ignore
+    from src.utils import IntroManager, get_branding_border, make_floating_particles  # type: ignore
 except Exception:
     project_root = os.getcwd()
     DATA_DIR = os.path.join(project_root, "data")
@@ -55,6 +55,9 @@ except Exception:
         border.set_stroke(width=8, color=[Theme.NEON_BLUE, Theme.NEON_PINK], opacity=0.55)
         border.set_fill(opacity=0)
         return border
+
+    def make_floating_particles(*args, **kwargs):
+        return VGroup()
 
     class IntroManager:
         @staticmethod
@@ -92,42 +95,24 @@ except Exception:
             )
             return rec, hdr
 
-# --- SYNC HELPERS (direct imports, NO try/except) ---
+# --- SYNC HELPERS ---
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp as _tl_clamp
-from src.sync.retention import hold_breathing, banner_scan_hold
-
-# ============================================================
-# SFX MARKS WRITER  (matches bar_chart.py exactly)
-# - writes: jobs/<job>/output/sfx_marks.json
-# - main.py will pick this up and mix SFX
-# ============================================================
-class SFXMarksWriter:
-    def __init__(self, scene: Scene, job_dir, template_id="sort_card", out_rel="output/sfx_marks.json"):
-        self.scene = scene
-        self.template_id = template_id
-        self.out_path = Path(str(job_dir)) / out_rel if job_dir else None
-        self.marks = []
-
-    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: dict | None = None):
-        t = float(self.scene.time) + float(offset)
-        ev = {"t": t, "key": str(key), "gain_db": float(gain_db)}
-        if meta:
-            ev["meta"] = meta
-        self.marks.append(ev)
-
-    def flush(self):
-        if self.out_path is None:
-            return
-        self.out_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "version": 1,
-            "template_id": self.template_id,
-            "marks": self.marks,
-        }
-        with self.out_path.open("w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        print(f"[OK] Wrote sfx_marks.json: {self.out_path} ({len(self.marks)} marks)")
+from src.sfx.engine import SFXEngine
+try:
+    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention_accents import retain_accent_sort_card
+except Exception:
+    def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
+        if seconds > 0:
+            scene.wait(seconds)
+    def banner_scan_hold(scene, banner, seconds: float, color=None):
+        if seconds > 0:
+            scene.wait(seconds)
+    def register_template_accent(scene, fn):
+        pass
+    def retain_accent_sort_card(scene, focus, seconds, **kw):
+        return lambda: None
 
 
 # ============================================================
@@ -303,6 +288,16 @@ def build_header(meta_title: str, meta_sub: str) -> Dict[str, Mobject]:
         pass
     underline.next_to(sub, DOWN, buff=0.18)
 
+    # Neon spill glow behind the underline (duplicated geometry, wide + transparent)
+    uL_glow = Line(LEFT * line_w / 2, ORIGIN).set_stroke(color=blue, width=18, opacity=0.15)
+    uR_glow = Line(ORIGIN, RIGHT * line_w / 2).set_stroke(color=pink, width=18, opacity=0.15)
+    underline_glow = VGroup(uL_glow, uR_glow).arrange(RIGHT, buff=0)
+    try:
+        underline_glow.set_z_index(498)
+    except Exception:
+        pass
+    underline_glow.next_to(sub, DOWN, buff=0.18)
+
     path = Line(underline.get_left(), underline.get_right()).set_stroke(width=0, opacity=0)
     dot = Dot(radius=0.045, color=blue).move_to(path.get_start())
     try:
@@ -310,7 +305,7 @@ def build_header(meta_title: str, meta_sub: str) -> Dict[str, Mobject]:
     except Exception:
         pass
 
-    return {"title": title, "sub": sub, "underline": underline, "path": path, "dot": dot}
+    return {"title": title, "sub": sub, "underline": underline, "underline_glow": underline_glow, "path": path, "dot": dot}
 
 
 # ============================================================
@@ -716,6 +711,10 @@ class SortCardTribunalFinal(Scene):
 
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)
+        register_template_accent(
+            self,
+            lambda s, f, t: retain_accent_sort_card(s, f, t, accent_color=Theme.NEON_BLUE),
+        )
 
         # Intro
         try:
@@ -752,6 +751,21 @@ class SortCardTribunalFinal(Scene):
         # Background (clean)
         bg_layer.add(build_god_background())
 
+        # Atmospheric floating particles (z_index 5, behind everything)
+        try:
+            particles = make_floating_particles(
+                n=22,
+                color=Theme.NEON_BLUE,
+                radius_range=(0.02, 0.05),
+                opacity_range=(0.05, 0.14),
+                drift=0.025,
+                margin=0.70,
+            )
+            particles.set_z_index(5)
+            self.add(particles)
+        except Exception:
+            pass
+
         # Branding border
         try:
             bb = get_branding_border().move_to(ORIGIN)
@@ -779,7 +793,7 @@ class SortCardTribunalFinal(Scene):
         if not job_dir_path and JOB_JSON_PATH:
             job_dir_path = Path(JOB_JSON_PATH).parent
 
-        sfx = SFXMarksWriter(self, job_dir_path, template_id="sort_card")
+        sfx = SFXEngine(self, str(job_dir_path) if job_dir_path else str(Path.cwd()))
 
         job_data = {}
         if job_dir_path and job_dir_path.exists():
@@ -829,6 +843,7 @@ class SortCardTribunalFinal(Scene):
         title = header["title"]
         sub = header["sub"]
         underline = header["underline"]
+        underline_glow = header["underline_glow"]
         dot = header["dot"]
 
         evidence = build_evidence_box(evidence_center)
@@ -859,7 +874,7 @@ class SortCardTribunalFinal(Scene):
             pass
 
         # Add layers
-        ui_layer.add(title, sub, underline, dot, scanner["text_group"], left_counter["group"], right_counter["group"])
+        ui_layer.add(underline_glow, title, sub, underline, dot, scanner["text_group"], left_counter["group"], right_counter["group"])
         hud_layer.add(
             evidence["group"], scanner["group"],
             left_bin["group"], right_bin["group"],
@@ -881,9 +896,11 @@ class SortCardTribunalFinal(Scene):
 
         sub.save_state()
         underline.save_state()
+        underline_glow.save_state()
         dot.save_state()
         sub.set_opacity(0.0)
         underline.set_opacity(0.0)
+        underline_glow.set_opacity(0.0)
         dot.set_opacity(0.0)
 
         evidence["group"].save_state()
@@ -947,7 +964,7 @@ class SortCardTribunalFinal(Scene):
                     rate_func=rf.ease_in_out_sine,
                 ),
                 AnimationGroup(Restore(sub), run_time=hook_act * 0.15, rate_func=rf.ease_out_cubic),
-                AnimationGroup(Restore(underline), Restore(dot), run_time=hook_act * 0.15, rate_func=rf.ease_out_cubic),
+                AnimationGroup(Restore(underline), Restore(underline_glow), Restore(dot), run_time=hook_act * 0.15, rate_func=rf.ease_out_cubic),
                 AnimationGroup(
                     Restore(line_ev),
                     Restore(line_lc),

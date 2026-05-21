@@ -1,7 +1,6 @@
 # src/captions/pipeline.py
 from __future__ import annotations
-import argparse
-import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -10,6 +9,8 @@ from .timeline_resolver import resolve_timeline_segments
 from .translator import translate_script_map
 from .ass_renderer import render_ass
 from .burn_in import burn_in_ass
+
+_log = logging.getLogger(__name__)
 
 
 def run_captions_pipeline(
@@ -32,7 +33,8 @@ def run_captions_pipeline(
         return {"ass_path": None, "captioned_video": None}
 
     render_cfg = captions.get("render") if isinstance(captions.get("render"), dict) else {}
-    burn_in = bool(render_cfg.get("burn_in", True))
+    # Default matches job_config.py:CaptionsRenderConfig.burn_in = False
+    burn_in = bool(render_cfg.get("burn_in", False))
 
     # script config
     script_cfg = captions.get("script") if isinstance(captions.get("script"), dict) else {}
@@ -46,16 +48,30 @@ def run_captions_pipeline(
     ass_path.parent.mkdir(parents=True, exist_ok=True)
 
     # 1) load script.json
-    script_map = load_script_json(script_path)
+    try:
+        script_map = load_script_json(script_path)
+    except Exception as e:
+        raise RuntimeError(f"captions pipeline: failed to load script.json: {e}") from e
 
     # 2) timeline segments (uses job.timeline or ffprobe fallback)
-    timeline_segments = resolve_timeline_segments(job=job, job_dir=job_dir, ffmpeg_path=ffmpeg)
+    try:
+        timeline_segments = resolve_timeline_segments(job=job, job_dir=job_dir, ffmpeg_path=ffmpeg)
+    except Exception as e:
+        raise RuntimeError(f"captions pipeline: failed to resolve timeline: {e}") from e
 
-    # 3) (optional) translate
-    source_lang = str(script_cfg.get("source_lang", "hi"))
+    # 3) (optional) translate — disabled in prototype v1
+    # Default matches job_config.py:CaptionsScriptConfig.source_lang = "en"
+    source_lang = str(script_cfg.get("source_lang", "en"))
     target_langs = script_cfg.get("target_langs", [])
     if not isinstance(target_langs, list):
         target_langs = []
+
+    if target_langs:
+        _log.warning(
+            "captions pipeline: translation disabled in prototype v1; "
+            "target_langs=%s will be ignored",
+            target_langs,
+        )
 
     script_map = translate_script_map(
         script_map=script_map,
@@ -65,12 +81,15 @@ def run_captions_pipeline(
     )
 
     # 4) render ass
-    render_ass(
-        out_path=ass_path,
-        job=job,
-        timeline_segments=timeline_segments,
-        script_map=script_map,
-    )
+    try:
+        render_ass(
+            out_path=ass_path,
+            job=job,
+            timeline_segments=timeline_segments,
+            script_map=script_map,
+        )
+    except Exception as e:
+        raise RuntimeError(f"captions pipeline: failed to render ASS file: {e}") from e
 
     captioned_out: Optional[Path] = None
 
@@ -83,18 +102,24 @@ def run_captions_pipeline(
         final_captioned_rel = str(out_cfg.get("final_captioned_mp4", "output/final_captioned.mp4"))
         captioned_out = (job_dir / final_captioned_rel).resolve()
 
-        burn_in_ass(
-            ffmpeg=ffmpeg,
-            video_in=video_in,
-            ass_path=ass_path,
-            video_out=captioned_out,
-        )
+        try:
+            burn_in_ass(
+                ffmpeg=ffmpeg,
+                video_in=video_in,
+                ass_path=ass_path,
+                video_out=captioned_out,
+            )
+        except Exception as e:
+            raise RuntimeError(f"captions pipeline: burn-in failed: {e}") from e
 
     return {"ass_path": ass_path, "captioned_video": captioned_out}
 
 
 # Optional CLI: test captions without full render
 if __name__ == "__main__":
+    import argparse
+    import json
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--job_dir", required=True, help="jobs/job_0001")
     ap.add_argument("--ffmpeg", default="ffmpeg")

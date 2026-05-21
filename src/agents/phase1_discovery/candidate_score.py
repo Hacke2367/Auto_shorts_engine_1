@@ -62,10 +62,10 @@ def _get_429_retry_policy() -> AsyncRetrying:
 # Gemini Structured Scoring
 # ---------------------------------------------------------------------------
 
-_SCORING_PROMPT_TEMPLATE = """You are a strict Data Analyst for AutoShorts.
+_SCORING_PROMPT_TEMPLATE = """You are the Lead Quality Assurer for AutoShorts.
 
-You are given a raw topic candidate (title + snippet from the web).
-Your job is to evaluate whether this topic can become a high-quality data-driven short video.
+You are evaluating a proposed topic hypothesis and its validated search evidence.
+Your job is to strictly grade if this is a premium, highly engaging short-form video concept.
 
 ## Available Visual Templates
 {template_list}
@@ -73,36 +73,34 @@ Your job is to evaluate whether this topic can become a high-quality data-driven
 ## Evaluation Output Format
 Return a single JSON object with these exact fields:
 {{
-  "why_it_matters": "<short 1-2 sentence explanation of audience relevance>",
-  "virality_score": <int 1-10>,
+  "rationale": "<deep 1-2 sentence breakdown of why this topic is highly interesting or novel>",
+  "validation_confidence": "<high|medium|low - based on if the evidence proves data is actually buildable>",
+  "hook_potential_score": <int 1-10>,
+  "novelty_score": <int 1-10>,
+  "visual_fit_score": <int 1-10>,
   "data_feasibility_score": <int 1-10>,
-  "template_fit_score": <int 1-10>,
-  "visual_potential_score": <int 1-10>,
-  "source_quality_score": <int 1-10>,
-  "fallback_strength_score": <int 1-10>,
+  "freshness_score": <int 1-10>,
   "best_fit_template": "<one of the template names above>",
-  "fit_reason": "<why this template works for this topic>",
-  "source_hint": "<where reliable data might come from>"
+  "fit_reason": "<why this template visually suits the data>",
+  "source_hint": "<where reliable data likely comes from based on evidence>"
 }}
 
 ## Scoring Guide
-- virality_score: How likely to attract attention, clicks, curiosity. 9-10=very clickable, 1-2=boring.
-- data_feasibility_score: How likely usable numerical/structured data exists. 9-10=easy to find, 1-2=impossible.
-- template_fit_score: How naturally the topic fits the best template. 9-10=obvious fit, 1-2=forced fit.
-- visual_potential_score: Will the final output look visually strong. 9-10=beautiful, 1-2=ugly.
-- source_quality_score: How trustworthy the likely sources are. 9-10=authoritative, 1-2=unreliable.
-- fallback_strength_score: If the best template fails, is there a strong second option. 9-10=strong fallback, 1-2=none.
+- hook_potential_score: Does the title naturally stop the scroll? 9-10=Instant curiosity, 1-2=Boring.
+- novelty_score: Is this a unique angle or overdone? 9-10=Fresh/surprising, 1-2=Cliché.
+- visual_fit_score: How beautifully does this map into the chosen template? 9-10=Perfect translation, 1-2=Forced.
+- data_feasibility_score: Based on the snippets, does structurable data actally exist? 9-10=Proven in evidence, 1-2=No evidence.
+- freshness_score: Is this incredibly timely/relevant right now? 9-10=Trending today, 1-2=Outdated content.
 
 ## Rules
-- Do NOT inflate scores just because a topic seems exciting.
-- Do NOT give high data_feasibility if you cannot imagine a real data source.
-- Do NOT give high template_fit if the topic is forced into the template.
-- Return pure JSON only. No markdown wrapping. No commentary before or after.
+- Do NOT inflate scores for boring corporate data unless it has a viral angle.
+- If data_feasibility_score is < 5, validation_confidence MUST be low.
+- Return pure JSON only. No markdown formatting wraps.
 
-## Topic to Evaluate
-
-Title: {title}
-Snippet: {snippet}
+## Hypothesis & Evidence
+Topic: {title}
+Evidence: 
+{snippet}
 """
 
 
@@ -184,17 +182,16 @@ def _parse_scoring_response(
         logger.error("Expected dict, got %s for topic '%s'.", type(data).__name__, topic_title)
         return None
 
-    # Extract and clamp scores
-    virality = _safe_parse_score(data.get("virality_score"), "virality_score")
+    # Extract and clamp ideation-first scores
+    hook = _safe_parse_score(data.get("hook_potential_score"), "hook_potential_score")
+    novelty = _safe_parse_score(data.get("novelty_score"), "novelty_score")
+    vfit = _safe_parse_score(data.get("visual_fit_score"), "visual_fit_score")
     data_feas = _safe_parse_score(data.get("data_feasibility_score"), "data_feasibility_score")
-    template_fit = _safe_parse_score(data.get("template_fit_score"), "template_fit_score")
-    visual_pot = _safe_parse_score(data.get("visual_potential_score"), "visual_potential_score")
-    source_qual = _safe_parse_score(data.get("source_quality_score"), "source_quality_score")
-    fb_strength = _safe_parse_score(data.get("fallback_strength_score"), "fallback_strength_score")
+    freshness = _safe_parse_score(data.get("freshness_score"), "freshness_score")
 
     # Option B: Python strictly assumes ownership of fallback_template
     # Prompt asks only for best_fit_template.
-    best_fit = str(data.get("best_fit_template", "")).strip()
+    best_fit = str(data.get("best_fit_template", "")).strip().lower().replace("_", "-")
 
     if best_fit not in VALID_TEMPLATES:
         # Deterministic rejection: if best_fit doesn't exist, we do not guess
@@ -215,13 +212,22 @@ def _parse_scoring_response(
     candidate = TopicCandidate(
         topic=topic_title,
         normalized_topic=norm,
-        why_it_matters=str(data.get("why_it_matters", "")),
-        virality_score=virality,
+        why_it_matters=str(data.get("rationale", "")),
+        rationale=str(data.get("rationale", "")),
+        validation_confidence=str(data.get("validation_confidence", "low")).lower().strip(),
+        # Rich idea-first metrics
+        hook_potential_score=hook,
+        novelty_score=novelty,
+        visual_fit_score=vfit,
         data_feasibility_score=data_feas,
-        template_fit_score=template_fit,
-        visual_potential_score=visual_pot,
-        source_quality_score=source_qual,
-        fallback_strength_score=fb_strength,
+        freshness_score=freshness,
+        # Legacy mapping to support sorting ties safely
+        virality_score=hook,
+        template_fit_score=vfit,
+        visual_potential_score=vfit,
+        source_quality_score=novelty,
+        fallback_strength_score=freshness,
+        
         best_fit_template=best_fit,
         fallback_template=fallback,
         fit_reason=str(data.get("fit_reason", "")),
@@ -307,9 +313,15 @@ async def score_single_candidate(
                         data = await resp.json()
 
                         try:
-                            raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                            candidate_data = data["candidates"][0]
+                            # Handle Safety or other Finish Reasons first
+                            if candidate_data.get("finishReason") == "SAFETY":
+                                log.warning("Gemini blocked topic '%s' due to SAFETY filters.", title)
+                                return None
+
+                            raw_text = candidate_data["content"]["parts"][0]["text"]
                         except (KeyError, IndexError):
-                            log.error("Malformed Gemini response for '%s': %s", title, data)
+                            log.error("Malformed or blocked Gemini response for '%s': %s", title, data)
                             return None
 
                         candidate = _parse_scoring_response(raw_text, title, snippet)

@@ -66,42 +66,25 @@ except Exception:
             scene.play(FadeIn(t1, shift=UP * 0.10), run_time=0.35)
             scene.play(FadeOut(t1), FadeOut(t2), run_time=0.35)
 
-# --- SYNC HELPERS (direct imports, NO try/except) ---
+# --- SYNC HELPERS ---
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp as _tl_clamp
-from src.sync.retention import hold_breathing, banner_scan_hold
+from src.sfx.engine import SFXEngine
+try:
+    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention_accents import retain_accent_vs_card
+except Exception:
+    def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
+        if seconds > 0:
+            scene.wait(seconds)
+    def register_template_accent(scene, fn):
+        pass
+    def retain_accent_vs_card(scene, focus, seconds, **kw):
+        return lambda: None
+    def banner_scan_hold(scene, banner, seconds: float, color=None):
+        if seconds > 0:
+            scene.wait(seconds)
 
-# ============================================================
-# SFX MARKS WRITER  (matches bar_chart.py exactly)
-# - writes: jobs/<job>/output/sfx_marks.json
-# - main.py will pick this up and mix SFX
-# ============================================================
-class SFXMarksWriter:
-    def __init__(self, scene: Scene, job_dir, template_id="vs_card", out_rel="output/sfx_marks.json"):
-        self.scene = scene
-        self.template_id = template_id
-        self.out_path = Path(str(job_dir)) / out_rel if job_dir else None
-        self.marks = []
-
-    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: dict | None = None):
-        t = float(self.scene.time) + float(offset)
-        ev = {"t": t, "key": str(key), "gain_db": float(gain_db)}
-        if meta:
-            ev["meta"] = meta
-        self.marks.append(ev)
-
-    def flush(self):
-        if self.out_path is None:
-            return
-        self.out_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "version": 1,
-            "template_id": self.template_id,
-            "marks": self.marks,
-        }
-        with self.out_path.open("w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        print(f"[OK] Wrote sfx_marks.json: {self.out_path} ({len(self.marks)} marks)")
 
 # ============================================================
 # 2) DATA LOADING (meta first line supported)
@@ -749,6 +732,11 @@ class VsCardFinal(Scene):
 
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)
+        # Spine (central VS divider) built later; accent uses focus as fallback
+        register_template_accent(
+            self,
+            lambda s, f, t: retain_accent_vs_card(s, f, t),
+        )
 
         try:
             IntroManager.play_intro(
@@ -787,7 +775,7 @@ class VsCardFinal(Scene):
         if not job_dir_path and JOB_JSON_PATH:
             job_dir_path = Path(JOB_JSON_PATH).parent
 
-        sfx = SFXMarksWriter(self, job_dir_path, template_id="vs_card")
+        sfx = SFXEngine(self, str(job_dir_path) if job_dir_path else str(Path.cwd()))
 
         job_data = {}
         if job_dir_path and job_dir_path.exists():

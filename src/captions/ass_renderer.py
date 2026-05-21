@@ -1,11 +1,14 @@
 # src/captions/ass_renderer.py
 from __future__ import annotations
+import logging
 from pathlib import Path
 from typing import Dict, Any, List
 
 from .styles import get_style_preset
 from .script_loader import pick_text_for_lang
 from .aligner import word_karaoke_equal_split, split_words, wrap_words_to_lines
+
+_log = logging.getLogger(__name__)
 
 
 def _ass_time(t: float) -> str:
@@ -22,14 +25,6 @@ def _ass_time(t: float) -> str:
     hh = mm // 60
     mm = mm % 60
     return f"{hh}:{mm:02d}:{ss:02d}.{cc:02d}"
-
-
-def _escape_ass_text(s: str) -> str:
-    """
-    Legacy minimal escape (we keep it because older parts depend on it).
-    """
-    s = s.replace("{", "(").replace("}", ")")
-    return s
 
 
 def _make_style_line(style_name: str, st: Dict[str, Any], margin_v: int) -> str:
@@ -138,14 +133,21 @@ def _to_reveal_words_ass(text: str, duration_sec: float) -> str:
     return " ".join(out)
 
 
-def _with_premium_entry_tags(text: str) -> str:
+def _with_premium_entry_tags(text: str, dur_s: float = 0.0) -> str:
     """
-    Subtle per-dialogue entry treatment for premium preset.
+    Subtle per-dialogue entry + exit treatment for premium preset.
+    Entry: fade-in 140ms + blur easing over 180ms.
+    Exit: blur-out over the last 100ms (timed transform from dur_s).
     """
     if not text:
         return ""
-    prefix = r"{\fad(140,100)\blur0.90\bord3.4\t(0,180,\blur0.35\bord2.8)}"
-    return prefix + text
+    entry = r"{\fad(140,100)\blur0.90\bord3.4\t(0,180,\blur0.35\bord2.8)}"
+    if dur_s > 0.15:
+        dur_cs = int(round(dur_s * 100))
+        exit_start = max(0, dur_cs - 100)
+        exit_tag = r"{\t(" + str(exit_start) + r"," + str(dur_cs) + r",\blur0.55\bord3.2)}"
+        return entry + text + exit_tag
+    return entry + text
 
 
 def render_ass(
@@ -224,9 +226,13 @@ def render_ass(
         name = seg["name"]
         start = float(seg["start"])
         end = float(seg["end"])
-        dur = float(seg["dur"])
 
         seg_data = script_map.get(name, {})
+        if name not in script_map:
+            _log.warning(
+                "captions: no script entry for segment '%s' — segment will have no captions",
+                name,
+            )
         if not isinstance(seg_data, dict):
             seg_data = {}
 
@@ -236,17 +242,17 @@ def render_ass(
             style_name = style_names_by_track[ti]
 
             txt = pick_text_for_lang(seg_data, lang=lang, fallback_lang="default")
-            txt = _escape_ass_text(txt)  # keep legacy safe for tags in other branches
 
             if not str(txt).strip():
                 continue
 
-            # duration seconds (same event time)
+            # Canonical duration: computed from start/end (already centisecond-rounded
+            # by timeline_resolver). Used consistently for all modes.
             dur_s = max(0.01, float(end) - float(start))
 
             if mode == "karaoke":
                 # simple equal split karaoke
-                pairs = word_karaoke_equal_split(txt, dur_seconds=dur)
+                pairs = word_karaoke_equal_split(txt, dur_seconds=dur_s)
                 words = [w for (w, _) in pairs]
                 wrapped = wrap_words_to_lines(words, max_lines=max_lines, max_chars_per_line=28)
 
@@ -258,7 +264,7 @@ def render_ass(
                         if word_index >= len(pairs):
                             break
                         w, cs = pairs[word_index]
-                        karaoke_chunks.append(r"{\k" + str(cs) + "}" + w)
+                        karaoke_chunks.append(r"{\k" + str(cs) + "}" + _ass_escape_text(w))
                         karaoke_chunks.append(" ")
                         word_index += 1
                     if li < len(wrapped) - 1:
@@ -266,7 +272,7 @@ def render_ass(
 
                 text_out = "".join(karaoke_chunks).strip()
                 if use_premium_entry:
-                    text_out = _with_premium_entry_tags(text_out)
+                    text_out = _with_premium_entry_tags(text_out, dur_s=dur_s)
                 dialogue = f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},{style_name},,0,0,0,,{text_out}"
                 lines.append(dialogue)
 
@@ -295,10 +301,10 @@ def render_ass(
                     ass_text = r"\N".join(reveal_lines).strip()
                 else:
                     # plain
-                    ass_text = r"\N".join(_escape_ass_text(x) for x in wrapped).strip()
+                    ass_text = r"\N".join(_ass_escape_text(x) for x in wrapped).strip()
 
                 if use_premium_entry:
-                    ass_text = _with_premium_entry_tags(ass_text)
+                    ass_text = _with_premium_entry_tags(ass_text, dur_s=dur_s)
                 dialogue = f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},{style_name},,0,0,0,,{ass_text}"
                 lines.append(dialogue)
 

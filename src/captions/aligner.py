@@ -39,9 +39,10 @@ def word_karaoke_equal_split(text: str, dur_seconds: float) -> List[Tuple[str, i
 def wrap_words_to_lines(words: List[str], max_lines: int = 2, max_chars_per_line: int = 28) -> List[str]:
     """
     Very simple line wrapper: makes up to max_lines lines.
+    Returns [] for empty input (callers should guard against an empty list).
     """
     if not words:
-        return [""]
+        return []
 
     lines: List[str] = []
     cur: List[str] = []
@@ -68,7 +69,7 @@ def wrap_words_to_lines(words: List[str], max_lines: int = 2, max_chars_per_line
         lines.append(" ".join(cur))
 
     # If too many words, last line gets "..."
-    used_words = sum(len(l.split()) for l in lines)
+    used_words = sum(len(split_words(l)) for l in lines)
     if used_words < len(words) and lines:
         lines[-1] = (lines[-1] + " ...").strip()
 

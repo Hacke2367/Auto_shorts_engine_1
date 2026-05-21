@@ -721,38 +721,21 @@ except Exception:
 # --- SYNC HELPERS ---
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp
-from src.sync.retention import hold_breathing, banner_scan_hold
-
-# ============================================================
-# SFX MARKS WRITER (IMPORTANT)
-# - writes: jobs/<job>/output/sfx_marks.json
-# - main.py will pick this up and mix SFX
-# ============================================================
-class SFXMarksWriter:
-    def __init__(self, scene: Scene, job_dir: str, template_id="bar_chart", out_rel="output/sfx_marks.json"):
-        self.scene = scene
-        self.template_id = template_id
-        self.out_path = Path(job_dir) / out_rel
-        self.marks = []
-
-    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: dict | None = None):
-        # scene.time is THE truth (auto adapts to runtime changes)
-        t = float(self.scene.time) + float(offset)
-        ev = {"t": t, "key": str(key), "gain_db": float(gain_db)}
-        if meta:
-            ev["meta"] = meta
-        self.marks.append(ev)
-
-    def flush(self):
-        self.out_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "version": 1,
-            "template_id": self.template_id,
-            "marks": self.marks,
-        }
-        with self.out_path.open("w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        print(f"[OK] Wrote sfx_marks.json: {self.out_path} ({len(self.marks)} marks)")
+from src.sfx.engine import SFXEngine
+try:
+    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention_accents import retain_accent_bar_chart
+except Exception:
+    def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
+        if seconds > 0:
+            scene.wait(seconds)
+    def banner_scan_hold(scene, banner, seconds: float, color=None):
+        if seconds > 0:
+            scene.wait(seconds)
+    def register_template_accent(scene, fn):
+        pass
+    def retain_accent_bar_chart(scene, focus, seconds, **kw):
+        return lambda: None
 
 # ============================================================
 # CSV loader with optional META line
@@ -903,10 +886,7 @@ class BarChartTemplate(Scene):
 
         timeline_dict = job.get("timeline", {}) if isinstance(job.get("timeline", {}), dict) else {}
 
-        # ✅ SFX Marks writer init (THIS IS THE FIX)
-        sfx = SFXMarksWriter(self, job_dir, template_id="bar_chart")
-        # expose for shared intro (optional future)
-        self.sfx_mark = sfx.mark
+        sfx = SFXEngine(self, job_dir)
 
         # CSV resolve (job relative to job_dir)
         csv_path = job.get("data_csv") or "data/ai_stats.csv"
@@ -932,9 +912,21 @@ class BarChartTemplate(Scene):
 
         num_items = len(names)
 
-        defaults = {"hook": 2.6, "setup": 1.3, "winner": 3.2, "outro": 1.2}
+        # Derive item_* segment names from audio.order so ghost padding covers all audio slots.
+        # Falls back to num_items only if audio.order is absent (old jobs without audio block).
+        _audio_cfg = job.get("audio") if isinstance(job, dict) else {}
+        _audio_order = _audio_cfg.get("order", []) if isinstance(_audio_cfg, dict) else []
+        _item_segs_audio = [s for s in _audio_order if isinstance(s, str) and s.startswith("item_")]
+
+        # Hook default raised to 4.5s — IntroManager takes ~1.9s, leaving ~2.6s for
+        # hook animations + retention breathing room. Real jobs use job.json timeline.
+        defaults = {"hook": 4.5, "setup": 1.3, "winner": 3.2, "outro": 1.2}
         for i in range(1, num_items + 1):
             defaults[f"item_{i}"] = 2.0
+        # Ensure all audio-order item segments have a default (covers extra ghost slots)
+        for seg in _item_segs_audio:
+            if seg not in defaults:
+                defaults[seg] = 2.0
         TL = Timeline.from_dict(timeline_dict, defaults=defaults)
 
         # ============================================================
@@ -942,6 +934,12 @@ class BarChartTemplate(Scene):
         # ============================================================
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)
+
+        # Register template-specific retention accent (trailing edge ghost on bars)
+        register_template_accent(
+            self,
+            lambda s, f, t: retain_accent_bar_chart(s, f, t, bar_color=Theme.NEON_BLUE),
+        )
 
         try:
             # (optional) intro SFX single mark at intro start
@@ -955,6 +953,10 @@ class BarChartTemplate(Scene):
             )
         except Exception as e:
             print(f"Intro Error: {e}")
+
+        # Measure how long the intro actually consumed so hook animations
+        # are sized against the REMAINING budget, not the full budget.
+        post_intro_t = float(self.time)
 
         # ============================================================
         # 2) SAFE FRAME
@@ -1034,8 +1036,13 @@ class BarChartTemplate(Scene):
         subtitle_shadow.set_z_index(59)
         self.add(subtitle_shadow)
 
-        hook_total = TL.seg_total("hook", 2.6)
-        hook_action = clamp(hook_total * 0.70, 1.2, 2.2)
+        hook_total = TL.seg_total("hook", 4.5)
+        # Scale animations against budget AFTER intro, not full budget.
+        # This prevents the intro duration from eating into animation time
+        # and leaves headroom for the retention breathing overlay.
+        intro_elapsed = post_intro_t - global_start_t0
+        hook_post_intro = max(0.8, hook_total - intro_elapsed)
+        hook_action = clamp(hook_post_intro * 0.70, 0.8, 2.2)
         scale = hook_action / 2.5
         
         hook_t0 = global_start_t0
@@ -1312,7 +1319,7 @@ class BarChartTemplate(Scene):
 
             sfx.mark("scan_tick", gain_db=-16, meta={"at": "item_fill", "i": i+1})
 
-            self.play(tracker.animate.set_value(1.0), run_time=t_track, rate_func=linear)
+            self.play(tracker.animate.set_value(1.0), run_time=t_track, rate_func=rf.ease_out_cubic)
 
             line_group.remove_updater(update_single_bar)
 
@@ -1348,8 +1355,10 @@ class BarChartTemplate(Scene):
                 VGroup(branch, bolt, rank_bg, rank_num, label_group, container, final_bar, sheen, val_pill, val_num)
             )
 
-        # Ghost Padding Loop 
-        for ghost_i in range(len(names), 15):
+        # Ghost Padding Loop — absorbs extra item_* audio segments beyond CSV row count.
+        # Cap derived from audio.order so jobs with >15 items are handled correctly.
+        _ghost_cap = max(len(_item_segs_audio), num_items)
+        for ghost_i in range(num_items, _ghost_cap):
             seg_key = f"item_{ghost_i+1}"
             g_t0 = float(self.time)
             TL.consume(seg_key, float(self.time) - g_t0)

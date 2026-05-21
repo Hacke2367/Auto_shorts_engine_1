@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, List
+
+_log = logging.getLogger(__name__)
 
 
 def _normalize_text_map(seg: Dict[str, Any]) -> Dict[str, str]:
     """
-    Segment ke andar se language-wise text nikalta hai.
+    Extracts language-keyed text from a segment dict.
     Supported forms:
       - {"text": {"hi": "...", "en": "..."}}
       - {"texts": {"hi": "...", "en": "..."}}
@@ -43,7 +46,7 @@ def _normalize_text_map(seg: Dict[str, Any]) -> Dict[str, str]:
         out["default"] = str(seg.get("default"))
 
     # 4) Direct language keys e.g. {"hi": "...", "en": "..."}
-    #    (ye fallback tab use hota hai jab above me kuch na mile)
+    #    Fallback used when none of the above yielded anything
     if not out:
         for k, v in seg.items():
             if not isinstance(k, str):
@@ -59,9 +62,7 @@ def _normalize_text_map(seg: Dict[str, Any]) -> Dict[str, str]:
 
 
 def _normalize_keywords(seg: Dict[str, Any]) -> List[str]:
-    """
-    keywords ko normalize karta hai.
-    """
+    """Normalizes the keywords list from a segment dict."""
     kw = seg.get("keywords", [])
     if not isinstance(kw, list):
         return []
@@ -75,10 +76,8 @@ def _normalize_keywords(seg: Dict[str, Any]) -> List[str]:
 
 def _segment_name_from_obj(s: Dict[str, Any]) -> str:
     """
-    Segment name pick:
-      - "name" preferred
-      - else "id"
-      - else "segment"
+    Picks the segment name from a segment dict.
+    Priority: "name" > "id" > "segment"
     """
     for k in ("name", "id", "segment"):
         v = s.get(k, "")
@@ -101,8 +100,8 @@ def load_script_json(script_path: Path) -> Dict[str, Any]:
       B) {"segments": { "hook": {...}, "setup": {...} }}
       C) { "hook": {...}, "setup": {...} }  (root map)
     """
-    if not script_path.exists():
-        raise FileNotFoundError(f"script.json not found: {script_path}")
+    if not script_path.is_file():
+        raise FileNotFoundError(f"script.json not found or is not a file: {script_path}")
 
     with script_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
@@ -118,11 +117,16 @@ def load_script_json(script_path: Path) -> Dict[str, Any]:
 
         # A) segments = list
         if isinstance(segs, list):
-            for s in segs:
+            for i, s in enumerate(segs):
                 if not isinstance(s, dict):
                     continue
                 name = _segment_name_from_obj(s)
                 if not name:
+                    _log.warning(
+                        "script.json: skipping unnamed segment at index %d "
+                        "(no 'name', 'id', or 'segment' key found)",
+                        i,
+                    )
                     continue
 
                 text_map = _normalize_text_map(s)
@@ -190,12 +194,10 @@ def pick_text_for_lang(
     fallback_lang: str = "default",
 ) -> str:
     """
-    Desired language ka text pick karta hai.
-
-    Smart fallback:
+    Picks text for the desired language with smart fallback:
       - exact match: "en"
       - region fallback: "en-US" -> "en"
-      - fallback_lang: default
+      - fallback_lang: "default"
       - otherwise first available
     """
     text_map = seg_data.get("text", {})

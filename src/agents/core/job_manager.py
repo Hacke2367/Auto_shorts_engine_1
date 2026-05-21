@@ -239,6 +239,25 @@ class JobManager:
             return []
         return list(state.get("steps", {}).keys())
 
+    def write_data_manifest(self, manifest_data: dict[str, Any]) -> None:
+        """Write the extraction data manifest to establish a fast-load contract."""
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = self.data_dir / "data_manifest.json"
+        
+        # Atomic write
+        fd, tmp_path = tempfile.mkstemp(dir=str(self.data_dir), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(manifest_data, f, indent=2)
+            os.replace(tmp_path, str(manifest_path))
+            self.get_logger().info("Generated stable data_manifest.json contract.")
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
     # -- Logging Integration ------------------------------------------------
 
     def get_logger(self) -> logging.Logger:
@@ -248,6 +267,7 @@ class JobManager:
         of this ``JobManager`` instance.
         """
         if self._logger is None:
+            self._job_dir.mkdir(parents=True, exist_ok=True) # ADD THIS LINE
             self._logger = setup_job_logger(self._job_dir, self._job_id)
         return self._logger
 

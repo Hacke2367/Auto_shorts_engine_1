@@ -192,25 +192,18 @@ async def run_extraction(
 
     # -- 1. Early Return Idempotency Check --
     if job_manager.is_step_completed(step_name):
-        log.info("Phase 1B extraction already completed. Parsing metadata...")
-        # Since it's completed, the completed template might be the fallback.
-        # Check job manager metadata to find which template actually succeeded
+        log.info("Phase 1B extraction already completed. Reading metadata...")
         completed_meta = job_manager.get_step_metadata(step_name) or {}
         actual_template = completed_meta.get("template", best_fit)
-        
-        # Determine location based on mode
+
         if job_manager.is_auto_mode:
-            target_dir = job_manager.get_attempt_dir(actual_template, 1) # Guessing attempt 1 or 2 isn't safe for idempotency
-            # In auto mode, the state is complex. As a simplified idempotency for the patch, we just search the completed attempt dir.
-            # But actual_template might be attempt 2. To be completely certain, we look at where the metadata says we wrote.
-            attempt_type = completed_meta.get("attempt_type", "best_fit")
-            attempt_num = 1 if attempt_type == "best_fit" else 2
+            # BUG-C2 fix: read the exact attempt_num that was stored — never derive it from attempt_type
+            attempt_num = int(completed_meta.get("attempt_num", 1))
             target_dir = job_manager.get_attempt_dir(actual_template, attempt_num)
         else:
-            # Manual mode isolation logic
             attempt_type = completed_meta.get("attempt_type", "best_fit")
             target_dir = (output_dir or job_manager.data_dir) / attempt_type
-            
+
         json_path = target_dir / f"{actual_template}_dataset.json"
 
         if json_path.exists():
@@ -327,13 +320,29 @@ async def run_extraction(
                 csv_path = attempt_dir / f"{t_name}_data.csv"
                 _write_csv(dataset, csv_path, log)
 
-                # -- 6. Mark Job Completed --
+                # -- 6. Generate Data Manifest Truth --
+                try:
+                    rel_dir = attempt_dir.relative_to(job_manager.job_dir).as_posix()
+                except ValueError:
+                    # Fallback for custom absolute output_dir outside of job root
+                    rel_dir = f"data/{t_type}" if not job_manager.is_auto_mode else f"attempts/{idx:02d}_{t_name}"
+
+                manifest = {
+                    "template_name": t_name,
+                    "csv_relpath": f"{rel_dir}/{t_name}_data.csv",
+                    "dataset_relpath": f"{rel_dir}/{t_name}_dataset.json",
+                    "audit_relpath": f"{rel_dir}/sources_audit.json"
+                }
+                job_manager.write_data_manifest(manifest)
+
+                # -- 7. Mark Job Completed --
                 job_manager.mark_step_completed(
                     step_name,
                     metadata={
                         "topic": topic,
                         "template": t_name,
                         "attempt_type": t_type,
+                        "attempt_num": idx,   # BUG-C2: store exact number; never guess on re-run
                         "rows_extracted": len(dataset.rows),
                         "sources_audited": len(trail.sources),
                     },

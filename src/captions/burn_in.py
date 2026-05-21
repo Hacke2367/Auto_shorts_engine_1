@@ -20,6 +20,14 @@ def burn_in_ass(
     ass_path: Path,
     video_out: Path,
 ) -> None:
+    """
+    Hardsubs video_in with ass_path and writes the result to video_out.
+    Overwrites video_out if it already exists (-y flag).
+    Raises RuntimeError with ffmpeg's stderr output on failure.
+    """
+    if not video_in.exists():
+        raise FileNotFoundError(f"burn_in: input video not found: {video_in}")
+
     video_out.parent.mkdir(parents=True, exist_ok=True)
 
     ass_arg = _ffmpeg_filter_path(ass_path)
@@ -37,4 +45,9 @@ def burn_in_ass(
         "-c:a", "copy",
         str(video_out),
     ]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(
+            f"burn_in_ass ffmpeg failed:\n{e.stderr or '(no stderr captured)'}"
+        ) from e

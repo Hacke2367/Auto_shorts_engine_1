@@ -33,10 +33,11 @@ class SFXEngine:
         except Exception:
             return 0.0
 
-    def mark(self, event: str, offset: float = 0.0, vol: Optional[float] = None, meta: Optional[Dict[str, Any]] = None):
+    def mark(self, event: str, offset: float = 0.0, vol: Optional[float] = None, gain_db: float = 0.0, meta: Optional[Dict[str, Any]] = None):
         """
         Record an SFX event at current time (+ offset).
-        vol override optional.
+        vol: linear multiplier override (uses registry default when None).
+        gain_db: dB offset applied on top of registry volume during mixing.
         """
         if not self.enabled:
             return
@@ -46,7 +47,12 @@ class SFXEngine:
 
         picked = pick_variant(event, idx)
         if not picked:
-            # Unknown event -> ignore silently (or print if you want)
+            import warnings
+            warnings.warn(
+                f"SFXEngine: event '{event}' not found in registry — mark dropped. "
+                f"Add it to src/sfx/registry.py to fix this.",
+                stacklevel=2,
+            )
             return
 
         t = max(0.0, self.now() + float(offset))
@@ -57,7 +63,7 @@ class SFXEngine:
             "t": t,
             "event": event,
             "key": event,
-            "gain_db": 0.0,
+            "gain_db": float(gain_db),
             "rel_path": rel_path,
             "vol": out_vol,
         })

@@ -44,6 +44,44 @@ _TIMING_REGISTRY_PATH = _PROJECT_ROOT / ".agent" / "context" / "template_timing_
 _ENGINE_VERSION = "1.0"
 
 
+def _validate_phase3_inputs(script_payload: dict[str, Any], script_path: Path) -> None:
+    """Validate Phase 2 script.json is complete before starting any TTS synthesis.
+
+    Raises:
+        ValueError: If required fields are missing or the segment list is empty/malformed.
+    """
+    for field in ("job_id", "template_name", "segments"):
+        if not script_payload.get(field):
+            raise ValueError(
+                f"Phase 3 validation failed: script.json missing or empty field '{field}'. "
+                f"Source: {script_path}"
+            )
+
+    segments = script_payload["segments"]
+    if not isinstance(segments, list) or len(segments) == 0:
+        raise ValueError(
+            f"Phase 3 validation failed: script.json contains 0 segments. "
+            f"Source: {script_path}"
+        )
+
+    for i, seg in enumerate(segments):
+        if not seg.get("tag"):
+            raise ValueError(
+                f"Phase 3 validation failed: segment[{i}] is missing the 'tag' field. "
+                f"Source: {script_path}"
+            )
+        if not seg.get("text", "").strip():
+            raise ValueError(
+                f"Phase 3 validation failed: segment[{i}] (tag={seg.get('tag')!r}) has empty 'text'. "
+                f"Source: {script_path}"
+            )
+
+    logger.info(
+        "Phase 3 input validation passed: %d segments, template='%s'.",
+        len(segments), script_payload["template_name"],
+    )
+
+
 def _get_base_tag(tag: str) -> str:
     """Extract base tag from dynamic tag: ITEM_1 -> ITEM."""
     return re.sub(r"_\d+$", "", tag)
@@ -159,6 +197,9 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
     with open(script_path, "r", encoding="utf-8") as f:
         script_payload = json.load(f)
 
+    # BUG-C5: validate script.json structure before any TTS calls or cache checks
+    _validate_phase3_inputs(script_payload, script_path)
+
     job_id = script_payload["job_id"]
     template_name = script_payload["template_name"]
     persona_id = script_payload["persona_id"]
@@ -184,6 +225,32 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
 
             expected_path = job_path / rel
             if not expected_path.exists():
+                files_intact = False
+                break
+
+            # BUG-C3: verify the file is non-empty and actually decodable.
+            # A 0-byte or truncated file from a prior failed write would pass
+            # the existence check but crash Phase 4 during rendering.
+            try:
+                file_bytes = expected_path.read_bytes()
+                if not file_bytes:
+                    logger.warning("Cache bust: %s is 0 bytes.", expected_path.name)
+                    files_intact = False
+                    break
+                measured_ms = duration_ms(file_bytes)
+                cached_ms = int(d_ms)
+                tolerance = max(100, int(cached_ms * 0.10))  # 10% or 100 ms floor
+                if abs(measured_ms - cached_ms) > tolerance:
+                    logger.warning(
+                        "Cache bust: %s duration mismatch — cached=%dms measured=%dms (tolerance=%dms).",
+                        expected_path.name, cached_ms, measured_ms, tolerance,
+                    )
+                    files_intact = False
+                    break
+            except Exception as exc:
+                logger.warning(
+                    "Cache bust: cannot decode cached audio %s: %s", expected_path.name, exc
+                )
                 files_intact = False
                 break
 
@@ -260,6 +327,16 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
 
     results.sort(key=lambda x: x[0])
     completed_segments = [seg for _, seg in results]
+
+    # BUG-C4: fail-fast before writing anything if synthesis is incomplete.
+    # asyncio.gather propagates the first exception, but a defensive count check
+    # catches any scenario where a result was silently dropped.
+    if len(completed_segments) != len(segments_data):
+        raise RuntimeError(
+            f"Phase 3 synthesis incomplete: expected {len(segments_data)} segments, "
+            f"received {len(completed_segments)}. "
+            "Aborting before writing Phase 4 inputs to prevent corrupt job directory."
+        )
 
     updated_script = update_script_with_audio(script_payload, completed_segments)
     updated_script["phase3_inputs_hash"] = current_hash

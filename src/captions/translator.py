@@ -1,6 +1,9 @@
 # src/captions/translator.py
 from __future__ import annotations
+import logging
 from typing import Dict, Any, List
+
+_log = logging.getLogger(__name__)
 
 
 def translate_script_map(
@@ -11,11 +14,16 @@ def translate_script_map(
 ) -> Dict[str, Any]:
     """
     Prototype v1:
-    - By default enabled=False -> no translation, just return input.
+    - enabled=False (default) -> no translation, returns input unchanged.
     Future:
     - Integrate your translation provider here and fill script_map[seg]['text'][lang]
     """
     if not enabled:
+        if target_langs:
+            _log.debug(
+                "translate_script_map: translation disabled; target_langs=%s ignored",
+                target_langs,
+            )
         return script_map
 
     raise NotImplementedError(

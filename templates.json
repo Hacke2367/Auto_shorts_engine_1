@@ -1,0 +1,32 @@
+{
+  "_comment": "Template registry — add new templates here without touching main.py. Keys must be snake_case.",
+
+  "bar_chart": {
+    "file": "src/templates/Bar_chart/bar_chart.py",
+    "scene": "BarChartTemplate"
+  },
+  "butterfly_chart": {
+    "file": "src/templates/chart_folder/butterfly_chart.py",
+    "scene": "ButterflyChart"
+  },
+  "geo_universal": {
+    "file": "src/templates/map_chart/geo_universal.py",
+    "scene": "GeoUniversalMap"
+  },
+  "scan_race": {
+    "file": "src/templates/line_chart/scan_race.py",
+    "scene": "CinematicLineRace"
+  },
+  "sort_card": {
+    "file": "src/templates/Sort_card/sort_card.py",
+    "scene": "SortCardTribunalFinal"
+  },
+  "vs_card": {
+    "file": "src/templates/Vs_card/vs_card.py",
+    "scene": "VsCardFinal"
+  },
+  "donut_breakdown": {
+    "file": "src/templates/pie_chart/donut_breakdown.py",
+    "scene": "DonutBreakdownFinal"
+  }
+}

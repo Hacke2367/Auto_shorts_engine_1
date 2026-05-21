@@ -90,6 +90,55 @@ async def tavily_search(
     return []
 
 
+async def tavily_search_snippets(
+    query: str,
+    session: aiohttp.ClientSession,
+    log: logging.Logger,
+    max_results: int = 4,
+) -> list[dict[str, str]]:
+    """Search for relevant web pages and return raw snippets for Hypothesis Validation."""
+    url = "https://api.tavily.com/search"
+    payload = {
+        "api_key": settings.tavily_api_key.get_secret_value(),
+        "query": query,
+        "search_depth": "basic",
+        "max_results": max_results,
+        "include_raw_content": False,
+    }
+
+    async for attempt in _get_retry_policy():
+        with attempt:
+            t0 = time.perf_counter()
+            async with session.post(url, json=payload) as resp:
+                elapsed = (time.perf_counter() - t0) * 1000
+                log_api_call(
+                    log,
+                    service="tavily.search.validate",
+                    status_code=resp.status,
+                    retry_count=attempt.retry_state.attempt_number - 1,
+                    duration_ms=elapsed,
+                )
+                resp.raise_for_status()
+                data = await resp.json()
+
+                results = []
+                for res in data.get("results", []):
+                    title = res.get("title", "")
+                    content = res.get("content", "")
+                    url_str = res.get("url", "")
+                    if content and url_str:
+                        results.append({
+                            "title": title,
+                            "content": content,
+                            "url": url_str
+                        })
+                
+                log.info("Tavily validation found %d snippets for: %s", len(results), query)
+                return results
+
+    return []
+
+
 async def tavily_extract(
     urls: list[str],
     session: aiohttp.ClientSession,
@@ -213,43 +262,15 @@ For sort_card, if an image URL is missing in the text, return an empty string ""
 
 Read the following sourced Markdown texts and extract the relevant numerical/statistical data:
 """
-    # Track source authority constraints
-    primary_count = 0
-    secondary_count = 0
-    social_count = 0
-
     for idx, src in enumerate(context, 1):
-        if src.authority_tier == AuthorityTier.PRIMARY:
-            primary_count += 1
-        elif src.authority_tier == AuthorityTier.SECONDARY:
-            secondary_count += 1
-        else:
-            social_count += 1
-
         prompt += f"\n--- SOURCE {idx} ({src.authority_tier.value}) ---\nURL: {src.url}\n{src.raw_snippet[:5000]}\n"
-
-    # Surface lightweight conflict note/authority distribution info
-    authority_distribution = f"{primary_count} Primary, {secondary_count} Secondary, {social_count} Social"
-    log.info("Extraction context contains %s sources.", authority_distribution)
-
-    # Emit lightweight consistency/conflict note if mixing high and low tiers
-    if primary_count > 0 and (secondary_count > 0 or social_count > 0):
-        log.warning(
-            "Conflict Note: Context mixes Primary authoritative sources with lower-tier sources. "
-            "Gemini is instructed to prefer Primary truth if metrics conflict."
-        )
-    elif secondary_count > 0 and social_count > 0:
-        log.info(
-            "Consistency Note: Context mixes Secondary and Social sources. "
-            "Verify output for social-media bias."
-        )
 
     prompt += f"""
 Return purely a JSON object with "meta" and "rows" keys.
 Each row in the "rows" array MUST match the exact example structure shown above. Do NOT invent new keys.
 DO NOT emit Markdown blocks like ```json ... ```, just emit the raw curly-brace JSON.
 
-Do not hallucinate data. Only extract facts found in the texts. If sources disagree, prefer Primary sources over Secondary/Social.
+Do not hallucinate data. Only extract facts found in the texts. If sources disagree, prefer Primary sources.
 """
 
     payload = {

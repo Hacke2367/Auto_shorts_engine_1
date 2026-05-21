@@ -379,10 +379,15 @@ TEMPLATE_FALLBACKS: dict[str, list[str]] = {
 }
 
 
-# Scoring weights (from scoring_rubric.md v1.0)
+# Scoring weights (Ideation-first + Legacy defaults)
 SCORING_WEIGHTS: dict[str, float] = {
+    "hook_potential": 0.30,
+    "novelty": 0.20,
+    "visual_fit": 0.20,
+    "data_feasibility": 0.20,
+    "freshness": 0.10,
+    # Legacy weights for backward compatibility
     "virality_potential": 0.25,
-    "data_feasibility": 0.25,
     "template_fit": 0.20,
     "visual_potential": 0.15,
     "source_quality": 0.10,
@@ -454,7 +459,18 @@ class TopicCandidate(BaseModel):
         default="", description="Short explanation of audience relevance."
     )
 
-    # --- 6 scoring dimensions (1-10 each) ---
+    # --- Idea-First Scoring Dimensions (New) ---
+    hook_potential_score: float = Field(default=0.0, ge=0, le=10)
+    novelty_score: float = Field(default=0.0, ge=0, le=10)
+    visual_fit_score: float = Field(default=0.0, ge=0, le=10)
+    freshness_score: float = Field(default=0.0, ge=0, le=10)
+
+    # --- Rich Metadata (New) ---
+    rationale: str = Field(default="", description="Deep why-interesting breakdown")
+    validation_confidence: str = Field(default="low", description="high/medium/low confidence")
+    score_breakdown: dict[str, float] = Field(default_factory=dict, description="Granular viewing of scoring metrics")
+
+    # --- Legacy 6 scoring dimensions (Kept for runtime compatibility) ---
     virality_score: float = Field(default=5.0, ge=1, le=10)
     data_feasibility_score: float = Field(default=5.0, ge=1, le=10)
     template_fit_score: float = Field(default=5.0, ge=1, le=10)
@@ -503,15 +519,36 @@ class TopicCandidate(BaseModel):
     def compute_final_score(self) -> float:
         """Deterministic Python-side weighted score calculation."""
         w = SCORING_WEIGHTS
-        self.final_score = round(
-            self.virality_score * w["virality_potential"]
-            + self.data_feasibility_score * w["data_feasibility"]
-            + self.template_fit_score * w["template_fit"]
-            + self.visual_potential_score * w["visual_potential"]
-            + self.source_quality_score * w["source_quality"]
-            + self.fallback_strength_score * w["fallback_strength"],
-            2,
-        )
+        
+        if self.hook_potential_score > 0:
+            # Ideation-first calculation
+            self.final_score = round(
+                self.hook_potential_score * w["hook_potential"]
+                + self.novelty_score * w["novelty"]
+                + self.visual_fit_score * w["visual_fit"]
+                + self.data_feasibility_score * w["data_feasibility"]
+                + self.freshness_score * w["freshness"],
+                2,
+            )
+            # Sync metadata representation
+            self.score_breakdown = {
+                "hook": self.hook_potential_score,
+                "novelty": self.novelty_score,
+                "visuals": self.visual_fit_score,
+                "data": self.data_feasibility_score,
+                "freshness": self.freshness_score,
+            }
+        else:
+            # Legacy calculation fallback (Queue items)
+            self.final_score = round(
+                self.virality_score * w["virality_potential"]
+                + self.data_feasibility_score * w["data_feasibility"]
+                + self.template_fit_score * w["template_fit"]
+                + self.visual_potential_score * w["visual_potential"]
+                + self.source_quality_score * w["source_quality"]
+                + self.fallback_strength_score * w["fallback_strength"],
+                2,
+            )
         return self.final_score
 
 

@@ -59,6 +59,34 @@ SFX_LIBRARY: Dict[str, SfxDef] = {
     "node_reveal":  SfxDef(["scan_beep_01.wav", "scan_beep_02.wav"], vol=0.58),
     "winner_sting": SfxDef(["success_chime_01.wav"], vol=0.85),
     "outro_swipe":  SfxDef(["ui_whoosh_soft_01.wav"], vol=0.70),
+
+    # ======================================================
+    # ✅ TEMPLATE ALIASES (added from full template audit)
+    # All point to nearest existing file by semantic intent.
+    # ======================================================
+
+    # bar_chart / scan_race
+    "bar_grow":     SfxDef(["ui_transition_sweep_01.wav"], vol=0.68),
+    "title_in":     SfxDef(["riser_short_01.wav"], vol=0.78),
+
+    # sort_card
+    "cards_in":     SfxDef(["ui_whoosh_short_01.wav", "ui_whoosh_short_02.wav"], vol=0.68),
+    "card_in":      SfxDef(["ui_whoosh_short_01.wav"], vol=0.65),
+    "scan_start":   SfxDef(["scan_beep_01.wav"], vol=0.58),
+
+    # vs_card
+    "round_in":     SfxDef(["impact_hit_soft_01.wav"], vol=0.75),
+    "round_win":    SfxDef(["success_chime_01.wav"], vol=0.80),
+    "round_tie":    SfxDef(["ui_tick_01.wav", "ui_tick_02.wav"], vol=0.55),
+    "winner_hit":   SfxDef(["impact_hit_soft_01.wav"], vol=0.82),
+    "winner_banner":SfxDef(["success_chime_01.wav"], vol=0.85),
+    "winner_announcement": SfxDef(["success_chime_01.wav"], vol=0.85),
+
+    # geo_universal / sort_card UI
+    "ui_in":        SfxDef(["ui_click_01.wav"], vol=0.60),
+    "spine_in":     SfxDef(["ui_transition_sweep_01.wav"], vol=0.68),
+    "meter_move":   SfxDef(["scan_beep_01.wav", "scan_beep_02.wav"], vol=0.52),
+    "score_tick":   SfxDef(["ui_tick_01.wav", "ui_tick_02.wav"], vol=0.50),
 }
 
 def resolve(event: str, count_index: int = 0) -> Optional[dict]:

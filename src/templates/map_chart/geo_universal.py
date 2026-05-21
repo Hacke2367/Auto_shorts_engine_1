@@ -17,39 +17,21 @@ from src.utils import IntroManager, get_safe_frame, make_floating_particles
 from src.geo_data.map_coords import COORDINATES
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp
-from src.sync.retention import hold_breathing, banner_scan_hold
-
-# ============================================================
-# SFX MARKS WRITER
-# ============================================================
-import json
-
-class SFXMarksWriter:
-    def __init__(self, scene, job_dir, template_id="geo_universal", out_rel="output/sfx_marks.json"):
-        self.scene = scene
-        self.template_id = template_id
-        self.out_path = Path(str(job_dir)) / out_rel if job_dir else None
-        self.marks = []
-
-    def mark(self, key: str, gain_db: float = 0.0, offset: float = 0.0, meta: dict | None = None):
-        t = float(self.scene.time) + float(offset)
-        ev = {"t": t, "key": str(key), "gain_db": float(gain_db)}
-        if meta:
-            ev["meta"] = meta
-        self.marks.append(ev)
-
-    def flush(self):
-        if self.out_path is None:
-            return
-        self.out_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "version": 1,
-            "template_id": self.template_id,
-            "marks": self.marks,
-        }
-        with self.out_path.open("w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        print(f"[OK] Wrote sfx_marks.json: {self.out_path} ({len(self.marks)} marks)")
+from src.sfx.engine import SFXEngine
+try:
+    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention_accents import retain_accent_geo
+except Exception:
+    def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
+        if seconds > 0:
+            scene.wait(seconds)
+    def register_template_accent(scene, fn):
+        pass
+    def retain_accent_geo(scene, focus, seconds, **kw):
+        return lambda: None
+    def banner_scan_hold(scene, banner, seconds: float, color=None):
+        if seconds > 0:
+            scene.wait(seconds)
 
 
 # ===========================
@@ -191,19 +173,15 @@ class GeoUniversalMap(Scene):
         timeline_src = job.get("timeline", {}) if isinstance(job.get("timeline"), dict) else {}
         TL = Timeline.from_dict(timeline_src, defaults=_timeline_defaults(hook_seg, setup_seg, node_segments, winner_seg, outro_seg))
 
-        sfx = SFXMarksWriter(self, job_dir, template_id="geo_universal")
-
-        def sfx_mark(key: str, offset: float = 0.0, meta: dict | None = None):
-            try:
-                sfx.mark(key, offset=offset, meta=meta)
-            except Exception:
-                pass
-
-        self.sfx_mark = sfx_mark
+        sfx = SFXEngine(self, str(job_dir) if job_dir else str(Path.cwd()))
 
         # ✅ FIX: Anchor global start time before intro plays
         # This ensures the intro duration is absorbed by the hook segment, maintaining sync.
         global_start_t0 = float(self.time)
+        register_template_accent(
+            self,
+            lambda s, f, t: retain_accent_geo(s, f, t, ring_color="#00F0FF"),
+        )
 
         try:
             IntroManager.play_intro(
@@ -700,7 +678,7 @@ class GeoUniversalMap(Scene):
         act_sweep = clamp(t_hook * 0.15, 0.30, 0.65)
         act_map_in = clamp(t_hook * 0.35, 0.70, 1.25)
         
-        sfx_mark("map_intro", meta={"segment": hook_seg})
+        sfx.mark("map_intro", meta={"segment": hook_seg})
         self.play(FadeIn(ticker, shift=UP * 0.06, scale=0.99), run_time=act_ticker_in, rate_func=rf.ease_out_back)
 
         self.add(ticker_sweep)
@@ -772,7 +750,7 @@ class GeoUniversalMap(Scene):
             act_card = clamp(t_node * 0.25, 0.35, 0.65)
             act_meter = clamp(t_node * 0.15, 0.25, 0.45)
             
-            sfx_mark("node_reveal", meta={"segment": seg_name, "node": i})
+            sfx.mark("node_reveal", meta={"segment": seg_name, "node": i})
             glow, core = ln[0], ln[1]
 
             ping = Circle(radius=0.12).move_to(dot[2].get_center()).set_z_index(72)
@@ -938,7 +916,7 @@ class GeoUniversalMap(Scene):
 
             if winner_idx is not None and 0 <= winner_idx < len(all_cards):
                 ticker_set("Top signal detected: highlighting node…", animate=True)
-                sfx_mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
+                sfx.mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
 
                 winner = all_cards[winner_idx]
                 winner_dot = all_dots[winner_idx]
@@ -965,7 +943,7 @@ class GeoUniversalMap(Scene):
 
             winner_idx = _winner_compare_index() if mode == "COMPARE" else _winner_metric_index()
             if winner_idx is not None and 0 <= winner_idx < len(all_cards):
-                sfx_mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
+                sfx.mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
                 winner = all_cards[winner_idx]
                 winner_dot = all_dots[winner_idx]
                 self.play(winner.animate.scale(1.04), run_time=0.25, rate_func=rf.ease_out_cubic)
@@ -993,7 +971,7 @@ class GeoUniversalMap(Scene):
         # OUTRO
         outro_t0 = float(self.time)
         act_outro = clamp(TL.seg_total(outro_seg, 1.6) * 0.40, 0.40, 1.0)
-        sfx_mark("outro_swipe", meta={"segment": outro_seg})
+        sfx.mark("outro_swipe", meta={"segment": outro_seg})
         self.play(
             ticker_bg.animate.set_stroke(width=2.6, opacity=0.90),
             run_time=act_outro,
