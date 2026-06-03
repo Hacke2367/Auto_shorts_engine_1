@@ -1,0 +1,66 @@
+{
+  "job_id": "test_vs_card_n6",
+  "template_id": "vs_card",
+  "data_csv": "data/vs_data.csv",
+  "video": { "w": 1080, "h": 1920 },
+
+  "audio": {
+    "segments": [
+      { "name": "hook",    "path": "audio/hook.mp3" },
+      { "name": "setup",   "path": "audio/setup.mp3" },
+      { "name": "round_1", "path": "audio/round_1.mp3" },
+      { "name": "round_2", "path": "audio/round_2.mp3" },
+      { "name": "round_3", "path": "audio/round_3.mp3" },
+      { "name": "round_4", "path": "audio/round_4.mp3" },
+      { "name": "round_5", "path": "audio/round_5.mp3" },
+      { "name": "round_6", "path": "audio/round_6.mp3" },
+      { "name": "winner",  "path": "audio/winner.mp3" },
+      { "name": "outro",   "path": "audio/outro.mp3" }
+    ],
+    "order": ["hook", "setup", "round_1", "round_2", "round_3", "round_4", "round_5", "round_6", "winner", "outro"]
+  },
+
+  "timeline": {
+    "hook":    4.42,
+    "setup":   3.84,
+    "round_1": 4.80,
+    "round_2": 4.80,
+    "round_3": 4.91,
+    "round_4": 4.80,
+    "round_5": 4.80,
+    "round_6": 4.80,
+    "winner":  4.40,
+    "outro":   2.81
+  },
+
+  "gains":  { "gain_voice": 1.0, "gain_sfx": 1.0, "gain_bgm_db": -20.0 },
+  "sfx":    { "enabled": true, "gain": 1.0 },
+  "bgm": {
+    "enabled": false,
+    "mode": "per_segment",
+    "library_dir": "audio/bgm",
+    "default": { "path": "bgm_default.mp3", "gain_db": 0.0, "duck": true, "duck_amount": "strong" },
+    "segments": {},
+    "crossfade": 0.25
+  },
+  "mix": { "preset": "punchy", "duck_sfx": false },
+  "captions": {
+    "enabled": true,
+    "script": { "path": "script/script.json", "source_lang": "hi", "target_langs": ["en"] },
+    "render": {
+      "format": "ass",
+      "burn_in": false,
+      "style": { "preset": "modern_clean", "safe_margin_px": 80, "max_lines": 2 },
+      "tracks": [
+        { "lang": "hi", "mode": "reveal_words", "position": "bottom" },
+        { "lang": "en", "mode": "plain", "position": "above_bottom" }
+      ],
+      "highlight": { "enabled": false, "mode": "word_reveal" }
+    }
+  },
+  "output": {
+    "final_mp4": "output/final.mp4",
+    "subtitles_ass": "output/subtitles.ass",
+    "final_captioned_mp4": "output/final_captioned.mp4"
+  }
+}

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -89,7 +90,7 @@ Return a single JSON object with these exact fields:
 - hook_potential_score: Does the title naturally stop the scroll? 9-10=Instant curiosity, 1-2=Boring.
 - novelty_score: Is this a unique angle or overdone? 9-10=Fresh/surprising, 1-2=Cliché.
 - visual_fit_score: How beautifully does this map into the chosen template? 9-10=Perfect translation, 1-2=Forced.
-- data_feasibility_score: Based on the snippets, does structurable data actally exist? 9-10=Proven in evidence, 1-2=No evidence.
+- data_feasibility_score: Based on the snippets, does structurable data actually exist? 9-10=Proven in evidence, 1-2=No evidence.
 - freshness_score: Is this incredibly timely/relevant right now? 9-10=Trending today, 1-2=Outdated content.
 
 ## Rules
@@ -113,8 +114,6 @@ def _build_template_list() -> str:
         lines.append(f"- {t} (fallbacks: {fb_str})")
     return "\n".join(lines)
 
-
-import re
 
 def _strip_markdown_json(raw: str) -> str:
     """Robustly extract the first top-level JSON object using a brace parser."""
@@ -191,7 +190,7 @@ def _parse_scoring_response(
 
     # Option B: Python strictly assumes ownership of fallback_template
     # Prompt asks only for best_fit_template.
-    best_fit = str(data.get("best_fit_template", "")).strip().lower().replace("_", "-")
+    best_fit = str(data.get("best_fit_template", "")).strip().lower()
 
     if best_fit not in VALID_TEMPLATES:
         # Deterministic rejection: if best_fit doesn't exist, we do not guess
@@ -265,8 +264,9 @@ async def score_single_candidate(
     model_name = settings.gemini_model
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model_name}:generateContent?key={key}"
+        f"{model_name}:generateContent"
     )
+    _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
     template_list = _build_template_list()
     prompt = _SCORING_PROMPT_TEMPLATE.format(
@@ -279,7 +279,7 @@ async def score_single_candidate(
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "temperature": 0.1,
+            "temperature": settings.gemini_temperature,
             "maxOutputTokens": 1000,
         },
     }
@@ -289,7 +289,7 @@ async def score_single_candidate(
             async for attempt in _get_retry_policy():
                 with attempt:
                     t0 = time.perf_counter()
-                    async with session.post(url, json=payload) as resp:
+                    async with session.post(url, json=payload, headers=_gemini_headers) as resp:
                         elapsed = (time.perf_counter() - t0) * 1000
                         log_api_call(
                             log,

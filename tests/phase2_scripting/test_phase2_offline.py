@@ -71,37 +71,50 @@ def test_length_violations():
 def test_runner_idempotency():
     logger.info("--- Testing Offline Runner Idempotency ---")
     from src.agents.phase2_scripting.runner import run_scripting
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
         job_dir = tmp_path / "job_123"
-        job_dir.mkdir(parents=True)
-        
+        data_dir = job_dir / "data"
+        data_dir.mkdir(parents=True)
+
         dataset = get_dummy_dataset(num_rows=3)
-        dataset_path = job_dir / "bar_chart_dataset.json"
+        dataset_path = data_dir / "bar_chart_dataset.json"
         dataset_path.write_text(json.dumps(dataset.model_dump()))
-        
+
+        # Write a valid data_manifest.json so _validate_phase2_inputs passes.
+        manifest = {
+            "template_name": "bar_chart",
+            "dataset_relpath": "data/bar_chart_dataset.json",
+            "csv_relpath": "data/bar_chart_data.csv",
+            "audit_relpath": "data/sources_audit.json",
+        }
+        # Create stub CSV so the CSV existence check passes.
+        (data_dir / "bar_chart_data.csv").write_text("# stub\n")
+        (data_dir / "data_manifest.json").write_text(json.dumps(manifest))
+
         jm = MagicMock(spec=JobManager)
         jm.job_id = "job_123"
         jm.job_dir = job_dir
+        jm.data_dir = data_dir          # required by _validate_phase2_inputs
         jm.get_logger.return_value = logger
         jm.get_step_metadata.return_value = {"template": "bar_chart"}
-        
+
         with patch("src.agents.phase2_scripting.runner.write_script") as mock_ws:
             plan = build_segment_plan("job_123", "bar_chart", "savage_roast_master", dataset)
             good_xml = build_fake_monologue(plan, "savage_roast_master")
             parsed = parse_monologue(good_xml, plan)
             mock_ws.return_value = (parsed, "mock history")
-            
+
             # Initial run
             payload1 = asyncio.run(run_scripting(jm, persona_id="savage_roast_master"))
             assert mock_ws.call_count == 1
             assert (job_dir / "script" / "script.json").exists()
             logger.info("PASS: First run generated and saved script properly.")
-            
-            # Subsequence Cached Run
+
+            # Subsequent cached run
             payload2 = asyncio.run(run_scripting(jm, persona_id="savage_roast_master"))
-            assert mock_ws.call_count == 1  # Verify the mocked function was NOT arbitrarily called again
+            assert mock_ws.call_count == 1  # LLM must NOT be called again on cache hit
             assert payload1.inputs_hash == payload2.inputs_hash
             logger.info("PASS: Second run seamlessly hit cache returning identical outputs natively.")
 

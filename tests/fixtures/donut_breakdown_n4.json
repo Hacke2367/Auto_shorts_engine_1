@@ -1,0 +1,62 @@
+{
+  "job_id": "test_donut_breakdown_n4",
+  "template_id": "donut_breakdown",
+  "data_csv": "data/market_share.csv",
+  "video": { "w": 1080, "h": 1920 },
+
+  "audio": {
+    "segments": [
+      { "name": "hook",    "path": "audio/hook.mp3" },
+      { "name": "setup",   "path": "audio/setup.mp3" },
+      { "name": "slice_1", "path": "audio/slice_1.mp3" },
+      { "name": "slice_2", "path": "audio/slice_2.mp3" },
+      { "name": "slice_3", "path": "audio/slice_3.mp3" },
+      { "name": "slice_4", "path": "audio/slice_4.mp3" },
+      { "name": "winner",  "path": "audio/winner.mp3" },
+      { "name": "outro",   "path": "audio/outro.mp3" }
+    ],
+    "order": ["hook", "setup", "slice_1", "slice_2", "slice_3", "slice_4", "winner", "outro"]
+  },
+
+  "timeline": {
+    "hook":    3.10,
+    "setup":   3.24,
+    "slice_1": 2.60,
+    "slice_2": 2.60,
+    "slice_3": 2.67,
+    "slice_4": 2.60,
+    "winner":  3.64,
+    "outro":   2.10
+  },
+
+  "gains":  { "gain_voice": 1.0, "gain_sfx": 1.0, "gain_bgm_db": -20.0 },
+  "sfx":    { "enabled": true, "gain": 1.0 },
+  "bgm": {
+    "enabled": false,
+    "mode": "per_segment",
+    "library_dir": "audio/bgm",
+    "default": { "path": "bgm_default.mp3", "gain_db": 0.0, "duck": true, "duck_amount": "strong" },
+    "segments": {},
+    "crossfade": 0.25
+  },
+  "mix": { "preset": "punchy", "duck_sfx": false },
+  "captions": {
+    "enabled": true,
+    "script": { "path": "script/script.json", "source_lang": "hi", "target_langs": ["en"] },
+    "render": {
+      "format": "ass",
+      "burn_in": false,
+      "style": { "preset": "modern_clean", "safe_margin_px": 80, "max_lines": 2 },
+      "tracks": [
+        { "lang": "hi", "mode": "reveal_words", "position": "bottom" },
+        { "lang": "en", "mode": "plain", "position": "above_bottom" }
+      ],
+      "highlight": { "enabled": false, "mode": "word_reveal" }
+    }
+  },
+  "output": {
+    "final_mp4": "output/final.mp4",
+    "subtitles_ass": "output/subtitles.ass",
+    "final_captioned_mp4": "output/final_captioned.mp4"
+  }
+}

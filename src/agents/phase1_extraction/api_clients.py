@@ -17,6 +17,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import aiohttp
 from tenacity import (
@@ -87,56 +88,7 @@ async def tavily_search(
                 log.info("Tavily search found %d URLs for: %s", len(urls), query)
                 return urls
 
-    return []
-
-
-async def tavily_search_snippets(
-    query: str,
-    session: aiohttp.ClientSession,
-    log: logging.Logger,
-    max_results: int = 4,
-) -> list[dict[str, str]]:
-    """Search for relevant web pages and return raw snippets for Hypothesis Validation."""
-    url = "https://api.tavily.com/search"
-    payload = {
-        "api_key": settings.tavily_api_key.get_secret_value(),
-        "query": query,
-        "search_depth": "basic",
-        "max_results": max_results,
-        "include_raw_content": False,
-    }
-
-    async for attempt in _get_retry_policy():
-        with attempt:
-            t0 = time.perf_counter()
-            async with session.post(url, json=payload) as resp:
-                elapsed = (time.perf_counter() - t0) * 1000
-                log_api_call(
-                    log,
-                    service="tavily.search.validate",
-                    status_code=resp.status,
-                    retry_count=attempt.retry_state.attempt_number - 1,
-                    duration_ms=elapsed,
-                )
-                resp.raise_for_status()
-                data = await resp.json()
-
-                results = []
-                for res in data.get("results", []):
-                    title = res.get("title", "")
-                    content = res.get("content", "")
-                    url_str = res.get("url", "")
-                    if content and url_str:
-                        results.append({
-                            "title": title,
-                            "content": content,
-                            "url": url_str
-                        })
-                
-                log.info("Tavily validation found %d snippets for: %s", len(results), query)
-                return results
-
-    return []
+    raise RuntimeError(f"tavily_search exhausted retries for query: {query!r}")
 
 
 async def tavily_extract(
@@ -176,12 +128,21 @@ async def tavily_extract(
                     if not u or not text:
                         continue
 
-                    # Heuristic for Authority Tier
+                    # Heuristic for Authority Tier — suffix matching to avoid
+                    # false positives (e.g. "gov" matching "government-agency.com")
+                    parsed_url = urlparse(u)
+                    netloc = parsed_url.netloc.lower()
+
                     tier = AuthorityTier.SECONDARY
-                    lower_url = u.lower()
-                    if any(x in lower_url for x in settings.primary_authority_domains):
+                    if any(
+                        netloc == d or netloc.endswith(f".{d}")
+                        for d in settings.primary_authority_domains
+                    ):
                         tier = AuthorityTier.PRIMARY
-                    elif any(x in lower_url for x in settings.social_authority_domains):
+                    elif any(
+                        netloc == d or netloc.endswith(f".{d}")
+                        for d in settings.social_authority_domains
+                    ):
                         tier = AuthorityTier.SOCIAL
 
                     audits.append(
@@ -197,7 +158,7 @@ async def tavily_extract(
                 log.info("Tavily extract parsed %d documents.", len(audits))
                 return audits
 
-    return []
+    raise RuntimeError(f"tavily_extract exhausted retries for {len(urls)} URLs")
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +177,8 @@ async def gemini_extract(
     """Use Gemini to map unstructured text into strictly typed JSON rows."""
     key = settings.gemini_api_key.get_secret_value()
     model_name = settings.gemini_model
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+    _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
     ideal = template_spec.capacity.ideal
     maximum = template_spec.capacity.max
@@ -284,7 +246,7 @@ Do not hallucinate data. Only extract facts found in the texts. If sources disag
     async for attempt in _get_retry_policy():
         with attempt:
             t0 = time.perf_counter()
-            async with session.post(url, json=payload) as resp:
+            async with session.post(url, json=payload, headers=_gemini_headers) as resp:
                 elapsed = (time.perf_counter() - t0) * 1000
                 log_api_call(
                     log,
@@ -331,6 +293,12 @@ Do not hallucinate data. Only extract facts found in the texts. If sources disag
                             if brace_count == 0:
                                 json_str = raw_text[start_idx:i + 1]
                                 break
+
+                if brace_count != 0:
+                    raise ValueError(
+                        f"parse_failure: Unbalanced JSON braces in Gemini response "
+                        f"(open={brace_count}). First 200 chars: {raw_text[:200]!r}"
+                    )
 
                 try:
                     parsed = json.loads(json_str)

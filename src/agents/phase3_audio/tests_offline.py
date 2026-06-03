@@ -13,25 +13,9 @@ Run:
 python -m src.agents.phase3_audio.tests_offline
 """
 
-import io
-from pydub import AudioSegment as PydubAudioSegment
-from pydub.generators import Sine
-
+from src.agents.phase3_audio._offline_tts import _fake_tts
 from src.agents.phase3_audio.trimming import trim_silence, TrimConfig
 from src.agents.phase3_audio.duration import duration_ms
-
-
-def _fake_tts(text: str, fmt: str = "mp3") -> bytes:
-    # 18 cps baseline: 1 sec per ~18 chars; add 300ms head/tail silence.
-    secs = max(0.5, len(text) / 18.0)
-    tone = Sine(440).to_audio_segment(duration=int(secs * 1000)).apply_gain(-6)
-    head = PydubAudioSegment.silent(duration=300)
-    tail = PydubAudioSegment.silent(duration=300)
-    audio = head + tone + tail
-
-    buf = io.BytesIO()
-    audio.export(buf, format=fmt)
-    return buf.getvalue()
 
 
 def main() -> None:

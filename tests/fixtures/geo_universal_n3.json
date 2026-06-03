@@ -1,0 +1,59 @@
+{
+  "job_id": "test_geo_universal_n3",
+  "template_id": "geo_universal",
+  "data_csv": "data/map_data.csv",
+  "video": { "w": 1080, "h": 1920 },
+
+  "audio": {
+    "segments": [
+      { "name": "hook",   "path": "audio/hook.mp3" },
+      { "name": "setup",  "path": "audio/setup.mp3" },
+      { "name": "node_1", "path": "audio/node_1.mp3" },
+      { "name": "node_2", "path": "audio/node_2.mp3" },
+      { "name": "node_3", "path": "audio/node_3.mp3" },
+      { "name": "winner", "path": "audio/winner.mp3" },
+      { "name": "outro",  "path": "audio/outro.mp3" }
+    ],
+    "order": ["hook", "setup", "node_1", "node_2", "node_3", "winner", "outro"]
+  },
+
+  "timeline": {
+    "hook":   3.84,
+    "setup":  3.24,
+    "node_1": 2.53,
+    "node_2": 2.61,
+    "node_3": 2.57,
+    "winner": 2.84,
+    "outro":  2.23
+  },
+
+  "gains":  { "gain_voice": 1.0, "gain_sfx": 1.0, "gain_bgm_db": -20.0 },
+  "sfx":    { "enabled": true, "gain": 1.0 },
+  "bgm": {
+    "enabled": false,
+    "mode": "per_segment",
+    "library_dir": "audio/bgm",
+    "default": { "path": "bgm_default.mp3", "gain_db": 0.0, "duck": true, "duck_amount": "strong" },
+    "segments": {},
+    "crossfade": 0.25
+  },
+  "mix": { "preset": "punchy", "duck_sfx": false },
+  "captions": {
+    "enabled": true,
+    "script": { "path": "script/script.json", "source_lang": "hi", "target_langs": ["en"] },
+    "render": {
+      "format": "ass",
+      "burn_in": false,
+      "style": { "preset": "modern_premium", "safe_margin_px": 80, "max_lines": 2 },
+      "tracks": [
+        { "lang": "hi", "mode": "reveal_words", "position": "bottom" }
+      ],
+      "highlight": { "enabled": true, "mode": "word_karaoke" }
+    }
+  },
+  "output": {
+    "final_mp4": "output/final.mp4",
+    "subtitles_ass": "output/subtitles.ass",
+    "final_captioned_mp4": "output/final_captioned.mp4"
+  }
+}

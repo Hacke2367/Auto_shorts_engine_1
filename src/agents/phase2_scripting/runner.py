@@ -6,11 +6,15 @@ locates the dataset, builds the deterministic segment plan, validates
 idempotency, invokes the LLM writer, and persists the payload.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import aiohttp
 
@@ -155,7 +159,7 @@ def _build_inputs_hash(
 ) -> str:
     context_dir = PROJECT_ROOT / ".agent" / "context"
     personas_dir = context_dir / "personas"
-    sys_dir = personas_dir / "system_prompts"
+    sys_dir = personas_dir / "system_prompt"   # canonical path — matches llm_writer.py SYSTEM_PROMPTS_DIR
 
     parts = [
         _hash_file(dataset_path),
@@ -176,11 +180,16 @@ def _build_inputs_hash(
 
 
 def _load_dataset(dataset_path: Path, template_name: str) -> TemplateDataset:
-    raw = json.loads(dataset_path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(dataset_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Corrupt dataset JSON at {dataset_path}: {exc}"
+        ) from exc
 
     # Support both shapes:
     # 1) raw is dict with {template_name, rows:[...]}
-    # 2) raw is list of row dicts
+    # 2) raw is list of row dicts (legacy shape)
     if isinstance(raw, dict):
         return TemplateDataset.model_validate(raw)
 
@@ -197,9 +206,12 @@ async def run_scripting(
 ) -> ScriptPayload:
     step_name = "phase2_scripting"
     log = job_manager.get_logger()
-    log.info(f"Starting Phase 2 Scripting for Job {job_manager.job_id} using persona '{persona_id}'")
+    log.info(
+        "Starting Phase 2 Scripting for Job %s using persona '%s'",
+        job_manager.job_id, persona_id,
+    )
 
-    # BUG-C5: validate all Phase 1B outputs exist before doing any work
+    # Validate all Phase 1B outputs are present before any LLM work begins.
     _validate_phase2_inputs(job_manager, log)
 
     template_name = _resolve_phase1_template(job_manager)
@@ -211,7 +223,7 @@ async def run_scripting(
     effective_cps = plan.voice_cps
 
     inputs_hash = _build_inputs_hash(dataset_path, template_name, persona_id, effective_cps)
-    log.info(f"Phase 2 inputs hash: {inputs_hash}")
+    log.info("Phase 2 inputs hash: %s", inputs_hash)
 
     script_dir = job_manager.job_dir / "script"
     script_dir.mkdir(parents=True, exist_ok=True)
@@ -227,7 +239,7 @@ async def run_scripting(
                 return cached_payload
             log.info("Inputs hash mismatch. Invalidating stale cache.")
         except Exception as e:
-            log.warning(f"Failed to load cached script: {e}. Regenerating.")
+            log.warning("Failed to load cached script: %s. Regenerating.", e)
 
     timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -242,8 +254,32 @@ async def run_scripting(
         segments=final_segments,
     )
 
-    script_json_path.write_text(payload.model_dump_json(indent=2), encoding="utf-8")
-    (script_dir / "llm_raw.txt").write_text(raw_history, encoding="utf-8")
+    # Atomic write of script.json — temp file → os.replace prevents corrupt cache on crash.
+    _script_content = payload.model_dump_json(indent=2)
+    _json_fd, _json_tmp = tempfile.mkstemp(dir=str(script_dir), suffix=".tmp")
+    try:
+        with os.fdopen(_json_fd, "w", encoding="utf-8") as _f:
+            _f.write(_script_content)
+        os.replace(_json_tmp, str(script_json_path))
+    except BaseException:
+        try:
+            os.unlink(_json_tmp)
+        except OSError:
+            pass
+        raise
+
+    # Atomic write of llm_raw.txt audit file.
+    _raw_fd, _raw_tmp = tempfile.mkstemp(dir=str(script_dir), suffix=".tmp")
+    try:
+        with os.fdopen(_raw_fd, "w", encoding="utf-8") as _f:
+            _f.write(raw_history)
+        os.replace(_raw_tmp, str(script_dir / "llm_raw.txt"))
+    except BaseException:
+        try:
+            os.unlink(_raw_tmp)
+        except OSError:
+            pass
+        raise
 
     job_manager.mark_step_completed(
         step_name,

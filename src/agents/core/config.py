@@ -5,7 +5,7 @@ Loads top-level API credentials.
 Ensures zero hallucination/blind-spots by crashing early if keys are missing.
 """
 
-import os
+from functools import lru_cache
 from pathlib import Path
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -68,5 +68,27 @@ class SystemSettings(BaseSettings):
     )
 
 
-# Instantiate globally. Will raise ValidationError immediately if keys are missing.
-settings = SystemSettings()
+@lru_cache(maxsize=1)
+def get_settings() -> SystemSettings:
+    """Return the global settings singleton (created on first call, then cached).
+
+    Production usage::
+
+        from src.agents.core.config import get_settings
+        model = get_settings().gemini_model
+
+    Testing (no real API keys needed)::
+
+        from unittest.mock import MagicMock
+        monkeypatch.setattr("src.agents.core.config.get_settings", lambda: MagicMock(...))
+
+    To force a reload (e.g. after env var change in tests)::
+
+        get_settings.cache_clear()
+    """
+    return SystemSettings()
+
+
+# Backward-compatibility alias — all existing ``from src.agents.core.config import settings``
+# imports continue to work without any changes. New code should prefer get_settings().
+settings: SystemSettings = get_settings()

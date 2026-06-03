@@ -19,6 +19,7 @@ from typing import Any
 import yaml
 import aiohttp
 
+from src.agents.core.config import settings
 from src.agents.phase3_audio.contracts import (
     AudioSegment,
     AudioSynthesisSettings,
@@ -27,13 +28,14 @@ from src.agents.phase3_audio.contracts import (
 )
 from src.agents.phase3_audio.tts_client import synthesize
 from src.agents.phase3_audio.trimming import trim_silence
-from src.agents.phase3_audio.duration import duration_ms, duration_sec
+from src.agents.phase3_audio.duration import duration_both
 from src.agents.phase3_audio.packager import (
     update_script_with_audio,
     build_job_json,
     atomic_write_json,
+    atomic_write_bytes,
 )
-from src.agents.phase3_audio.tests_offline import _fake_tts
+from src.agents.phase3_audio._offline_tts import _fake_tts
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +111,7 @@ def _compute_inputs_hash(
     script_stable = copy.deepcopy(script_payload)
     script_stable.pop("phase3_inputs_hash", None)
 
-    # remove Phase3-derived segment fields
+    # Remove Phase3-derived segment fields so they don't affect the hash.
     for s in script_stable.get("segments", []):
         s.pop("audio_relpath", None)
         s.pop("duration_ms", None)
@@ -126,7 +128,6 @@ def _compute_inputs_hash(
 
 
 async def _process_segment(
-    idx: int,
     seg_dict: dict[str, Any],
     tts_settings: AudioSynthesisSettings,
     session: aiohttp.ClientSession | None,
@@ -136,7 +137,7 @@ async def _process_segment(
     timing_registry: dict[str, Any],
     is_offline: bool,
     skip_underrun: bool,
-) -> tuple[int, AudioSegment]:
+) -> AudioSegment:
     """Lifecycle of one segment: synthesize -> trim -> duration -> persist -> underrun gate."""
     tag = seg_dict["tag"]
     text = seg_dict["text"]
@@ -147,24 +148,23 @@ async def _process_segment(
 
     async with sem:
         if is_offline:
-            logger.info(f"[{tag}] Synthesizing OFFLINE tone wrapper...")
-            await asyncio.sleep(0)  # yield
+            logger.info("[%s] Synthesizing OFFLINE tone wrapper...", tag)
+            await asyncio.sleep(0)  # yield to event loop
             raw_bytes = _fake_tts(text)
         else:
             if session is None:
                 raise RuntimeError("HTTP session is required for online TTS mode.")
-            logger.info(f"[{tag}] Synthesizing via ElevenLabs API...")
+            logger.info("[%s] Synthesizing via ElevenLabs API...", tag)
             raw_bytes = await synthesize(text, tts_settings, session)
 
     trimmed_bytes = trim_silence(raw_bytes)
-    d_ms = duration_ms(trimmed_bytes)
-    d_sec = duration_sec(trimmed_bytes)
+    # Decode once — avoids two separate ffmpeg passes per segment.
+    d_ms, d_sec = duration_both(trimmed_bytes)
 
-    # Persist segment audio deterministically
-    with open(audio_file_path, "wb") as f:
-        f.write(trimmed_bytes)
+    # Persist segment audio atomically (temp file → os.replace prevents corrupt cache on crash).
+    atomic_write_bytes(audio_file_path, trimmed_bytes)
 
-    # Under-run check
+    # Under-run check: ensure synthesized duration meets the visual minimum.
     base_tag = _get_base_tag(safe_tag)
     mnd = float(timing_registry.get(template_name, {}).get(base_tag, 0.0))
     if (not skip_underrun) and d_sec < mnd:
@@ -172,10 +172,10 @@ async def _process_segment(
             f"Segment [{tag}] spoke {d_sec}s but visual MND requires {mnd}s. REPAIR NEEDED."
         )
     if skip_underrun and d_sec < mnd:
-        logger.warning(f"[SKIP_UNDERRUN=1] {tag} under-runs MND: {d_sec}s < {mnd}s")
+        logger.warning("[SKIP_UNDERRUN=1] %s under-runs MND: %ss < %ss", tag, d_sec, mnd)
 
     rel_path = f"audio/{audio_file_name}"
-    return idx, AudioSegment(
+    return AudioSegment(
         tag=tag,
         text=text,
         audio_relpath=rel_path,
@@ -197,7 +197,7 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
     with open(script_path, "r", encoding="utf-8") as f:
         script_payload = json.load(f)
 
-    # BUG-C5: validate script.json structure before any TTS calls or cache checks
+    # Validate script.json structure before any TTS calls or cache checks.
     _validate_phase3_inputs(script_payload, script_path)
 
     job_id = script_payload["job_id"]
@@ -228,7 +228,7 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
                 files_intact = False
                 break
 
-            # BUG-C3: verify the file is non-empty and actually decodable.
+            # Verify the file is non-empty and actually decodable.
             # A 0-byte or truncated file from a prior failed write would pass
             # the existence check but crash Phase 4 during rendering.
             try:
@@ -237,7 +237,7 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
                     logger.warning("Cache bust: %s is 0 bytes.", expected_path.name)
                     files_intact = False
                     break
-                measured_ms = duration_ms(file_bytes)
+                measured_ms, _ = duration_both(file_bytes)
                 cached_ms = int(d_ms)
                 tolerance = max(100, int(cached_ms * 0.10))  # 10% or 100 ms floor
                 if abs(measured_ms - cached_ms) > tolerance:
@@ -288,14 +288,12 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
 
     tasks = []
     if is_offline:
-        session = None
-        for idx, s_dict in enumerate(segments_data):
+        for s_dict in segments_data:
             tasks.append(
                 _process_segment(
-                    idx,
                     s_dict,
                     tts_settings,
-                    session,
+                    None,   # no HTTP session in offline mode
                     audio_dir,
                     sem,
                     template_name,
@@ -304,14 +302,16 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
                     skip_underrun,
                 )
             )
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        errors = [r for r in results if isinstance(r, BaseException)]
+        if errors:
+            raise errors[0]
     else:
-        timeout = aiohttp.ClientTimeout(total=300)
+        timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            for idx, s_dict in enumerate(segments_data):
+            for s_dict in segments_data:
                 tasks.append(
                     _process_segment(
-                        idx,
                         s_dict,
                         tts_settings,
                         session,
@@ -323,14 +323,17 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
                         skip_underrun,
                     )
                 )
-            results = await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            errors = [r for r in results if isinstance(r, BaseException)]
+            if errors:
+                raise errors[0]
 
-    results.sort(key=lambda x: x[0])
-    completed_segments = [seg for _, seg in results]
+    # asyncio.gather preserves input order — no sort needed.
+    completed_segments: list[AudioSegment] = list(results)
 
-    # BUG-C4: fail-fast before writing anything if synthesis is incomplete.
-    # asyncio.gather propagates the first exception, but a defensive count check
-    # catches any scenario where a result was silently dropped.
+    # Fail-fast before writing anything if synthesis is incomplete.
+    # asyncio.gather with return_exceptions=True returns all results; this defensive
+    # count check catches any scenario where a result was silently dropped.
     if len(completed_segments) != len(segments_data):
         raise RuntimeError(
             f"Phase 3 synthesis incomplete: expected {len(segments_data)} segments, "
