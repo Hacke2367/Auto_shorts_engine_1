@@ -17,17 +17,22 @@ Workflow (Idea-First):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
 import re
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import aiohttp
+from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.retry import standard_retry_policy
 from src.agents.core.logger import timed_operation, log_api_call
 from src.agents.core.models import (
     DiscoveryBatch,
@@ -67,11 +72,13 @@ async def _ideate_hypotheses(
 ) -> list[str]:
     """Use Gemini to brainstorm novel topic ideas before we search the web."""
     key = settings.gemini_api_key.get_secret_value()
-    model_name = settings.gemini_model
+    cfg = APP_CONFIG.llm.discovery_ideation
+    model_name = cfg.model
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model_name}:generateContent?key={key}"
+        f"{model_name}:generateContent"
     )
+    _headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
     niche_context = f"Please focus exclusively on this niche/theme: '{niche_hint}'" if niche_hint else "Focus on broad general internet trends, business, tech, and pop culture."
 
@@ -80,37 +87,39 @@ async def _ideate_hypotheses(
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "temperature": 0.9,
-            "maxOutputTokens": 1000,
+            "temperature": cfg.temperature,
+            "maxOutputTokens": cfg.max_output_tokens,
         },
     }
 
     try:
-        t0 = time.perf_counter()
-        async with session.post(url, json=payload) as resp:
-            elapsed = (time.perf_counter() - t0) * 1000
-            log_api_call(
-                log,
-                service="gemini.ideate",
-                status_code=resp.status,
-                retry_count=0,
-                duration_ms=elapsed,
-            )
-            resp.raise_for_status()
-            data = await resp.json()
-            raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-            
-            # Simple brace extraction if it got markdown wrapped
-            match = re.search(r'\[.*\]', raw_text, re.DOTALL)
-            if match:
-                raw_text = match.group(0)
-                
-            ideas = json.loads(raw_text)
-            if isinstance(ideas, list) and all(isinstance(x, str) for x in ideas):
-                return [x.strip() for x in ideas if x.strip()]
-            return []
+        async for attempt in standard_retry_policy():
+            with attempt:
+                t0 = time.perf_counter()
+                async with session.post(url, json=payload, headers=_headers) as resp:
+                    elapsed = (time.perf_counter() - t0) * 1000
+                    log_api_call(
+                        log,
+                        service="gemini.ideate",
+                        status_code=resp.status,
+                        retry_count=attempt.retry_state.attempt_number - 1,
+                        duration_ms=elapsed,
+                    )
+                    resp.raise_for_status()
+                    data = await resp.json()
+                    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+
+                    # Simple brace extraction if it got markdown wrapped
+                    match = re.search(r'\[.*\]', raw_text, re.DOTALL)
+                    if match:
+                        raw_text = match.group(0)
+
+                    ideas = json.loads(raw_text)
+                    if isinstance(ideas, list) and all(isinstance(x, str) for x in ideas):
+                        return [x.strip() for x in ideas if x.strip()]
+                    return []
     except Exception as e:
-        log.warning("Failed to ideate hypotheses: %s", e)
+        log.warning("Failed to ideate hypotheses after retries: %s", e)
         return []
 
 
@@ -181,7 +190,6 @@ async def run_discovery(
             log=log,
         )
 
-        # ---------------- ADD THIS BLOCK ----------------
         # -- 4.5 Post-Search Archive Filter --
         # Tavily might return articles with titles that accidentally match old videos
         novel_raw_candidates = []
@@ -204,7 +212,6 @@ async def run_discovery(
             )
 
         # -- 5. Score Candidates --
-        # CHANGE raw_candidates to novel_raw_candidates here
         scored = await score_candidates_batch(
             raw_candidates=novel_raw_candidates,
             session=session,
@@ -323,10 +330,19 @@ async def run_discovery(
             returned_candidate_count=len(top_candidates),
         )
 
-        candidates_path.write_text(
-            batch.model_dump_json(indent=2),
-            encoding="utf-8",
-        )
+        # Atomic write of candidates.json
+        _batch_content = batch.model_dump_json(indent=2)
+        _batch_fd, _batch_tmp = tempfile.mkstemp(dir=str(output_dir), suffix=".tmp")
+        try:
+            with os.fdopen(_batch_fd, "w", encoding="utf-8") as _f:
+                _f.write(_batch_content)
+            os.replace(_batch_tmp, str(candidates_path))
+        except BaseException:
+            try:
+                os.unlink(_batch_tmp)
+            except OSError:
+                pass
+            raise
         log.info("Saved candidates.json to %s", candidates_path)
 
         # Persist raw_candidates.json for transparency/audit of what search returned

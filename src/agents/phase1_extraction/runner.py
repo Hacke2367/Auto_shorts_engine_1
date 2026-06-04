@@ -19,6 +19,8 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 try:
@@ -28,7 +30,7 @@ except ImportError:
 
 import aiohttp
 
-from src.agents.core.config import settings
+from src.agents.core.config import APP_CONFIG
 from src.agents.core.job_manager import JobManager
 from src.agents.core.logger import timed_operation
 from src.agents.core.models import (
@@ -56,6 +58,30 @@ MIN_USABLE_ROWS: int = 2    # Minimum rows after cleaning
 _MND_SEC_PENDING: dict[str, float] = {"_phase2_pending": 0.0}
 
 
+def _write_data_manifest(job_manager: "JobManager", manifest_data: dict) -> None:
+    """Write extraction data manifest atomically to the job's data directory.
+
+    Extraction-phase concern only — intentionally NOT on JobManager (SRP).
+    Uses the same temp-file → os.replace pattern as job_manager._write_state.
+    """
+    data_dir = job_manager.data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = data_dir / "data_manifest.json"
+
+    fd, tmp_path = tempfile.mkstemp(dir=str(data_dir), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(manifest_data, f, indent=2)
+        os.replace(tmp_path, str(manifest_path))
+        job_manager.get_logger().info("Generated stable data_manifest.json contract.")
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def _build_template_spec(template_name: str) -> TemplateSpec:
     """Build a TemplateSpec on the fly from models.py definitions.
 
@@ -74,7 +100,7 @@ def _build_template_spec(template_name: str) -> TemplateSpec:
 
 
 def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> None:
-    """Export the TemplateDataset to CSV for the Manim engine."""
+    """Export the TemplateDataset to CSV for the Manim engine (atomic write)."""
     if not dataset.rows:
         return
 
@@ -92,20 +118,29 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
 
     headers = list(dataset.rows[0].model_dump().keys())
 
-    with path.open("w", newline="", encoding="utf-8") as f:
-        # Write Meta Tags
-        if dataset.template_name == "scan_race":
-            for k, v in combined_meta.items():
-                f.write(f"#{k}={v}\n")
-        else:
-            if combined_meta:
-                meta_line = ", ".join(f"{k}={v}" for k, v in combined_meta.items())
-                f.write(f"# {meta_line}\n")
-                
-        writer = csv.DictWriter(f, fieldnames=headers)
-        writer.writeheader()
-        for row in dataset.rows:
-            writer.writerow(row.model_dump())
+    # Write to temp file then atomically replace
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8") as f:
+            # Write Meta Tags
+            if dataset.template_name == "scan_race":
+                for k, v in combined_meta.items():
+                    f.write(f"#{k}={v}\n")
+            else:
+                if combined_meta:
+                    meta_line = ", ".join(f"{k}={v}" for k, v in combined_meta.items())
+                    f.write(f"# {meta_line}\n")
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            for row in dataset.rows:
+                writer.writerow(row.model_dump())
+        os.replace(tmp_path, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     log.info("Saved CSV tags and data to %s", path.name)
 
@@ -224,18 +259,19 @@ async def run_extraction(
     if fallback and fallback in VALID_TEMPLATES and fallback != best_fit:
         attempts.append({"template": fallback, "type": "fallback"})
         
-    timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
-    
     # Track overarching failure reason
     last_error = "Unknown error"
-    
+
     with timed_operation(log, step_name, topic=topic):
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            for idx, attempt in enumerate(attempts, 1):
-                t_name = attempt["template"]
-                t_type = attempt["type"]
-                
-                log.info("--- Starting Extraction Attempt %d/%d (%s: %s) ---", idx, len(attempts), t_type, t_name)
+        for idx, attempt in enumerate(attempts, 1):
+            t_name = attempt["template"]
+            t_type = attempt["type"]
+
+            log.info("--- Starting Extraction Attempt %d/%d (%s: %s) ---", idx, len(attempts), t_type, t_name)
+
+            # Each attempt gets its own full timeout budget
+            timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 
                 if t_name not in VALID_TEMPLATES:
                     log.error("Attempt failed: %s is not a valid template.", t_name)
@@ -315,7 +351,19 @@ async def run_extraction(
                 trail.save_to_file(attempt_dir)
 
                 json_path = attempt_dir / f"{t_name}_dataset.json"
-                json_path.write_text(dataset.model_dump_json(indent=2), encoding="utf-8")
+                # Atomic write: temp file → os.replace to prevent partial writes on crash
+                _json_content = dataset.model_dump_json(indent=2)
+                _json_fd, _json_tmp = tempfile.mkstemp(dir=str(attempt_dir), suffix=".tmp")
+                try:
+                    with os.fdopen(_json_fd, "w", encoding="utf-8") as _f:
+                        _f.write(_json_content)
+                    os.replace(_json_tmp, str(json_path))
+                except BaseException:
+                    try:
+                        os.unlink(_json_tmp)
+                    except OSError:
+                        pass
+                    raise
 
                 csv_path = attempt_dir / f"{t_name}_data.csv"
                 _write_csv(dataset, csv_path, log)
@@ -333,7 +381,7 @@ async def run_extraction(
                     "dataset_relpath": f"{rel_dir}/{t_name}_dataset.json",
                     "audit_relpath": f"{rel_dir}/sources_audit.json"
                 }
-                job_manager.write_data_manifest(manifest)
+                _write_data_manifest(job_manager, manifest)
 
                 # -- 7. Mark Job Completed --
                 job_manager.mark_step_completed(
@@ -342,7 +390,7 @@ async def run_extraction(
                         "topic": topic,
                         "template": t_name,
                         "attempt_type": t_type,
-                        "attempt_num": idx,   # BUG-C2: store exact number; never guess on re-run
+                        "attempt_num": idx,   # store exact number for idempotent restart
                         "rows_extracted": len(dataset.rows),
                         "sources_audited": len(trail.sources),
                     },

@@ -1,0 +1,71 @@
+{
+  "job_id": "test_bar_chart_n7",
+  "template_id": "bar_chart",
+  "data_csv": "data/bar_data.csv",
+  "video": { "w": 1080, "h": 1920 },
+
+  "audio": {
+    "segments": [
+      { "name": "hook",   "path": "audio/hook.mp3" },
+      { "name": "setup",  "path": "audio/setup.mp3" },
+      { "name": "item_1", "path": "audio/item_1.mp3" },
+      { "name": "item_2", "path": "audio/item_2.mp3" },
+      { "name": "item_3", "path": "audio/item_3.mp3" },
+      { "name": "item_4", "path": "audio/item_4.mp3" },
+      { "name": "item_5", "path": "audio/item_5.mp3" },
+      { "name": "item_6", "path": "audio/item_6.mp3" },
+      { "name": "item_7", "path": "audio/item_7.mp3" },
+      { "name": "winner", "path": "audio/winner.mp3" },
+      { "name": "outro",  "path": "audio/outro.mp3" }
+    ],
+    "order": ["hook", "setup", "item_1", "item_2", "item_3", "item_4", "item_5", "item_6", "item_7", "winner", "outro"]
+  },
+
+  "timeline": {
+    "hook":   3.20,
+    "setup":  2.74,
+    "item_1": 2.60,
+    "item_2": 2.61,
+    "item_3": 2.60,
+    "item_4": 2.60,
+    "item_5": 2.74,
+    "item_6": 2.60,
+    "item_7": 2.60,
+    "winner": 3.81,
+    "outro":  1.80
+  },
+
+  "gains":  { "gain_voice": 1.0, "gain_sfx": 1.0, "gain_bgm_db": -20.0 },
+  "sfx":    { "enabled": true, "gain": 1.0 },
+  "bgm": {
+    "enabled": true,
+    "mode": "per_segment",
+    "library_dir": "audio/bgm",
+    "default": { "path": "bgm_default.mp3", "gain_db": 0.0, "duck": true, "duck_amount": "strong" },
+    "segments": {
+      "hook":   { "path": "bgm_hook.mp3",   "gain_db": 0.0, "duck": true,  "duck_amount": "strong" },
+      "winner": { "path": "bgm_winner.mp3", "gain_db": 0.0, "duck": false, "duck_amount": "medium" },
+      "outro":  { "path": "bgm_outro.mp3",  "gain_db": 0.0, "duck": false, "duck_amount": "medium" }
+    },
+    "crossfade": 0.25
+  },
+  "mix": { "preset": "punchy", "duck_sfx": false },
+  "captions": {
+    "enabled": true,
+    "script": { "path": "script/script.json", "source_lang": "hi", "target_langs": ["en"] },
+    "render": {
+      "format": "ass",
+      "burn_in": true,
+      "style": { "preset": "modern_clean", "safe_margin_px": 80, "max_lines": 2 },
+      "tracks": [
+        { "lang": "hi", "mode": "reveal_words", "position": "above_bottom" }
+      ],
+      "highlight": { "enabled": true, "mode": "word_karaoke" }
+    }
+  },
+  "output": {
+    "final_mp4": "output/final.mp4",
+    "subtitles_ass": "output/subtitles.ass",
+    "final_captioned_mp4": "output/final_captioned.mp4"
+  }
+}

@@ -1,5 +1,5 @@
 # Project Overview — AutoShorts
-**Generated:** 2026-05-22 | **Source:** CHANGELOG_CODEX.md + PLANS.md + RUNBOOK.md + git history + codebase scan
+**Generated:** 2026-06-04 | **Source:** CHANGELOG_CODEX.md + CODE_REVIEW files + REFACTOR_PLAN files + git history + test run
 
 ---
 
@@ -12,7 +12,7 @@ It has two independent halves that share `jobs/<job_id>/` as their handoff bus:
 ## Tech Stack
 - **Python 3.11+** · Manim (scene rendering) · FFmpeg (audio/video mixing)
 - **LLM**: Gemini (ideation, scripting) · **Search**: Tavily (topic evidence)
-- **Audio TTS**: ElevenLabs (Phase 3) · **Schema**: Pydantic v2
+- **Audio TTS**: ElevenLabs (Phase 3) · **Schema**: Pydantic v2 · **State machine**: LangGraph
 - **Testing**: pytest + offline fakes (no API keys needed for most tests)
 
 ---
@@ -39,90 +39,91 @@ It has two independent halves that share `jobs/<job_id>/` as their handoff bus:
 
 **Sync / Retention Layer (`src/sync/`)**
 - `Timeline` — budget-tracking with overrun warnings
-- `hold_breathing` — 4-layer fail-safe hold: Living Data glow, Confidence Tick, Narrative Cursor, Template Accent
-- 7 per-template accent functions in `retention_accents.py`
-- `job_config.py` — Pydantic v2 schema with cross-field validators (audio alignment + timeline coverage)
-- Technical Refactor Phases 0–3 completed: HUD telemetry, delta-time sync standard, ghost padding loops, visual audit
+- `hold_breathing` — 4-layer fail-safe hold with per-template retention accents
+- Technical Refactor Phases 0–3 completed: HUD telemetry, delta-time sync, ghost padding loops, visual audit
 
 **Captions Pipeline (`src/captions/`)**
 - ASS subtitle generation — plain / reveal_words / karaoke modes
-- `modern_clean` + `modern_premium` style presets with font fallback chain
-- Standalone `captions.py` CLI with `--burn`, `--force`, custom output paths
-- `timeline_resolver` — uses `job.timeline` with ffprobe fallback
+- `modern_clean` + `modern_premium` style presets
+- Standalone `captions.py` CLI with `--burn`
 
-**Tooling**
-- `tools/audio_durations.py` — strict segment mismatch detection, `--write-timeline` gate
-- `RUNBOOK.md` — complete command reference for every pipeline step
-- `src/sync/job_config.py` — Pydantic schema catches audio/timeline misalignment at load time
+**Data Pipeline (Phases 1–3) — Core + Agents Refactored**
+All four `src/agents/` modules have completed expert code review + refactor on branch `features/agentic_engine`:
 
-**Data Pipeline (Phases 1–3)**
-- Phase 1: Topic discovery (`src/agents/phase1_discovery/`) + Data extraction (`phase1_extraction/` + LangGraph)
-- Phase 2: Script generation (`phase2_scripting/`) with LLM + XML parsing
-- Phase 3: TTS synthesis (`phase3_audio/`) with offline e2e mode
-- Handoff: `final_handoff/handoff.py` converts pipeline output → `job.json` shape
-- CLI: `src/cli/autoshorts.py` (master) + `src/cli/phase1.py` (granular)
-- Tests: `tests/phase1/`, `tests/phase2_scripting/`, `tests/pipeline/` — all use fakes (no API keys)
+| Module | Review File | Refactor File | Status |
+|--------|-------------|---------------|--------|
+| `src/agents/core/` | `CODE_REVIEW_CORE.md` | `REFACTOR_PLAN_CORE.md` | ✅ Applied (15 items) |
+| `src/agents/phase1_*/` | `CODE_REVIEW_phase1.md` | `REFACTOR_PLAN_PHASE1.md` | ✅ Applied (20 items) |
+| `src/agents/phase2_scripting/` | `CODE_REVIEW_PHASE2.md` | *(inline)* | ✅ Applied |
+| `src/agents/phase3_audio/` | `CODE_REVIEW.md` | `REFACTOR_PLAN.md` | ✅ Applied (11 items) |
 
-**Code Quality (This Session — `features/polishing`)**
-- Expert code review of `src/sync/` and `src/captions/` completed → `CODE_REVIEW.md`
-- All review issues fixed across 11 files (no core logic changed):
-  - Critical NameError bug fixed (`styles.py` — missing `Path` import)
-  - `burn_in` default inconsistency fixed (`True` → `False`)
-  - `source_lang` default fixed (`"hi"` → `"en"`)
-  - Donut accent contract violation fixed (ghost copy instead of mutating focus)
-  - Key-phrase logic bug fixed in `hold_breathing`
-  - Schema validators added to `job_config.py` for audio alignment + timeline coverage
-  - Logging added across all silent `except` blocks
-  - subprocess timeout + stderr capture added
+Key fixes applied in `polish8` commit (`d040bcaf`):
+- `config.py` — module-level singleton replaced with `@lru_cache get_settings()` factory (testability fix)
+- `packager.py` — `atomic_write_bytes()` added; phase 3 runner now writes audio atomically
+- `_offline_tts.py` — fake TTS extracted out of test file (no longer pollutes root logger on import)
+- `runner.py` (phase3) — double ffmpeg decode per segment eliminated
+- Phase 1 — atomic writes, retry logic, timeout guards, URL dedup all applied
+- New test fixtures added: `tests/fixtures/` with n-variant JSON fixtures for all 7 templates
+
+**Tests**
+- Phase 2 scripting: 3/3 pass
+- Phase 1: 20/21 pass (1 known test fixture bug — see WIP below)
+- `runbook_agentic.md` created — agentic pipeline command reference
 
 ---
 
 ### 🔄 Currently Working On
 
-- **`features/polishing` branch** — Polish + code quality pass. Code review done, fixes applied. Pending: compile smoke + merge.
-- **Phase 1 pipeline flaw** — Known issue (commit: `"phase1 have flaw"`, `"phase 1 testing pending"`). Phase 1 agents (`src/agents/`) were modified in the last data-pipeline commit but testing is marked as incomplete. *(Inferred from git history)*
-- **B5 end-to-end smoke** — scan_race and geo_universal jobs have aligned scaffolds but full render verification (real audio + manim environment) is still pending per CHANGELOG_CODEX last entries.
+- **`features/agentic_engine` branch** — 3 commits ahead of `main` (`d040bcaf`, `feb7721b`, `1749b245`). Not yet merged.
+- **Phase 1 test failure** — `tests/phase1/test_discovery_runner.py::test_run_discovery_writes_candidates_json` fails with:
+  ```
+  ValidationError: Unknown template 'line_chart'
+  ```
+  Root cause: test fixture constructs `TopicCandidate(fallback_template="line_chart" if "line_chart" else "bar_chart")` — the ternary is always truthy, passing `"line_chart"` which is not in `VALID_TEMPLATES`. Fix: change to a valid template name (`"scan_race"` or `"bar_chart"`) in the test fixture.
 
 ---
 
 ### 📋 Planned / Not Started
 
-- **Translation support** — `translator.py` is a stub; `enabled=False` hardcoded in pipeline v1. Needs a provider integration.
-- **`pandas` removal from `scan_race`** — `scan_race.py` depends on `pandas` which caused a blocking install failure in the venv (noted in CHANGELOG Step B5-ADVANCE). Template should switch to stdlib CSV reading.
-- **`sort_card`, `vs_card`, `donut_breakdown` job scaffolds** — These three templates have no dedicated `jobs/` directory; they borrow `jobs/job_0001` for testing. Production job scaffolds not yet created.
-- **Manual render verification** — geo_universal, donut_breakdown, butterfly_chart final render check still listed as "Next step" in the last few CHANGELOG entries.
+- **Translation support** — `translator.py` is a stub; `enabled=False` hardcoded in pipeline. Needs a provider integration.
+- **`sort_card`, `vs_card`, `donut_breakdown` job scaffolds** — These three templates have no dedicated `jobs/` directory.
+- **Manual render verification** — geo_universal, donut_breakdown, butterfly_chart final render check still pending after refactors (render requires local manim env).
+- **Merge `features/agentic_engine` → `main`** — Pending test fix + smoke.
 
 ---
 
 ## Last Active Area
 
-`src/sync/` + `src/captions/` — Just finished expert code review + applied all fixes in this session (`features/polishing` branch). 11 files modified.
-
-Previously: `src/agents/` and `main.py` — Phase 1 pipeline flaw investigation (most recent data-pipeline commit).
+`src/agents/` (all phases) — Major refactor pass completed in `polish8` commit (2026-06-03). Expert code reviews done for all 4 agent modules; all 46 refactor items applied.
 
 ---
 
 ## Next Step (Inferred)
 
-**1. Run the compile smoke check** to verify today's fixes didn't break anything:
-```powershell
-python -m py_compile src/sync/job.py src/sync/timeline.py src/sync/job_config.py src/sync/retention_base.py src/sync/retention_accents.py
-python -m py_compile src/captions/pipeline.py src/captions/styles.py src/captions/ass_renderer.py src/captions/burn_in.py src/captions/script_loader.py src/captions/timeline_resolver.py src/captions/aligner.py src/captions/translator.py
+**1. Fix the Phase 1 test fixture (5 min):**
+```python
+# tests/phase1/test_discovery_runner.py ~line 63
+# Change:
+fallback_template="line_chart" if "line_chart" else "bar_chart"
+# To:
+fallback_template="scan_race"   # or any other VALID_TEMPLATES member
 ```
 
-**2. Do a fast smoke render** to confirm Phase 4 still works end-to-end:
+**2. Verify full test suite green:**
 ```powershell
-python main.py --job jobs/job_0001 --template bar_chart -q l --no_sfx
+python -m pytest tests/phase1 tests/phase2_scripting -v
 ```
 
-**3. Investigate the Phase 1 flaw** — check `src/agents/phase1_discovery/` and `src/agents/phase1_extraction/` for the issue referenced in commit `e57fe1b3`. Run:
+**3. Run pipeline smoke (offline mode, no API keys):**
 ```powershell
-python -m pytest tests/phase1 -v
+python -m src.agents.phase3_audio.offline_e2e
 ```
+
+**4. Merge `features/agentic_engine` → `dev` or `main`** when tests are clean.
 
 ---
 
 *Notes:*
-- *Template status for sort_card/vs_card/donut_breakdown inferred from absence of dedicated job scaffolds + no CHANGELOG entries for standalone job creation*
-- *Phase 1 "flaw" status inferred from git commit messages — no specific error log found*
-- *B5 smoke render blocking by environment (pandas/manim) noted in CHANGELOG; assumed resolvable in user's local env*
+- *Phase 1 test failure confirmed by live test run — root cause is test fixture, not production code*
+- *All refactor items status inferred from code inspection (get_settings, atomic_write_bytes, _offline_tts.py all confirmed present)*
+- *Render verification (geo_universal, butterfly_chart visual pass) still pending — requires local manim environment*

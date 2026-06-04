@@ -13,6 +13,10 @@ from typing import Dict, Any, List, Optional
 # Captions pipeline entrypoint
 from src.captions import run_captions_pipeline
 
+# Single source of truth for the voice silence-trim filter (shared with captions
+# timing so subtitles match the trimmed voice track exactly).
+from src.sync.audio_trim import SILENCE_TRIM_FILTER
+
 
 # Built-in fallback registry — used when templates.json is absent or unreadable.
 _BUILTIN_TEMPLATE_MAP: Dict[str, Dict[str, str]] = {
@@ -148,7 +152,7 @@ def concat_audio_ffmpeg(
         # Strip leading/trailing silence from each segment before concat.
         # Threshold -50dB, min silence duration 0.02s — removes dead-air gaps
         # between TTS clips without cutting into actual speech.
-        _SR = "silenceremove=start_periods=1:start_duration=0.02:start_threshold=-50dB:stop_periods=-1:stop_duration=0.02:stop_threshold=-50dB"
+        _SR = SILENCE_TRIM_FILTER
         trim_parts = ";".join([f"[{i}:a]{_SR}[tr{i}]" for i in range(n)])
         concat_inputs = "".join([f"[tr{i}]" for i in range(n)])
         filter_complex = f"{trim_parts};{concat_inputs}concat=n={n}:v=0:a=1[a]"
@@ -1065,6 +1069,7 @@ def main():
                 job_dir=job_dir,
                 ffmpeg=ffmpeg,
                 video_in=out_path,  # burn-in needs final muxed video
+                trim_silence=(not args.no_trim_silence),  # match the trimmed voice track
             )
             if isinstance(cap_res, dict):
                 if cap_res.get("ass_path"):

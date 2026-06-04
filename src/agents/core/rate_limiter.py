@@ -23,7 +23,7 @@ class TokenBucketRateLimiter:
             raise ValueError(f"RPM must be positive, got {rpm}.")
 
         self.capacity: float = float(rpm)
-        self.tokens: float = self.capacity  # START FULL: No artificial waiting  # Cold-start: only 1 token available
+        self.tokens: float = self.capacity  # Start full — no cold-start wait on first requests
         self.fill_rate: float = self.capacity / 60.0
         self.min_interval: float = 60.0 / self.capacity
         self.last_update: float = time.monotonic()
@@ -31,22 +31,60 @@ class TokenBucketRateLimiter:
         self._lock: asyncio.Lock = asyncio.Lock()
         self.pause_until: float = 0.0  # NEW: Global Circuit Breaker
 
+    # -- Observability (advisory reads — not lock-protected) -------------------
+
+    @property
+    def current_tokens(self) -> float:
+        """Snapshot of available tokens (advisory only — not lock-protected)."""
+        return self.tokens
+
+    @property
+    def is_paused(self) -> bool:
+        """True if the circuit breaker penalty is currently active."""
+        return time.monotonic() < self.pause_until
+
+    @property
+    def pause_remaining_seconds(self) -> float:
+        """Seconds remaining in the current circuit-breaker pause (0.0 if not paused)."""
+        return max(0.0, self.pause_until - time.monotonic())
+
+    # -- Core methods ----------------------------------------------------------
+
     async def apply_penalty(self, seconds: float = 60.0) -> None:
-        """Trigger a global pause for all requests."""
+        """Trigger a global pause for all requests (circuit breaker)."""
         async with self._lock:
             penalty_end = time.monotonic() + seconds
             if penalty_end > self.pause_until:
                 self.pause_until = penalty_end
 
-    async def acquire(self, tokens: int = 1) -> None:
+    async def acquire(self, tokens: int = 1, *, timeout: float | None = None) -> None:
+        """Acquire tokens from the bucket, blocking until they are available.
+
+        Args:
+            tokens: Number of tokens to acquire (must be <= capacity).
+            timeout: Maximum seconds to wait before raising ``asyncio.TimeoutError``.
+                     ``None`` (default) means wait indefinitely — original behaviour.
+
+        Raises:
+            ValueError: If ``tokens`` exceeds bucket capacity.
+            asyncio.TimeoutError: If ``timeout`` is set and the deadline passes.
+        """
         if tokens > self.capacity:
             raise ValueError(f"Cannot acquire {tokens} tokens.")
+
+        deadline: float | None = (time.monotonic() + timeout) if timeout is not None else None
 
         while True:
             async with self._lock:
                 now = time.monotonic()
 
-                # --- NEW: CIRCUIT BREAKER CHECK ---
+                # Hard deadline check — raise before sleeping again
+                if deadline is not None and now >= deadline:
+                    raise asyncio.TimeoutError(
+                        f"rate_limiter.acquire() timed out after {timeout}s"
+                    )
+
+                # --- CIRCUIT BREAKER CHECK ---
                 if now < self.pause_until:
                     wait_time = self.pause_until - now
                 else:
@@ -69,6 +107,10 @@ class TokenBucketRateLimiter:
                     token_wait = (tokens - self.tokens) / self.fill_rate if self.tokens < tokens else 0.0
                     interval_wait = (self.min_interval - time_since_last_grant) if not interval_ok else 0.0
                     wait_time = max(token_wait, interval_wait, 0.01)
+
+                    # Don't sleep past the deadline
+                    if deadline is not None:
+                        wait_time = min(wait_time, deadline - now)
 
             # Sleep OUTSIDE the lock
             await asyncio.sleep(wait_time)

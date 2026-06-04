@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import re
+import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -52,7 +53,8 @@ class ArchiveManager:
         self._saved_queue: list[QueuedTopic] = []
 
         self._load()
-        self.expire_stale_entries()  # ADDED: Instantly clean up garbage when system starts
+        # NOTE: expire_stale_entries() is NOT called here.
+        # Call it explicitly at session start via run_discovery or CLI.
 
     # ------------------------------------------------------------------
     # Public API
@@ -307,35 +309,82 @@ class ArchiveManager:
         return queue
 
     def _save(self) -> None:
-        """Persist archive to disk using an atomic write."""
-        payload: dict[str, Any] = {
-            "produced": {
-                k: v.model_dump(mode="json") for k, v in self._produced.items()
-            },
-            "rejected": {
-                k: v.model_dump(mode="json") for k, v in self._rejected.items()
-            },
-            "saved_queue": [
-                q.model_dump(mode="json") for q in self._saved_queue
-            ],
-        }
+        """Persist archive to disk using an atomic write with cross-process locking."""
+        lock_path = self._archive_path.with_suffix(".lock")
 
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(self._archive_path.parent),
-            suffix=".tmp",
-            prefix=".archive_",
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
-            os.replace(tmp_path, str(self._archive_path))
-        except BaseException as e:
-            logger.error("Atomic save of archive failed: %s", e)
+        if sys.platform == "win32":
+            import msvcrt
+
+            # Acquire exclusive advisory lock via msvcrt on Windows
+            lock_fd = open(lock_path, "wb")
             try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
+                # Lock first byte of the lock file exclusively (blocking)
+                msvcrt.locking(lock_fd.fileno(), msvcrt.LK_LOCK, 1)
+
+                # Re-read from disk to pick up changes made by another process
+                # while we were waiting for the lock
+                self._load()
+
+                payload: dict[str, Any] = {
+                    "produced": {k: v.model_dump(mode="json") for k, v in self._produced.items()},
+                    "rejected": {k: v.model_dump(mode="json") for k, v in self._rejected.items()},
+                    "saved_queue": [q.model_dump(mode="json") for q in self._saved_queue],
+                }
+
+                fd, tmp_path = tempfile.mkstemp(
+                    dir=str(self._archive_path.parent), suffix=".tmp", prefix=".archive_"
+                )
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        json.dump(payload, f, indent=2, ensure_ascii=False)
+                    os.replace(tmp_path, str(self._archive_path))
+                except BaseException as e:
+                    logger.error("Atomic save of archive failed: %s", e)
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+            finally:
+                try:
+                    msvcrt.locking(lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
+                except OSError:
+                    pass
+                lock_fd.close()
+        else:
+            import fcntl
+
+            lock_fd = open(lock_path, "w")
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+
+                # Re-read from disk to pick up changes made by another process
+                # while we were waiting for the lock
+                self._load()
+
+                payload = {
+                    "produced": {k: v.model_dump(mode="json") for k, v in self._produced.items()},
+                    "rejected": {k: v.model_dump(mode="json") for k, v in self._rejected.items()},
+                    "saved_queue": [q.model_dump(mode="json") for q in self._saved_queue],
+                }
+
+                fd, tmp_path = tempfile.mkstemp(
+                    dir=str(self._archive_path.parent), suffix=".tmp", prefix=".archive_"
+                )
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        json.dump(payload, f, indent=2, ensure_ascii=False)
+                    os.replace(tmp_path, str(self._archive_path))
+                except BaseException as e:
+                    logger.error("Atomic save of archive failed: %s", e)
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
 
 
 if __name__ == "__main__":

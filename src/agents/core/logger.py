@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -26,6 +27,16 @@ from typing import Any, Generator
 # Internal registry: prevents duplicate handlers on repeated setup calls
 # ---------------------------------------------------------------------------
 _INITIALISED_LOGGERS: dict[str, logging.Logger] = {}
+_REGISTRY_LOCK: threading.Lock = threading.Lock()  # Guards check-and-set on the registry
+
+# Standard logging.LogRecord attributes — excluded from the "extra" capture.
+# Defined once at module level to avoid re-allocating on every log record.
+_STANDARD_LOG_KEYS: frozenset[str] = frozenset({
+    "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
+    "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
+    "created", "msecs", "relativeCreated", "thread", "threadName",
+    "processName", "process", "message", "asctime",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -57,12 +68,8 @@ class _JSONLineFormatter(logging.Formatter):
         # Attach any structured extras the caller passed via ``extra={"data": ...}``
         extra_data: dict[str, Any] = {}
         # Ignore Python's internal logging keys, grab everything else automatically
-        standard_keys = {"name", "msg", "args", "levelname", "levelno", "pathname", "filename", "module", "exc_info",
-                         "exc_text", "stack_info", "lineno", "funcName", "created", "msecs", "relativeCreated",
-                         "thread", "threadName", "processName", "process", "message", "asctime"}
-
         for key, val in record.__dict__.items():
-            if key not in standard_keys and key != "job_id" and not key.startswith("_"):
+            if key not in _STANDARD_LOG_KEYS and key != "job_id" and not key.startswith("_"):
                 extra_data[key] = val
         if extra_data:
             entry["extra"] = extra_data
@@ -124,6 +131,9 @@ def setup_job_logger(
 ) -> logging.Logger:
     """Create (or retrieve) a logger for a specific pipeline job.
 
+    Thread-safe: multiple threads calling with the same ``job_id`` receive
+    the same logger without duplicate handlers (protected by ``_REGISTRY_LOCK``).
+
     Args:
         job_dir: Absolute path to the job directory. Created if missing.
         job_id: Unique job identifier (used as logger name suffix).
@@ -137,33 +147,57 @@ def setup_job_logger(
         Multiple calls with the same ``job_id`` return the **same** logger
         without adding duplicate handlers.
     """
-    if job_id in _INITIALISED_LOGGERS:
-        return _INITIALISED_LOGGERS[job_id]
+    with _REGISTRY_LOCK:
+        if job_id in _INITIALISED_LOGGERS:
+            return _INITIALISED_LOGGERS[job_id]
 
-    job_dir = Path(job_dir)
-    job_dir.mkdir(parents=True, exist_ok=True)
+        job_dir = Path(job_dir)
+        job_dir.mkdir(parents=True, exist_ok=True)
 
-    log_name = f"autoshorts.pipeline.{job_id}"
-    log = logging.getLogger(log_name)
-    log.setLevel(logging.DEBUG)  # handlers filter from here
-    log.propagate = False  # avoid duplicate output from root logger
+        log_name = f"autoshorts.pipeline.{job_id}"
+        log = logging.getLogger(log_name)
+        log.setLevel(logging.DEBUG)  # handlers filter from here
+        log.propagate = False  # avoid duplicate output from root logger
 
-    # --- File handler (JSON-lines) -----------------------------------------
-    log_file = job_dir / "pipeline_execution.log"
-    fh = logging.FileHandler(str(log_file), encoding="utf-8")
-    fh.setLevel(file_level)
-    fh.setFormatter(_JSONLineFormatter(job_id))
-    log.addHandler(fh)
+        # --- File handler (JSON-lines) -----------------------------------------
+        log_file = job_dir / "pipeline_execution.log"
+        fh = logging.FileHandler(str(log_file), encoding="utf-8")
+        fh.setLevel(file_level)
+        fh.setFormatter(_JSONLineFormatter(job_id))
+        log.addHandler(fh)
 
-    # --- Console handler (human-readable) ----------------------------------
-    ch = logging.StreamHandler()
-    ch.setLevel(console_level)
-    ch.setFormatter(_ConsoleFormatter())
-    log.addHandler(ch)
+        # --- Console handler (human-readable) ----------------------------------
+        ch = logging.StreamHandler()
+        ch.setLevel(console_level)
+        ch.setFormatter(_ConsoleFormatter())
+        log.addHandler(ch)
 
-    _INITIALISED_LOGGERS[job_id] = log
+        _INITIALISED_LOGGERS[job_id] = log
+
     log.info("Logger initialised — log file: %s", log_file)
     return log
+
+
+def teardown_job_logger(job_id: str) -> None:
+    """Close handlers and remove the logger for a completed job.
+
+    Call this when a job finishes to release its file descriptor.
+    Safe to call even if the logger was never initialised (no-op).
+
+    Args:
+        job_id: The same identifier passed to ``setup_job_logger``.
+    """
+    with _REGISTRY_LOCK:
+        log = _INITIALISED_LOGGERS.pop(job_id, None)
+        if log is None:
+            return
+
+    for handler in list(log.handlers):
+        try:
+            handler.close()
+        except Exception:
+            pass
+        log.removeHandler(handler)
 
 
 # ---------------------------------------------------------------------------
@@ -197,20 +231,22 @@ def timed_operation(
         yield
     except BaseException as exc:
         elapsed_ms = (time.perf_counter() - t0) * 1000
-        log.error(
-            "✖ FAILED %s after %.0fms — %s: %s",
-            operation_name,
-            elapsed_ms,
-            type(exc).__name__,
-            exc,
-            exc_info=True,
-            extra={
-                "operation": operation_name,
-                "duration_ms": elapsed_ms,
-                "error": str(exc),
-                **extra,
-            },
-        )
+        # Don't log controlled shutdowns (Ctrl+C, sys.exit()) as pipeline failures
+        if not isinstance(exc, (SystemExit, KeyboardInterrupt)):
+            log.error(
+                "✖ FAILED %s after %.0fms — %s: %s",
+                operation_name,
+                elapsed_ms,
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+                extra={
+                    "operation": operation_name,
+                    "duration_ms": elapsed_ms,
+                    "error": str(exc),
+                    **extra,
+                },
+            )
         raise
     else:
         elapsed_ms = (time.perf_counter() - t0) * 1000
@@ -243,7 +279,12 @@ def log_api_call(
         retry_count: How many retries were needed (0 = first attempt).
         duration_ms: Round-trip time in milliseconds.
     """
-    level = logging.INFO if 200 <= status_code < 400 else logging.WARNING
+    if 200 <= status_code < 400:
+        level = logging.INFO
+    elif status_code >= 500:
+        level = logging.ERROR      # Server-side failure — pipeline is in danger
+    else:
+        level = logging.WARNING    # 4xx — client error (auth, rate limit, etc.)
     log.log(
         level,
         "API %s → %d (retries=%d, %.0fms)",

@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 """AutoShorts Phase 3 Audio Engine — Contracts
 ==========================================
 Pydantic schemas and typed boundaries for Audio Synthesis and payload assembly.
 """
 
-from typing import List, Optional, Literal
+from datetime import datetime, timezone
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -51,13 +55,12 @@ class AudioSynthesisSettings(BaseModel):
     model_id: str = Field(..., description="Provider model ID.")
     output_format: str = Field(default="mp3_44100_128", description="ElevenLabs output_format string.")
 
-    stability: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    similarity_boost: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    style: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    speaker_boost: Optional[bool] = Field(default=None)
+    stability: float | None = Field(default=None, ge=0.0, le=1.0)
+    similarity_boost: float | None = Field(default=None, ge=0.0, le=1.0)
+    style: float | None = Field(default=None, ge=0.0, le=1.0)
+    speaker_boost: bool | None = Field(default=None)
 
     concurrency_limit: int = Field(default=3, ge=1, description="Bounded concurrency for synthesis (enforced by runner).")
-    rpm_limit: Optional[int] = Field(default=None, ge=1, description="Optional RPM limiter (enforced by runner).")
 
 
 class Phase3Payload(BaseModel):
@@ -65,7 +68,11 @@ class Phase3Payload(BaseModel):
     job_id: str = Field(..., description="ID mapping back to JobManager context.")
     template_name: str = Field(..., description="Visual template to be rendered.")
     persona_id: str = Field(..., description="Persona ID used.")
-    segments: List[AudioSegment] = Field(..., description="Ordered list of synthesized segments with durations.")
+    segments: list[AudioSegment] = Field(..., description="Ordered list of synthesized segments with durations.")
     tts_settings: AudioSynthesisSettings = Field(..., description="Synthesis parameters utilized.")
     under_run_retries_used: int = Field(default=0, ge=0, description="How many rewrite attempts occurred before passing MND gate.")
     inputs_hash: str = Field(..., description="Hash protecting idempotency from silent mutation.")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="UTC timestamp when this payload was assembled — aids cache-hit debugging.",
+    )

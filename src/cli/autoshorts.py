@@ -22,6 +22,7 @@ from src.agents.phase2_scripting.runner import run_scripting
 from src.agents.phase3_audio.runner import run_phase3
 from src.agents.phase3_audio.contracts import AudioSynthesisSettings
 from src.agents.final_handoff.handoff import run_handoff
+from src.agents.core.config import APP_CONFIG
 
 
 def get_bucket_name(template_name: str) -> str:
@@ -59,8 +60,7 @@ async def async_phase1_discover(args):
     from src.agents.phase1_discovery.discovery_runner import run_discovery
     import aiohttp
     import shutil
-    from src.agents.core.config import settings
-    
+
     jm = JobManager(template_name="auto")
     jm.initialize()
     out_dir = jm.discovery_dir
@@ -69,7 +69,7 @@ async def async_phase1_discover(args):
     log_cost(out_dir, "phase1", "discovery", "start")
     
     try:
-        timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
+        timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             await run_discovery(session, logger, out_dir, niche_hint=args.template)
             
@@ -543,10 +543,14 @@ def main():
     p_run.add_argument("--topic", help="Topic to extract (if dataset missing).")
     p_run.add_argument("--offline", action="store_true", help="Run Phase 3 offline.")
     p_run.add_argument("--skip-underrun", action="store_true", help="Skip Phase 3 bounds.")
-    p_run.add_argument("--voice-id", help="TTS Voice ID.")
-    p_run.add_argument("--model-id", help="TTS Model ID.")
-    p_run.add_argument("--output-format", default="mp3_44100_128", help="TTS Output format.")
-    p_run.add_argument("--concurrency", type=int, default=3, help="TTS Concurrent requests limit.")
+    p_run.add_argument("--voice-id", default=APP_CONFIG.tts.voice_id or None,
+                       help="TTS Voice ID (default: config.py APP_CONFIG.tts.voice_id).")
+    p_run.add_argument("--model-id", default=APP_CONFIG.tts.model_id or None,
+                       help="TTS Model ID (default: config.py APP_CONFIG.tts.model_id).")
+    p_run.add_argument("--output-format", default=APP_CONFIG.tts.output_format,
+                       help="TTS Output format (default: config.py APP_CONFIG.tts.output_format).")
+    p_run.add_argument("--concurrency", type=int, default=APP_CONFIG.tts.concurrency_limit,
+                       help="TTS Concurrent requests limit (default: config.py APP_CONFIG.tts.concurrency_limit).")
     p_run.add_argument("-q", "--quality", default="h", help="Manim render quality format (default: h).")
     p_run.set_defaults(func=cmd_run)
 

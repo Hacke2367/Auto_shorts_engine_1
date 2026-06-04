@@ -18,6 +18,7 @@ def run_captions_pipeline(
         job_dir: Path,
         ffmpeg: str,
         video_in: Optional[Path] = None,
+        trim_silence: bool = True,
 ) -> Dict[str, Optional[Path]]:
     """
     Returns:
@@ -53,9 +54,12 @@ def run_captions_pipeline(
     except Exception as e:
         raise RuntimeError(f"captions pipeline: failed to load script.json: {e}") from e
 
-    # 2) timeline segments (uses job.timeline or ffprobe fallback)
+    # 2) timeline segments — when trim_silence is on, measure the trimmed
+    # per-segment durations so captions match the final voice track exactly.
     try:
-        timeline_segments = resolve_timeline_segments(job=job, job_dir=job_dir, ffmpeg_path=ffmpeg)
+        timeline_segments = resolve_timeline_segments(
+            job=job, job_dir=job_dir, ffmpeg_path=ffmpeg, trim_silence=trim_silence
+        )
     except Exception as e:
         raise RuntimeError(f"captions pipeline: failed to resolve timeline: {e}") from e
 

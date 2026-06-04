@@ -8,7 +8,7 @@ Re-exports the three foundational modules for convenient imports::
 """
 
 from src.agents.core.job_manager import JobManager
-from src.agents.core.logger import log_api_call, setup_job_logger, timed_operation
+from src.agents.core.logger import log_api_call, setup_job_logger, teardown_job_logger, timed_operation
 from src.agents.core.models import (
     ArchiveEntry,
     AuditTrail,
@@ -29,7 +29,10 @@ from src.agents.core.models import (
     TemplateSpec,
     TopicCandidate,
     SCORING_WEIGHTS,
+    TEMPLATE_CAPACITIES,
     TEMPLATE_FALLBACKS,
+    TEMPLATE_META_KEYS,
+    TEMPLATE_ROW_MAP,
     VALID_TEMPLATES,
     VsCardRow,
 )
@@ -39,6 +42,7 @@ __all__ = [
     "JobManager",
     # Logger
     "setup_job_logger",
+    "teardown_job_logger",
     "timed_operation",
     "log_api_call",
     # Models — Audit
@@ -50,6 +54,9 @@ __all__ = [
     "TemplateSpec",
     "VALID_TEMPLATES",
     "TEMPLATE_FALLBACKS",
+    "TEMPLATE_META_KEYS",
+    "TEMPLATE_ROW_MAP",
+    "TEMPLATE_CAPACITIES",
     "SCORING_WEIGHTS",
     # Models — Data Rows
     "BarChartRow",

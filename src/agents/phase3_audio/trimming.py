@@ -14,14 +14,15 @@ Dependencies:
 """
 
 import io
-
+import logging
 from dataclasses import dataclass
-from typing import Tuple
 
 from pydub import AudioSegment as PydubAudioSegment
 from pydub.silence import detect_nonsilent
 
 from src.agents.phase3_audio.contracts import AudioTrimError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -44,13 +45,15 @@ def _compute_silence_thresh_dbfs(audio: PydubAudioSegment, cfg: TrimConfig) -> f
     return max(thresh, cfg.min_silence_threshold_dbfs)
 
 
-def _trim_bounds(audio: PydubAudioSegment, cfg: TrimConfig) -> Tuple[int, int]:
+def _trim_bounds(audio: PydubAudioSegment, cfg: TrimConfig) -> tuple[int, int]:
     thresh = _compute_silence_thresh_dbfs(audio, cfg)
     ranges = detect_nonsilent(
         audio,
         min_silence_len=cfg.min_silence_len_ms,
         silence_thresh=thresh,
-        seek_step=1,
+        # seek_step=10: silence window is 120ms so checking every 10ms cannot miss it,
+        # and is 10× faster than seek_step=1 (3,000 iterations → 300 for a 3s clip).
+        seek_step=10,
     )
     if not ranges:
         # No speech detected; return as-is.
@@ -59,6 +62,7 @@ def _trim_bounds(audio: PydubAudioSegment, cfg: TrimConfig) -> Tuple[int, int]:
     start = max(0, ranges[0][0] - cfg.pad_ms)
     end = min(len(audio), ranges[-1][1] + cfg.pad_ms)
     if end <= start:
+        logger.warning("Degenerate trim bounds (end <= start) for audio — returning full length.")
         return 0, len(audio)
     return start, end
 

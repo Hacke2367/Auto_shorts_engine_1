@@ -6,6 +6,7 @@ Strict Python-only payload assembly to prepare identical outputs for
 the Manim video rendering hooks. NEVER ask LLMs to structure JSON here.
 """
 
+import copy
 import json
 import logging
 import os
@@ -38,13 +39,36 @@ def atomic_write_json(path: Path | str, data: dict[str, Any]) -> None:
             os.fsync(tmp.fileno())
         os.replace(tmp_name, path_obj)
     except Exception as e:
-        # cleanup temp file if it exists
         try:
             if tmp_name and os.path.exists(tmp_name):
-                os.remove(tmp_name)
+                os.unlink(tmp_name)
         except Exception:
             pass
         raise PayloadAssemblyError(f"Failed to atomically persist JSON at {path_obj}: {e}") from e
+
+
+def atomic_write_bytes(path: Path | str, data: bytes) -> None:
+    """Safely write binary data atomically.
+
+    Writes to a temp file in the same directory, fsyncs, then replaces the target.
+    Ensures temp files are cleaned up on failure.
+    """
+    path_obj = Path(path)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=str(path_obj.parent), suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path_obj)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def update_script_with_audio(
@@ -55,7 +79,7 @@ def update_script_with_audio(
     Preserves existing segment fields; only adds audio_relpath/duration_ms/duration_sec
     for tags that exist in audio_segments.
     """
-    out = dict(script_payload)
+    out = copy.deepcopy(script_payload)
     out_segments = out.get("segments", [])
 
     audio_map = {seg.tag: seg for seg in audio_segments}
@@ -71,9 +95,8 @@ def update_script_with_audio(
             s_copy["duration_ms"] = audio_data.duration_ms
             s_copy["duration_sec"] = audio_data.duration_sec
         else:
-            # BUG-C4: a missing audio segment produces a corrupt script.json that
-            # Phase 4 cannot render. Fail hard here rather than silently writing
-            # an incomplete payload to disk.
+            # A missing audio segment produces a corrupt script.json that Phase 4
+            # cannot render. Fail hard here rather than silently writing an incomplete payload.
             raise ValueError(
                 f"Audio synthesis missing for segment '{tag}'. "
                 f"Synthesized tags: {sorted(audio_map.keys())}. "

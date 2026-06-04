@@ -5,7 +5,10 @@ The sole source of truth for script segment ordering and text capacity limitatio
 Python does all timing math based on provided mnd_sec and voice_cps.
 """
 
+from __future__ import annotations
+
 import math
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -80,11 +83,16 @@ def build_segment_plan(
 
     # 4. Expand tags and calculate limits
     # e.g., ["HOOK", "SETUP", "ITEM_1..ITEM_N", "WINNER", "OUTRO"]
+    # Dynamic pattern: PREFIX_1..PREFIX_N  (exact form — prefix may contain underscores)
+    _dynamic_tag_re = re.compile(r"^([A-Z][A-Z0-9_]*)_\d+\.\.[A-Z][A-Z0-9_]*_N$")
+
     expanded_tags: List[str] = []
     for raw_tag in raw_order:
-        if ".._N" in raw_tag or "_1.." in raw_tag:
-            # Dynamic expansion. example: "ITEM_1..ITEM_N"
-            prefix = raw_tag.split("_")[0]  # "ITEM"
+        dyn_match = _dynamic_tag_re.match(raw_tag)
+        if dyn_match:
+            # Extract the full prefix up to the trailing numeric range.
+            # "ITEM_1..ITEM_N" → prefix "ITEM"; "ITEM_VALUE_1..ITEM_VALUE_N" → "ITEM_VALUE"
+            prefix = raw_tag.split("_1..")[0]   # everything before "_1.."
             num_rows = len(dataset.rows)
             for i in range(1, num_rows + 1):
                 expanded_tags.append(f"{prefix}_{i}")
@@ -98,14 +106,14 @@ def build_segment_plan(
     segments: List[SegmentSpec] = []
     
     for idx, tag in enumerate(expanded_tags):
-        # Resolve base tag for timing lookup (e.g. "ITEM_1" -> "ITEM")
-        base_tag = tag.split("_")[0] if any(char.isdigit() for char in tag) else tag
-        
-        # Some dynamic tags might just be Lap_1 which is base LAP
-        # Check against template_timings keys directly:
-        # We need to map things like "ITEM" from "ITEM_1"
+        # Resolve base tag for timing lookup (e.g. "ITEM_1" → "ITEM", "ITEM_VALUE_1" → "ITEM_VALUE").
+        # Strategy: strip the trailing _<digits> suffix if present, then check timing dict.
+        # Falls back to using the full tag name for non-numeric tags like "HOOK", "OUTRO".
+        _numeric_suffix_re = re.compile(r"_\d+$")
+        base_tag = _numeric_suffix_re.sub("", tag) if _numeric_suffix_re.search(tag) else tag
+
         if base_tag not in template_timings:
-            # Maybe the whole tag matches (e.g., HOOK)
+            # Maybe the whole tag matches exactly (e.g., HOOK, WINNER)
             if tag in template_timings:
                 base_tag = tag
             else:
@@ -143,32 +151,36 @@ def build_segment_plan(
 
 
 def _load_visual_rules(template_name: str) -> Dict[str, str]:
-    """Parse the markdown visual rules file to attach as hints for the LLM."""
+    """Parse the markdown visual rules file to attach as hints for the LLM.
+
+    Splits on the FIRST colon only (``split(":", 1)``) so descriptions that
+    contain colons (e.g. ``HOOK: "Revenue grew 47%: here's why"``) are
+    preserved intact.
+    """
     if not VISUAL_RULES_PATH.exists():
         return {}
 
-    rules = {}
+    rules: Dict[str, str] = {}
     lines = VISUAL_RULES_PATH.read_text(encoding="utf-8").splitlines()
-    
+
     in_target_block = False
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-            
-        if stripped.endswith(":") and not stripped.startswith(" "):
-            # We hit a top-level block (e.g., "bar_chart:")
-            if stripped == f"{template_name}:":
-                in_target_block = True
-            else:
-                in_target_block = False
+
+        # Detect top-level block headers — lines that end with ":" and have no
+        # leading whitespace (e.g. "bar_chart:").
+        if stripped.endswith(":") and not line[0].isspace():
+            in_target_block = stripped == f"{template_name}:"
             continue
 
         if in_target_block and ":" in stripped:
-            # "  HOOK: 'description...'"
-            parts = stripped.split(":", 1)
-            tag = parts[0].strip()
-            desc = parts[1].strip().strip("\"'")
-            rules[tag] = desc
+            # Split on FIRST colon only — preserves colons inside the description.
+            tag, _, desc = stripped.partition(":")
+            tag = tag.strip()
+            desc = desc.strip().strip("\"'")
+            if tag:
+                rules[tag] = desc
 
     return rules

@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Sequence, Union
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -68,6 +69,19 @@ class SourceAudit(BaseModel):
     """A single evidence record for one scraped data point."""
 
     url: str = Field(..., description="Exact URL the data was fetched from.")
+
+    @field_validator("url")
+    @classmethod
+    def _validate_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError(
+                f"SourceAudit.url must start with http:// or https://, got: {v!r}"
+            )
+        parsed = urlparse(v)
+        if not parsed.netloc:
+            raise ValueError(f"SourceAudit.url has no domain: {v!r}")
+        return v
+
     raw_snippet: str = Field(
         ..., description="Verbatim text extracted from the source."
     )
@@ -379,20 +393,27 @@ TEMPLATE_FALLBACKS: dict[str, list[str]] = {
 }
 
 
-# Scoring weights (Ideation-first + Legacy defaults)
-SCORING_WEIGHTS: dict[str, float] = {
+# Ideation-first scoring weights (sum = 1.0)
+_NEW_SCORING_WEIGHTS: dict[str, float] = {
     "hook_potential": 0.30,
     "novelty": 0.20,
     "visual_fit": 0.20,
     "data_feasibility": 0.20,
     "freshness": 0.10,
-    # Legacy weights for backward compatibility
+}
+
+# Legacy queue scoring weights (sum = 1.0 — was 0.95, fallback_strength fixed 0.05→0.10)
+_LEGACY_SCORING_WEIGHTS: dict[str, float] = {
     "virality_potential": 0.25,
+    "data_feasibility": 0.20,
     "template_fit": 0.20,
     "visual_potential": 0.15,
     "source_quality": 0.10,
-    "fallback_strength": 0.05,
+    "fallback_strength": 0.10,   # Fixed: was 0.05 — caused legacy max score of 9.5 not 10.0
 }
+
+# Public alias: merged dict for backward compatibility with any consumer that imports SCORING_WEIGHTS
+SCORING_WEIGHTS: dict[str, float] = {**_NEW_SCORING_WEIGHTS, **_LEGACY_SCORING_WEIGHTS}
 
 
 # ---------------------------------------------------------------------------
@@ -499,8 +520,9 @@ class TopicCandidate(BaseModel):
     @field_validator("best_fit_template")
     @classmethod
     def _validate_best_fit(cls, v: str) -> str:
-        if v and v not in VALID_TEMPLATES:
-            raise ValueError(f"Unknown template '{v}'.")
+        # Do NOT guard with `if v` — empty strings must also be rejected
+        if v not in VALID_TEMPLATES:
+            raise ValueError(f"Unknown template '{v}'. Valid: {sorted(VALID_TEMPLATES)}")
         return v
 
     @field_validator("fallback_template")
@@ -517,11 +539,15 @@ class TopicCandidate(BaseModel):
         return self
 
     def compute_final_score(self) -> float:
-        """Deterministic Python-side weighted score calculation."""
-        w = SCORING_WEIGHTS
-        
+        """Deterministic Python-side weighted score calculation.
+
+        Uses _NEW_SCORING_WEIGHTS when hook_potential_score > 0 (ideation-first path).
+        Falls back to _LEGACY_SCORING_WEIGHTS for queue-sourced candidates.
+        Both weight sets sum to exactly 1.0, so max achievable score is always 10.0.
+        """
         if self.hook_potential_score > 0:
-            # Ideation-first calculation
+            # Ideation-first calculation (weights sum = 1.0)
+            w = _NEW_SCORING_WEIGHTS
             self.final_score = round(
                 self.hook_potential_score * w["hook_potential"]
                 + self.novelty_score * w["novelty"]
@@ -539,7 +565,8 @@ class TopicCandidate(BaseModel):
                 "freshness": self.freshness_score,
             }
         else:
-            # Legacy calculation fallback (Queue items)
+            # Legacy calculation fallback for queue-sourced topics (weights sum = 1.0)
+            w = _LEGACY_SCORING_WEIGHTS
             self.final_score = round(
                 self.virality_score * w["virality_potential"]
                 + self.data_feasibility_score * w["data_feasibility"]

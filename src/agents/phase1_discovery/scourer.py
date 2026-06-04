@@ -24,19 +24,16 @@ from tenacity import (
     wait_exponential,
 )
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.retry import standard_retry_policy
 from src.agents.core.logger import log_api_call
 
 logger = logging.getLogger(__name__)
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=5),
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
-        reraise=True,
-    )
+    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
+    return standard_retry_policy()
 
 
 async def _validate_hypothesis(
@@ -44,13 +41,14 @@ async def _validate_hypothesis(
     session: aiohttp.ClientSession,
     log: logging.Logger,
     max_results: int = 4,
+    request_timeout: float = APP_CONFIG.api_timeout_seconds,
 ) -> dict[str, Any] | None:
     """Fetch evidence for a specific topic hypothesis via Tavily."""
     url = "https://api.tavily.com/search"
-    
+
     # We append data-seeking terms to validate if the topic has buildable numbers
     query = f"{hypothesis} statistics data market share ranking comparison"
-    
+
     payload = {
         "api_key": settings.tavily_api_key.get_secret_value(),
         "query": query,
@@ -60,10 +58,12 @@ async def _validate_hypothesis(
         "topic": "general",
     }
 
+    per_req_timeout = aiohttp.ClientTimeout(total=request_timeout)
+
     async for attempt in _get_retry_policy():
         with attempt:
             t0 = time.perf_counter()
-            async with session.post(url, json=payload) as resp:
+            async with session.post(url, json=payload, timeout=per_req_timeout) as resp:
                 elapsed = (time.perf_counter() - t0) * 1000
                 log_api_call(
                     log,
@@ -98,7 +98,7 @@ async def _validate_hypothesis(
                 return {
                     "title": hypothesis,
                     "snippet": combined_snippet,
-                    "source_urls": list(set(urls)),
+                    "source_urls": list(dict.fromkeys(urls)),   # deduplicate while preserving insertion order
                     "bucket": "hypothesis_validation",
                 }
 
@@ -146,6 +146,7 @@ async def fetch_raw_candidates(
     log: logging.Logger,
     max_per_bucket: int = 4,
     max_concurrency: int = 5,
+    request_timeout_seconds: float = APP_CONFIG.api_timeout_seconds,
 ) -> list[dict[str, Any]]:
     """Validate topic hypotheses by gathering evidence from the web.
 
@@ -168,7 +169,7 @@ async def fetch_raw_candidates(
 
     async def _validate_wrapped(hypothesis: str) -> dict[str, Any] | None:
         async with sem:
-            return await _validate_hypothesis(hypothesis, session, log, max_per_bucket)
+            return await _validate_hypothesis(hypothesis, session, log, max_per_bucket, request_timeout_seconds)
 
     log.info(
         "Validating %d topic hypotheses via search (max_concurrency=%d)...",

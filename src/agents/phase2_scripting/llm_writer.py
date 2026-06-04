@@ -22,7 +22,8 @@ from tenacity import (
     wait_exponential,
 )
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.retry import standard_retry_policy, rate_limit_retry_policy
 from src.agents.core.job_manager import PROJECT_ROOT
 from src.agents.core.logger import log_api_call
 from src.agents.core.models import TemplateDataset
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Constants & Paths
 CONTEXT_DIR = PROJECT_ROOT / ".agent" / "context"
 PERSONAS_DIR = CONTEXT_DIR / "personas"
-SYSTEM_PROMPTS_DIR = PERSONAS_DIR / "system_prompt"
+SYSTEM_PROMPTS_DIR = PERSONAS_DIR / "system_prompt"   # canonical — matches runner.py hash
 
 SHARED_CONTRACT_PATH = PERSONAS_DIR / "shared_output_contract.md"
 VISUAL_RULES_PATH = CONTEXT_DIR / "template_visual_rules.md"
@@ -53,23 +54,13 @@ class GeminiRateLimitError(Exception):
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    """Standard retry: 3 attempts for network errors."""
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
-        reraise=True,
-    )
+    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
+    return standard_retry_policy()
 
 
 def _get_429_retry_policy() -> AsyncRetrying:
-    """Strict 429-aware retry: waits 60s+."""
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=60, min=60, max=120),
-        retry=retry_if_exception_type(GeminiRateLimitError),
-        reraise=True,
-    )
+    """Strict 429-aware retry (config-driven, see APP_CONFIG.retry)."""
+    return rate_limit_retry_policy(exceptions=(GeminiRateLimitError,))
 
 
 def _load_text(path: Path) -> str:
@@ -185,13 +176,22 @@ async def _call_gemini(
     log: logging.Logger,
 ) -> str:
     key = settings.gemini_api_key.get_secret_value()
-    model_name = settings.gemini_model  # set this to gemini-2.5-flash in settings
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+    cfg = APP_CONFIG.llm.scripting
+    model_name = cfg.model
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model_name}:generateContent"
+    )
+    _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+
+    gen_config: dict = {"temperature": cfg.temperature}
+    if cfg.max_output_tokens is not None:
+        gen_config["maxOutputTokens"] = cfg.max_output_tokens
 
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"parts": [{"text": user_prompt}]}],
-        "generationConfig": {"temperature": 0.3},
+        "generationConfig": gen_config,
     }
 
     async for rate_attempt in _get_429_retry_policy():
@@ -199,7 +199,7 @@ async def _call_gemini(
             async for attempt in _get_retry_policy():
                 with attempt:
                     t0 = time.perf_counter()
-                    async with session.post(url, json=payload) as resp:
+                    async with session.post(url, json=payload, headers=_gemini_headers) as resp:
                         elapsed = (time.perf_counter() - t0) * 1000
                         log_api_call(
                             log,
@@ -219,7 +219,9 @@ async def _call_gemini(
                         try:
                             return data["candidates"][0]["content"]["parts"][0]["text"]
                         except (KeyError, IndexError):
-                            raise Exception(f"Malformed Gemini response: {data}")
+                            raise ScriptGenerationError(
+                                f"Malformed Gemini response structure: {str(data)[:300]}"
+                            )
 
     raise ScriptGenerationError("Gemini call failed after retries.")
 
@@ -259,14 +261,17 @@ async def _run_rewrite_loop(
     current_failing = initial_failing
 
     for rewrite_attempt in range(max_retries):
-        log.info(f"--- Segment Rewrite Loop (Attempt {rewrite_attempt + 1}/{max_retries}) ---")
+        log.info(
+            "--- Segment Rewrite Loop (Attempt %d/%d) ---",
+            rewrite_attempt + 1, max_retries,
+        )
 
         user_prompt_rewrite = _build_rewrite_prompt(current_failing, dataset, plan, visual_rules_text)
         raw_output = await _call_gemini(system_prompt, user_prompt_rewrite, session, log)
 
         # Extract only the rewritten tags
         for seg, _ in current_failing:
-            tag_pattern = re.compile(rf"<{seg.tag}>(.*?)</{seg.tag}>", re.DOTALL)
+            tag_pattern = re.compile(rf"<{seg.tag}>(.*?)</{seg.tag}>", re.DOTALL | re.IGNORECASE)
             match = tag_pattern.search(raw_output)
             if match:
                 text = normalize_text(match.group(1))
@@ -278,7 +283,7 @@ async def _run_rewrite_loop(
                     target_max_chars=seg.target_max_chars,
                 )
             else:
-                log.warning(f"Rewrite response missing tag <{seg.tag}>")
+                log.warning("Rewrite response missing tag <%s>", seg.tag)
 
         current_failing = _get_failing_segments(final_segments, plan)
         if not current_failing:
@@ -301,17 +306,21 @@ async def write_script(
 
     max_full_retries = 2
     final_segments: Dict[str, ParsedSegment] = {}
-    full_generation_history = ""
+    # Use a list of parts to avoid O(n²) string concatenation across retries.
+    history_parts: List[str] = []
 
     for attempt in range(max_full_retries + 1):
-        log.info(f"--- Full Monologue Generation (Attempt {attempt + 1}/{max_full_retries + 1}) ---")
+        log.info(
+            "--- Full Monologue Generation (Attempt %d/%d) ---",
+            attempt + 1, max_full_retries + 1,
+        )
         raw_output = await _call_gemini(system_prompt, user_prompt_full, session, log)
-        full_generation_history += f"\n\n--- Full Gen Attempt {attempt + 1} ---\n{raw_output}"
+        history_parts.append(f"\n\n--- Full Gen Attempt {attempt + 1} ---\n{raw_output}")
 
         try:
             parsed = parse_monologue(raw_output, plan)
         except ScriptParsingError as e:
-            log.warning(f"Structural parsing failed: {e}. Retrying full monologue.")
+            log.warning("Structural parsing failed: %s. Retrying full monologue.", e)
             continue
 
         for seg in parsed:
@@ -319,9 +328,9 @@ async def write_script(
 
         failing = _get_failing_segments(final_segments, plan)
         if not failing:
-            return _order_segments(final_segments, plan), full_generation_history
+            return _order_segments(final_segments, plan), "".join(history_parts)
 
-        log.warning(f"{len(failing)} segments failed length checks. Entering rewrite loop.")
+        log.warning("%d segments failed length checks. Entering rewrite loop.", len(failing))
         ok = await _run_rewrite_loop(
             failing,
             final_segments,
@@ -333,7 +342,7 @@ async def write_script(
             log,
         )
         if ok:
-            return _order_segments(final_segments, plan), full_generation_history
+            return _order_segments(final_segments, plan), "".join(history_parts)
 
         log.warning("Rewrite loop exhausted; retrying full monologue.")
 

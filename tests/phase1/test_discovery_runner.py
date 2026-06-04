@@ -70,7 +70,7 @@ async def fake_score_candidates_batch(raw_candidates, session=None, log=None, ma
             source_quality_score=7,
             fallback_strength_score=6,
             best_fit_template="bar_chart",
-            fallback_template="line_chart" if "line_chart" else "bar_chart",
+            fallback_template="scan_race",
         ),
     ]
 

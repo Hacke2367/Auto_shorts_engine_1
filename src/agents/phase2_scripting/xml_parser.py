@@ -6,7 +6,10 @@ Extracts exact segment tags, validates ordering against SegmentPlan,
 computes normalized character limits, and bubbles up errors for LLM retry.
 """
 
+from __future__ import annotations
+
 import re
+from collections import Counter
 from typing import List
 
 from src.agents.phase2_scripting.contracts import (
@@ -34,20 +37,21 @@ def parse_monologue(raw_output: str, plan: SegmentPlan) -> List[ParsedSegment]:
     """
     
     # 1. Verify Outer Wrapper.
-    mono_match = re.search(r"<MONOLOGUE>(.*)</MONOLOGUE>", raw_output, re.DOTALL | re.IGNORECASE)
+    # Non-greedy (.*?) prevents merging two <MONOLOGUE> blocks if the LLM emits them twice.
+    mono_match = re.search(r"<MONOLOGUE>(.*?)</MONOLOGUE>", raw_output, re.DOTALL | re.IGNORECASE)
     if not mono_match:
         raise ScriptParsingError("Raw output missing <MONOLOGUE>...</MONOLOGUE> wrapper.")
-        
+
     mono_content = mono_match.group(1).strip()
-    
-    # 2. Extract all tags linearly using a Regex parser
-    # Match strings shaped like <TAG>content</TAG>
+
+    # 2. Extract all tags linearly using a regex parser.
+    # re.IGNORECASE so <hook> and <Hook> are captured; we normalise to uppercase immediately.
     # Note: re.finditer catches them in the exact order they appeared in the text.
-    tag_pattern = re.compile(r"<([A-Z0-9_]+)>(.*?)</\1>", re.DOTALL)
-    
+    tag_pattern = re.compile(r"<([A-Z0-9_]+)>(.*?)</\1>", re.DOTALL | re.IGNORECASE)
+
     found_elements = []
     for match in tag_pattern.finditer(mono_content):
-        tag_name = match.group(1).strip()
+        tag_name = match.group(1).strip().upper()   # normalise case
         tag_text = normalize_text(match.group(2))
         found_elements.append((tag_name, tag_text))
 
@@ -70,8 +74,6 @@ def parse_monologue(raw_output: str, plan: SegmentPlan) -> List[ParsedSegment]:
 
     # Rule: No duplicates
     if len(found_tags) != len(set(found_tags)):
-        # find specifically which ones duplicated
-        from collections import Counter
         dupes = [tag for tag, count in Counter(found_tags).items() if count > 1]
         raise ScriptParsingError(f"Found duplicate tags: {sorted(dupes)}")
 
@@ -79,13 +81,12 @@ def parse_monologue(raw_output: str, plan: SegmentPlan) -> List[ParsedSegment]:
     if found_tags != expected_tags:
         raise ScriptParsingError(f"Incorrect tag ordering. Expected: {expected_tags}, Got: {found_tags}")
 
-    # 4. Build output models, enforcing 'no empty tags'
+    # 4. Build output models, enforcing 'no empty tags'.
+    # Ordering is already verified as 1:1 exact match above, so use direct index access — O(n).
     parsed_segments: List[ParsedSegment] = []
-    for spec in plan.segments:
-        # We know they match 1:1 in order now
-        idx = expected_tags.index(spec.tag)
-        _, text = found_elements[idx]
-        
+    for i, spec in enumerate(plan.segments):
+        _, text = found_elements[i]
+
         if not text:
             raise ScriptParsingError(f"Tag <{spec.tag}> is empty.")
 
@@ -95,7 +96,7 @@ def parse_monologue(raw_output: str, plan: SegmentPlan) -> List[ParsedSegment]:
                 text=text,
                 char_count=count_chars(text),
                 target_min_chars=spec.min_chars,
-                target_max_chars=spec.max_chars
+                target_max_chars=spec.max_chars,
             )
         )
 

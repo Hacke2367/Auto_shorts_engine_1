@@ -74,3 +74,60 @@ def wrap_words_to_lines(words: List[str], max_lines: int = 2, max_chars_per_line
         lines[-1] = (lines[-1] + " ...").strip()
 
     return lines
+
+
+def pack_words_into_chunks(
+    words: List[str],
+    max_lines: int = 2,
+    max_chars_per_line: int = 32,
+) -> List[List[str]]:
+    """
+    Greedily pack ALL words into a sequence of chunks. No words are dropped.
+
+    Each chunk holds up to `max_lines` lines, and each line holds up to
+    `max_chars_per_line` characters. When a chunk fills up, a new chunk is
+    started. A word longer than `max_chars_per_line` is placed on its own
+    line rather than dropped (prevents truncation / infinite loops).
+
+    Returns a list of chunks; each chunk is a list of line strings.
+    Returns [] for empty input.
+
+    This replaces the single truncate-to-2-lines behaviour of
+    `wrap_words_to_lines`, so long segment captions are shown in full
+    across multiple timed chunks instead of being cut off with "...".
+    """
+    if not words:
+        return []
+
+    max_lines = max(1, int(max_lines))
+
+    chunks: List[List[str]] = []
+    cur_lines: List[str] = []
+    cur: List[str] = []
+
+    def line_len(tokens: List[str]) -> int:
+        return len(" ".join(tokens)) if tokens else 0
+
+    for w in words:
+        if not cur:
+            cur = [w]
+            continue
+
+        if line_len(cur + [w]) <= max_chars_per_line:
+            cur.append(w)
+        else:
+            # current line is full -> commit it
+            cur_lines.append(" ".join(cur))
+            cur = [w]
+            if len(cur_lines) >= max_lines:
+                # chunk is full -> commit it and start fresh
+                chunks.append(cur_lines)
+                cur_lines = []
+
+    # flush trailing line + chunk
+    if cur:
+        cur_lines.append(" ".join(cur))
+    if cur_lines:
+        chunks.append(cur_lines)
+
+    return chunks

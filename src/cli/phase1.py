@@ -21,7 +21,7 @@ import aiohttp
 # Ensure src is in python path if ran directly
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.agents.core.config import settings
+from src.agents.core.config import APP_CONFIG
 from src.agents.core.job_manager import JobManager
 from src.agents.phase1_discovery.archive_manager import ArchiveManager
 from src.agents.phase1_discovery.discovery_runner import run_discovery
@@ -144,7 +144,7 @@ async def cmd_discover(args: argparse.Namespace) -> None:
     print(f"Job Dir: {jm.job_dir}")
     print("Running discovery engines... This may take a minute.\n")
     
-    timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
+    timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         batch = await run_discovery(
             session=session,
@@ -171,7 +171,7 @@ async def cmd_auto(args: argparse.Namespace) -> None:
     print(f"Job ID:  {jm.job_id}")
     print("Running discovery engines... (fetching from web + AI scoring)\n")
     
-    timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
+    timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         batch = await run_discovery(
             session=session,

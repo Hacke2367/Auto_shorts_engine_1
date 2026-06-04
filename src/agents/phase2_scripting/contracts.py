@@ -10,8 +10,11 @@ Core Responsibilities:
   - Standardized scripting error definitions.
 """
 
+from __future__ import annotations
+
 import re
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -21,12 +24,13 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class ScriptParsingError(Exception):
-    """Raised when the LLM output completely fails structural extraction."""
+    """Raised when the LLM output completely fails structural extraction (missing wrapper,
+    missing tags, wrong order, duplicates, empty tags)."""
     pass
 
 
 class ScriptValidationError(Exception):
-    """Raised when the LLM output violates constraints (missing tags, empty, length)."""
+    """Raised when a parsed segment violates length constraints (too short or too long)."""
     pass
 
 
@@ -71,7 +75,6 @@ class SegmentSpec(BaseModel):
     min_chars: int
     max_chars: int
     visual_rule: Optional[str] = None
-    required: bool = True
 
 
 class SegmentPlan(BaseModel):
@@ -80,7 +83,7 @@ class SegmentPlan(BaseModel):
     template_name: str
     persona_id: str
     voice_cps: float
-    segments: List[SegmentSpec]
+    segments: list[SegmentSpec]
 
 
 class ParsedSegment(BaseModel):
@@ -99,5 +102,6 @@ class ScriptPayload(BaseModel):
     persona_id: str
     voice_cps: float
     inputs_hash: str
-    segments: List[ParsedSegment]
+    segments: list[ParsedSegment]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

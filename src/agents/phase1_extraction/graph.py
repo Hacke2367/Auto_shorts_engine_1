@@ -85,19 +85,17 @@ def _build_smart_query(topic: str, template_name: str, attempt: int = 0) -> str:
     elif attempt == 2:
         # Pivot B: Historical data to bypass noisy recent-news
         return f"{topic} historical data trend timeline analysis"
-    elif attempt == 3:
-        # Pivot C: Market share breakdown
-        return f"{topic} market share industry breakdown report"
-    elif attempt == 4:
-        # Pivot D: Direct comparison
-        return f"{topic} comparison versus detailed metrics"
 
-    # Default generic fallback
+    # Default fallback (should not be reached with current retry cap of 2)
     return f"{topic} deeper quantitative evidence facts"
 
 
 async def node_search(state: ExtractionState) -> ExtractionState:
     """Node: Discover relevant URLs on the web."""
+    # Clear any stale failure state from a previous attempt before trying again
+    state.pop("failure_category", None)
+    state.pop("failure_reason", None)
+
     log = state["log"]
     session = state["session"]
     topic = state["topic"]
@@ -228,18 +226,12 @@ def should_retry_search(state: ExtractionState) -> str:
 
     if not urls:
         if attempts < 2:
-            state["log"].warning("Search yielded 0 URLs. Retrying (Attempt %d/2)...", attempts + 1)
-            # Clear failure state for retry
-            state.pop("failure_category", None)
-            state.pop("failure_reason", None)
+            state["log"].warning("Search yielded 0 URLs. Retrying (attempt %d/2)...", attempts)
             return "search"
         else:
             state["log"].error("Search yielded 0 URLs after 2 attempts. Aborting.")
             return END
-            
-    # If successful, clear any lingering search errors that might have been set
-    state.pop("failure_category", None)
-    state.pop("failure_reason", None)
+
     return "scrape"
 
 

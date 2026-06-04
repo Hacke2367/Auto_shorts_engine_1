@@ -86,23 +86,15 @@ def render_ass(job: Dict[str, Any], timeline_segments: List[Dict[str, Any]], scr
 
 def burn_ass_to_video(ffmpeg: str, video_in: Path, ass_path: Path, video_out: Path) -> None:
     """
-    Burn subtitles into a video using ffmpeg.
-    -vf "ass=...": video filter that draws subtitles
-    -c:a copy     : audio stream copy as-is (fast)
+    Burn subtitles into a video.
+
+    Delegates to src.captions.burn_in.burn_in_ass, which escapes the Windows
+    drive colon (C:\\ -> C\\:/) for the libass `ass=` filter. The previous inline
+    implementation here passed a raw `C:/...` path, which ffmpeg mis-parsed (the
+    `:` was read as a filter-option separator) and the burn failed on Windows.
     """
-    video_out.parent.mkdir(parents=True, exist_ok=True)
-
-    # Windows-safe: prefer forward slashes inside filter arg
-    ass_for_filter = str(ass_path).replace("\\", "/")
-
-    cmd = [
-        ffmpeg, "-y",
-        "-i", str(video_in),
-        "-vf", f"ass={ass_for_filter}",
-        "-c:a", "copy",
-        str(video_out),
-    ]
-    subprocess.run(cmd, check=True)
+    from src.captions.burn_in import burn_in_ass
+    burn_in_ass(ffmpeg=ffmpeg, video_in=video_in, ass_path=ass_path, video_out=video_out)
 
 
 def main():
@@ -118,6 +110,10 @@ def main():
 
     # If captions.enabled is false in job.json, still allow generation
     ap.add_argument("--force", action="store_true", help="run even if captions.enabled=false")
+    # Caption timing source. Default matches main.py: the voice track is silence-
+    # trimmed, so captions are timed against the TRIMMED durations to stay in sync.
+    ap.add_argument("--no-trim-silence", action="store_true",
+                    help="time captions off raw job.timeline instead of the trimmed voice track")
     args = ap.parse_args()
 
     repo_root = Path(__file__).resolve().parent
@@ -133,8 +129,15 @@ def main():
     if (not enabled) and (not args.force):
         raise ValueError("captions.enabled=false. Use --force OR set captions.enabled=true in job.json")
 
-    # 1) Build timeline segments from job.json
-    timeline_segments = build_timeline_segments(job)
+    # 1) Build timeline segments — match the trimmed voice track by default so
+    # subtitles stay in sync (shared resolver, same logic as the main pipeline).
+    from src.captions.timeline_resolver import resolve_timeline_segments
+    timeline_segments = resolve_timeline_segments(
+        job=job,
+        job_dir=job_dir,
+        ffmpeg_path=args.ffmpeg,
+        trim_silence=(not args.no_trim_silence),
+    )
 
     # 2) Load script map from script.json
     script_map = load_script_map(job_dir, job)
