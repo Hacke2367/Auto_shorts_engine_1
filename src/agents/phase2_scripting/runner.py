@@ -18,7 +18,7 @@ from typing import Any
 
 import aiohttp
 
-from src.agents.core.config import settings
+from src.agents.core.config import APP_CONFIG
 from src.agents.core.job_manager import PROJECT_ROOT, JobManager
 from src.agents.core.models import TemplateDataset
 from src.agents.phase2_scripting.contracts import ScriptPayload
@@ -241,7 +241,7 @@ async def run_scripting(
         except Exception as e:
             log.warning("Failed to load cached script: %s. Regenerating.", e)
 
-    timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
+    timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         final_segments, raw_history = await write_script(plan, dataset, session, log)
 

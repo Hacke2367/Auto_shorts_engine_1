@@ -15,7 +15,7 @@ from src.agents.phase2_scripting.llm_writer import (
     _call_gemini,
     parse_monologue
 )
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -33,14 +33,13 @@ async def main():
         visual_rules_text = _load_text(VISUAL_RULES_PATH)
         user_prompt_full = _build_user_prompt(dataset, plan, visual_rules_text)
         
-        # Override to 2.5 explicitly
-        settings.gemini_model = "gemini-2.5-flash"
-        
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent?key={settings.gemini_api_key.get_secret_value()}"
+        # Use the centrally-configured scripting model (see config.py:LLMConfig).
+        model_name = APP_CONFIG.llm.scripting.model
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={settings.gemini_api_key.get_secret_value()}"
         payload = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"parts": [{"text": user_prompt_full}]}],
-            "generationConfig": {"temperature": 0.3},
+            "generationConfig": {"temperature": APP_CONFIG.llm.scripting.temperature},
         }
 
         timeout = aiohttp.ClientTimeout(total=45)

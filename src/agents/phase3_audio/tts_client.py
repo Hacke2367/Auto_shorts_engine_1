@@ -28,6 +28,7 @@ from tenacity import (
 
 from src.agents.core.logger import log_api_call
 from src.agents.phase3_audio.contracts import AudioSynthesisSettings, TTSError
+from src.agents.core.retry import standard_retry_policy, rate_limit_retry_policy
 
 logger = logging.getLogger(__name__)
 
@@ -55,23 +56,13 @@ def _get_elevenlabs_key() -> str:
 
 
 def _get_standard_retry() -> AsyncRetrying:
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        # aiohttp.ClientResponseError covers HTTP 5xx raised via resp.raise_for_status()
-        # or explicitly for 5xx — allows transient server errors to be retried.
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
-        reraise=True,
-    )
+    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
+    return standard_retry_policy()
 
 
 def _get_429_retry() -> AsyncRetrying:
-    return AsyncRetrying(
-        stop=stop_after_attempt(4),
-        wait=wait_exponential(multiplier=30, min=30, max=120),
-        retry=retry_if_exception_type(ElevenLabsRateLimitError),
-        reraise=True,
-    )
+    """ElevenLabs 429 retry (config-driven, see APP_CONFIG.retry)."""
+    return rate_limit_retry_policy(exceptions=(ElevenLabsRateLimitError,))
 
 
 async def synthesize(

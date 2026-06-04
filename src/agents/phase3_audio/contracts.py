@@ -61,10 +61,6 @@ class AudioSynthesisSettings(BaseModel):
     speaker_boost: bool | None = Field(default=None)
 
     concurrency_limit: int = Field(default=3, ge=1, description="Bounded concurrency for synthesis (enforced by runner).")
-    rpm_limit: int | None = Field(
-        default=None, ge=1,
-        description="Optional RPM limiter. Defined for future token-bucket enforcement; currently unused by runner.",
-    )
 
 
 class Phase3Payload(BaseModel):

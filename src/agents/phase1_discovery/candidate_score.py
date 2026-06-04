@@ -27,7 +27,8 @@ from tenacity import (
     wait_exponential,
 )
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.retry import standard_retry_policy, rate_limit_retry_policy
 from src.agents.core.logger import log_api_call
 from src.agents.core.models import TopicCandidate, VALID_TEMPLATES, TEMPLATE_FALLBACKS
 from src.agents.core.rate_limiter import TokenBucketRateLimiter
@@ -40,23 +41,13 @@ class GeminiRateLimitError(Exception):
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    """Standard retry: 3 attempts, exponential backoff, retries on transient errors."""
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
-        reraise=True,
-    )
+    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
+    return standard_retry_policy()
 
 
 def _get_429_retry_policy() -> AsyncRetrying:
-    """Strict 429-aware retry: waits 60s before retrying after a rate limit hit."""
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=60, min=60, max=120),
-        retry=retry_if_exception_type(GeminiRateLimitError),
-        reraise=True,
-    )
+    """Strict 429-aware retry (config-driven, see APP_CONFIG.retry)."""
+    return rate_limit_retry_policy(exceptions=(GeminiRateLimitError,))
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +252,8 @@ async def score_single_candidate(
         A TopicCandidate with all scores computed, or None if scoring failed.
     """
     key = settings.gemini_api_key.get_secret_value()
-    model_name = settings.gemini_model
+    cfg = APP_CONFIG.llm.discovery_scoring
+    model_name = cfg.model
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{model_name}:generateContent"
@@ -279,8 +271,8 @@ async def score_single_candidate(
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "temperature": settings.gemini_temperature,
-            "maxOutputTokens": 1000,
+            "temperature": cfg.temperature,
+            "maxOutputTokens": cfg.max_output_tokens,
         },
     }
 
@@ -354,7 +346,7 @@ async def score_candidates_batch(
         List of successfully scored TopicCandidate objects.
     """
     sem = asyncio.Semaphore(max_concurrency)
-    limiter = TokenBucketRateLimiter(rpm=settings.gemini_rpm_limit)
+    limiter = TokenBucketRateLimiter(rpm=APP_CONFIG.llm.rpm_limit)
 
     async def _score_wrapped(c: dict[str, str]) -> TopicCandidate | None:
         # Acquire time-based quota token *before* entering the concurrency limit

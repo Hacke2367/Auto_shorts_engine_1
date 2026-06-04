@@ -25,7 +25,8 @@ The two halves can run independently. `main.py` only needs a fully-formed `jobs/
 
 - Python 3.11+ with `.venv`. Install: `pip install -r requirements.txt`.
 - FFmpeg must be on PATH (`ffmpeg -version`).
-- `.env` at repo root must define `TAVILY_API_KEY` and `GEMINI_API_KEY` — `src/agents/core/config.py` raises ValidationError on import if missing. Optional overrides: `GEMINI_MODEL`, `GEMINI_RPM_LIMIT`, `GEMINI_TEMPERATURE`, `API_TIMEOUT_SECONDS`.
+- `.env` at repo root holds **secrets only**: `TAVILY_API_KEY`, `GEMINI_API_KEY` (required), `ELEVENLABS_API_KEY` (optional). `src/agents/core/config.py` raises ValidationError on import if a required key is missing.
+- **All operational settings live in `config.py`, NOT `.env`.** Per-phase model routing, temperatures, RPM, HTTP timeout, retry/backoff, TTS defaults, and authority domains are managed in `APP_CONFIG` (`src/agents/core/config.py`). To change the model for a phase, edit `LLMConfig` there. The legacy env vars `GEMINI_MODEL` / `GEMINI_RPM_LIMIT` / `GEMINI_TEMPERATURE` / `API_TIMEOUT_SECONDS` are **ignored** — do not put them in `.env`.
 - Windows shell here is PowerShell; the Bash tool is available but most examples below use forward slashes which work in both.
 
 ## Common Commands

@@ -30,7 +30,7 @@ except ImportError:
 
 import aiohttp
 
-from src.agents.core.config import settings
+from src.agents.core.config import APP_CONFIG
 from src.agents.core.job_manager import JobManager
 from src.agents.core.logger import timed_operation
 from src.agents.core.models import (
@@ -270,7 +270,7 @@ async def run_extraction(
             log.info("--- Starting Extraction Attempt %d/%d (%s: %s) ---", idx, len(attempts), t_type, t_name)
 
             # Each attempt gets its own full timeout budget
-            timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
+            timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 
                 if t_name not in VALID_TEMPLATES:

@@ -19,7 +19,7 @@ from typing import Any
 import yaml
 import aiohttp
 
-from src.agents.core.config import settings
+from src.agents.core.config import APP_CONFIG
 from src.agents.phase3_audio.contracts import (
     AudioSegment,
     AudioSynthesisSettings,
@@ -307,7 +307,7 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
         if errors:
             raise errors[0]
     else:
-        timeout = aiohttp.ClientTimeout(total=settings.api_timeout_seconds)
+        timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             for s_dict in segments_data:
                 tasks.append(

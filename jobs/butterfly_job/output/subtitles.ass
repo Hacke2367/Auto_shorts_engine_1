@@ -13,21 +13,41 @@ Style: Cap1_above_bottom,Segoe UI,54,&H00FFFFFF,&H00000000,&H80000000,&H80000000
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
-Dialogue: 0,0:00:00.00,0:00:03.76,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf12}A {\kf86}massive {\kf73}system {\kf49}leak {\kf49}just\N{\2a&HFF&} {\kf75}exposed {\kf32}...
-Dialogue: 0,0:00:00.00,0:00:03.76,Cap1_above_bottom,,0,0,0,,A massive system leak just\Nexposed ...
-Dialogue: 0,0:00:03.76,0:00:06.92,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf34}Five {\kf68}critical {\kf84}attributes {\kf25}are\N{\2a&HFF&} {\kf66}being {\kf39}...
-Dialogue: 0,0:00:03.76,0:00:06.92,Cap1_above_bottom,,0,0,0,,Five critical attributes are\Nbeing ...
-Dialogue: 0,0:00:06.92,0:00:11.70,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf72}Speed {\kf72}test. {\kf57}Item {\kf14}A {\kf57}hits {\kf86}eighty\N{\2a&HFF&} {\kf79}eight, {\kf40}...
-Dialogue: 0,0:00:06.92,0:00:11.70,Cap1_above_bottom,,0,0,0,,Speed test. Item A hits eighty\Neight, ...
-Dialogue: 0,0:00:11.70,0:00:15.64,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf92}Handling {\kf114}precision. {\kf46}Item {\kf11}A\N{\2a&HFF&} {\kf98}dominates {\kf33}...
-Dialogue: 0,0:00:11.70,0:00:15.64,Cap1_above_bottom,,0,0,0,,Handling precision. Item A\Ndominates ...
-Dialogue: 0,0:00:15.64,0:00:19.64,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf128}Acceleration {\kf85}metrics. {\kf43}Item {\kf11}A\N{\2a&HFF&} {\kf83}shows {\kf50}...
-Dialogue: 0,0:00:15.64,0:00:19.64,Cap1_above_bottom,,0,0,0,,Acceleration metrics. Item A\Nshows ...
-Dialogue: 0,0:00:19.64,0:00:22.38,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf45}Luxury {\kf46}finish {\kf46}score. {\kf30}Item {\kf8}A {\kf30}hits\N{\2a&HFF&} {\kf45}ninety {\kf23}...
-Dialogue: 0,0:00:19.64,0:00:22.38,Cap1_above_bottom,,0,0,0,,Luxury finish score. Item A hits\Nninety ...
-Dialogue: 0,0:00:22.38,0:00:24.23,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf47}Technology {\kf52}innovation. {\kf19}Item {\kf5}A\N{\2a&HFF&} {\kf41}scores {\kf21}...
-Dialogue: 0,0:00:22.38,0:00:24.23,Cap1_above_bottom,,0,0,0,,Technology innovation. Item A\Nscores ...
-Dialogue: 0,0:00:28.15,0:00:30.37,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf20}All {\kf26}five {\kf64}attributes {\kf19}are {\kf19}in. {\kf19}The\N{\2a&HFF&} {\kf35}final {\kf21}...
-Dialogue: 0,0:00:28.15,0:00:30.37,Cap1_above_bottom,,0,0,0,,All five attributes are in. The\Nfinal ...
-Dialogue: 0,0:00:30.37,0:00:31.94,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf26}System {\kf34}offline. {\kf17}Stay {\kf22}tuned {\kf13}for\N{\2a&HFF&} {\kf23}the {\kf22}...
-Dialogue: 0,0:00:30.37,0:00:31.94,Cap1_above_bottom,,0,0,0,,System offline. Stay tuned for\Nthe ...
+Dialogue: 0,0:00:00.00,0:00:01.01,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf3}A {\kf18}massive {\kf15}system {\kf10}leak {\kf10}just\N{\2a&HFF&} {\kf12}exposed {\kf6}the {\kf6}raw {\kf21}performance
+Dialogue: 0,0:00:01.01,0:00:02.16,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf16}stats. {\kf10}Item {\kf3}A {\kf15}versus {\kf10}Item {\kf5}B. {\kf8}Who\N{\2a&HFF&} {\kf7}will {\kf15}dominate {\kf6}the {\kf12}luxury {\kf8}tech
+Dialogue: 0,0:00:02.16,0:00:02.81,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf65}showdown?
+Dialogue: 0,0:00:00.00,0:00:01.01,Cap1_above_bottom,,0,0,0,,A massive system leak just\Nexposed the raw performance
+Dialogue: 0,0:00:01.01,0:00:02.16,Cap1_above_bottom,,0,0,0,,stats. Item A versus Item B. Who\Nwill dominate the luxury tech
+Dialogue: 0,0:00:02.16,0:00:02.81,Cap1_above_bottom,,0,0,0,,showdown?
+Dialogue: 0,0:00:02.81,0:00:04.12,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf9}Five {\kf19}critical {\kf23}attributes {\kf7}are\N{\2a&HFF&} {\kf14}being {\kf16}loaded {\kf11}into {\kf8}the {\kf24}butterfly
+Dialogue: 0,0:00:04.12,0:00:05.36,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf17}chart. {\kf15}Watch {\kf12}both {\kf15}sides {\kf18}render\N{\2a&HFF&} {\kf17}head {\kf8}to {\kf21}head.
+Dialogue: 0,0:00:02.81,0:00:04.12,Cap1_above_bottom,,0,0,0,,Five critical attributes are\Nbeing loaded into the butterfly
+Dialogue: 0,0:00:04.12,0:00:05.36,Cap1_above_bottom,,0,0,0,,chart. Watch both sides render\Nhead to head.
+Dialogue: 0,0:00:05.36,0:00:06.81,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf14}Speed {\kf14}test. {\kf12}Item {\kf3}A {\kf12}hits {\kf18}eighty\N{\2a&HFF&} {\kf19}eight, {\kf9}but {\kf12}Item {\kf3}B {\kf15}edges {\kf15}ahead
+Dialogue: 0,0:00:06.81,0:00:08.05,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf14}with {\kf21}ninety {\kf14}two. {\kf14}Item {\kf3}B {\kf17}takes\N{\2a&HFF&} {\kf8}the {\kf15}first {\kf18}round.
+Dialogue: 0,0:00:05.36,0:00:06.81,Cap1_above_bottom,,0,0,0,,Speed test. Item A hits eighty\Neight, but Item B edges ahead
+Dialogue: 0,0:00:06.81,0:00:08.05,Cap1_above_bottom,,0,0,0,,with ninety two. Item B takes\Nthe first round.
+Dialogue: 0,0:00:08.05,0:00:08.65,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf9}Handling {\kf12}precision. {\kf5}Item {\kf1}A\N{\2a&HFF&} {\kf12}dominates {\kf2}at {\kf7}ninety {\kf5}five {\kf8}against
+Dialogue: 0,0:00:08.65,0:00:09.26,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf5}Item {\kf4}B's {\kf9}eighty. {\kf1}A {\kf9}massive {\kf5}gap.\N{\2a&HFF&} {\kf6}Item {\kf2}A {\kf8}takes {\kf7}this {\kf5}one
+Dialogue: 0,0:00:09.26,0:00:09.86,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf60}convincingly.
+Dialogue: 0,0:00:08.05,0:00:08.65,Cap1_above_bottom,,0,0,0,,Handling precision. Item A\Ndominates at ninety five against
+Dialogue: 0,0:00:08.65,0:00:09.26,Cap1_above_bottom,,0,0,0,,Item B's eighty. A massive gap.\NItem A takes this one
+Dialogue: 0,0:00:09.26,0:00:09.86,Cap1_above_bottom,,0,0,0,,convincingly.
+Dialogue: 0,0:00:09.86,0:00:11.30,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf28}Acceleration {\kf19}metrics. {\kf9}Item {\kf2}A\N{\2a&HFF&} {\kf18}shows {\kf23}seventy {\kf20}eight, {\kf10}but {\kf13}Item {\kf3}B
+Dialogue: 0,0:00:11.30,0:00:12.66,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf21}surges {\kf7}to {\kf22}eighty {\kf22}eight. {\kf15}Item {\kf4}B\N{\2a&HFF&} {\kf14}pulls {\kf14}ahead {\kf17}again.
+Dialogue: 0,0:00:09.86,0:00:11.30,Cap1_above_bottom,,0,0,0,,Acceleration metrics. Item A\Nshows seventy eight, but Item B
+Dialogue: 0,0:00:11.30,0:00:12.66,Cap1_above_bottom,,0,0,0,,surges to eighty eight. Item B\Npulls ahead again.
+Dialogue: 0,0:00:12.66,0:00:13.74,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf13}Luxury {\kf13}finish {\kf13}score. {\kf9}Item {\kf2}A {\kf9}hits\N{\2a&HFF&} {\kf11}ninety {\kf14}against {\kf8}Item {\kf6}B's {\kf10}sixty
+Dialogue: 0,0:00:13.74,0:00:14.83,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf12}five. {\kf2}A {\kf17}complete {\kf17}blowout. {\kf9}Item {\kf2}A\N{\2a&HFF&} {\kf11}takes {\kf5}it {\kf9}with {\kf5}no {\kf19}contest.
+Dialogue: 0,0:00:12.66,0:00:13.74,Cap1_above_bottom,,0,0,0,,Luxury finish score. Item A hits\Nninety against Item B's sixty
+Dialogue: 0,0:00:13.74,0:00:14.83,Cap1_above_bottom,,0,0,0,,five. A complete blowout. Item A\Ntakes it with no contest.
+Dialogue: 0,0:00:14.83,0:00:15.52,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf11}Technology {\kf12}innovation. {\kf4}Item {\kf1}A\N{\2a&HFF&} {\kf9}scores {\kf10}eighty {\kf8}five, {\kf5}but {\kf7}Item {\kf2}B
+Dialogue: 0,0:00:15.52,0:00:16.22,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf7}fires {\kf5}back {\kf5}with {\kf8}ninety {\kf7}five.\N{\2a&HFF&} {\kf5}Item {\kf2}B {\kf10}claims {\kf5}the {\kf6}tech {\kf10}crown.
+Dialogue: 0,0:00:14.83,0:00:15.52,Cap1_above_bottom,,0,0,0,,Technology innovation. Item A\Nscores eighty five, but Item B
+Dialogue: 0,0:00:15.52,0:00:16.22,Cap1_above_bottom,,0,0,0,,fires back with ninety five.\NItem B claims the tech crown.
+Dialogue: 0,0:00:19.40,0:00:20.35,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf6}All {\kf8}five {\kf22}attributes {\kf7}are {\kf7}in. {\kf7}The\N{\2a&HFF&} {\kf6}final {\kf16}calculations {\kf12}complete. {\kf4}And
+Dialogue: 0,0:00:20.35,0:00:21.16,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf6}the {\kf14}overall {\kf22}performance {\kf12}winner\N{\2a&HFF&} {\kf5}is {\kf22}revealed.
+Dialogue: 0,0:00:19.40,0:00:20.35,Cap1_above_bottom,,0,0,0,,All five attributes are in. The\Nfinal calculations complete. And
+Dialogue: 0,0:00:20.35,0:00:21.16,Cap1_above_bottom,,0,0,0,,the overall performance winner\Nis revealed.
+Dialogue: 0,0:00:21.16,0:00:22.21,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf13}System {\kf16}offline. {\kf8}Stay {\kf10}tuned {\kf6}for\N{\2a&HFF&} {\kf5}the {\kf8}next {\kf23}head-to-head {\kf8}data {\kf9}leak.
+Dialogue: 0,0:00:21.16,0:00:22.21,Cap1_above_bottom,,0,0,0,,System offline. Stay tuned for\Nthe next head-to-head data leak.

@@ -24,7 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import aiohttp
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
 from src.agents.core.models import (
     AuthorityTier,
     SourceAudit,
@@ -270,7 +270,7 @@ driving experience with more horsepower and faster acceleration.
 
 async def run_all_tests() -> None:
     """Execute all 7 template tests sequentially with rate limiting."""
-    limiter = TokenBucketRateLimiter(rpm=settings.gemini_rpm_limit)
+    limiter = TokenBucketRateLimiter(rpm=APP_CONFIG.llm.rpm_limit)
 
     passed = 0
     failed = 0
@@ -278,7 +278,7 @@ async def run_all_tests() -> None:
 
     print("\n" + "=" * 64)
     print("  AutoShorts -- Manual Data Generation Test")
-    print(f"  Model: {settings.gemini_model}  |  RPM: {settings.gemini_rpm_limit}")
+    print(f"  Model: {APP_CONFIG.llm.extraction.model}  |  RPM: {APP_CONFIG.llm.rpm_limit}")
     print("=" * 64 + "\n")
 
     async with aiohttp.ClientSession() as session:

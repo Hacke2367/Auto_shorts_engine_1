@@ -22,7 +22,8 @@ from tenacity import (
     wait_exponential,
 )
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.retry import standard_retry_policy, rate_limit_retry_policy
 from src.agents.core.job_manager import PROJECT_ROOT
 from src.agents.core.logger import log_api_call
 from src.agents.core.models import TemplateDataset
@@ -53,23 +54,13 @@ class GeminiRateLimitError(Exception):
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    """Standard retry: 3 attempts for network errors."""
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
-        reraise=True,
-    )
+    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
+    return standard_retry_policy()
 
 
 def _get_429_retry_policy() -> AsyncRetrying:
-    """Strict 429-aware retry: waits 60s+."""
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=60, min=60, max=120),
-        retry=retry_if_exception_type(GeminiRateLimitError),
-        reraise=True,
-    )
+    """Strict 429-aware retry (config-driven, see APP_CONFIG.retry)."""
+    return rate_limit_retry_policy(exceptions=(GeminiRateLimitError,))
 
 
 def _load_text(path: Path) -> str:
@@ -185,17 +176,22 @@ async def _call_gemini(
     log: logging.Logger,
 ) -> str:
     key = settings.gemini_api_key.get_secret_value()
-    model_name = settings.gemini_model
+    cfg = APP_CONFIG.llm.scripting
+    model_name = cfg.model
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{model_name}:generateContent"
     )
     _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
+    gen_config: dict = {"temperature": cfg.temperature}
+    if cfg.max_output_tokens is not None:
+        gen_config["maxOutputTokens"] = cfg.max_output_tokens
+
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"parts": [{"text": user_prompt}]}],
-        "generationConfig": {"temperature": settings.gemini_temperature},
+        "generationConfig": gen_config,
     }
 
     async for rate_attempt in _get_429_retry_policy():

@@ -24,19 +24,16 @@ from tenacity import (
     wait_exponential,
 )
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.retry import standard_retry_policy
 from src.agents.core.logger import log_api_call
 
 logger = logging.getLogger(__name__)
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=5),
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
-        reraise=True,
-    )
+    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
+    return standard_retry_policy()
 
 
 async def _validate_hypothesis(
@@ -44,7 +41,7 @@ async def _validate_hypothesis(
     session: aiohttp.ClientSession,
     log: logging.Logger,
     max_results: int = 4,
-    request_timeout: float = 30.0,
+    request_timeout: float = APP_CONFIG.api_timeout_seconds,
 ) -> dict[str, Any] | None:
     """Fetch evidence for a specific topic hypothesis via Tavily."""
     url = "https://api.tavily.com/search"
@@ -149,7 +146,7 @@ async def fetch_raw_candidates(
     log: logging.Logger,
     max_per_bucket: int = 4,
     max_concurrency: int = 5,
-    request_timeout_seconds: float = 30.0,
+    request_timeout_seconds: float = APP_CONFIG.api_timeout_seconds,
 ) -> list[dict[str, Any]]:
     """Validate topic hypotheses by gathering evidence from the web.
 

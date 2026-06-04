@@ -1,8 +1,13 @@
 # src/captions/timeline_resolver.py
 from __future__ import annotations
+import logging
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+from src.sync.audio_trim import trimmed_duration_seconds
+
+_log = logging.getLogger(__name__)
 
 
 def _guess_ffprobe_path(ffmpeg_path: str) -> str:
@@ -57,11 +62,22 @@ def resolve_timeline_segments(
     job: Dict[str, Any],
     job_dir: Path,
     ffmpeg_path: str,
+    trim_silence: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Builds a timeline list:
       [{name, start, end, dur}, ...]
-    Uses job['timeline'] if present; else uses ffprobe on each audio segment file.
+
+    Duration source per segment:
+      - trim_silence=True : the segment's silence-TRIMMED duration, measured with
+        the SAME filter the voice concat uses. This makes subtitle timing match
+        the final (trimmed) voice track exactly. This is authoritative and
+        overrides job['timeline'] (which holds raw/untrimmed durations).
+      - trim_silence=False: job['timeline'] if present, else raw ffprobe of the
+        original segment file.
+
+    If a trimmed measurement fails for a segment, falls back to the
+    timeline/raw-ffprobe value so caption generation never hard-crashes.
     """
     audio_cfg = job.get("audio") if isinstance(job.get("audio"), dict) else None
     if not audio_cfg:
@@ -94,13 +110,27 @@ def resolve_timeline_segments(
             raise ValueError(f"audio.order references missing segment: {name}")
 
         dur: Optional[float] = None
-        if name in timeline:
+
+        # Authoritative path: trimmed duration that matches the real voice track.
+        if trim_silence:
+            try:
+                dur = trimmed_duration_seconds(ffmpeg_path, seg_path_map[name])
+            except Exception as e:
+                _log.warning(
+                    "captions: trimmed-duration measurement failed for '%s' "
+                    "(%s) — falling back to timeline/raw duration",
+                    name, e,
+                )
+                dur = None
+
+        # Otherwise (or on fallback): use job['timeline'] if present.
+        if dur is None and name in timeline:
             try:
                 dur = float(timeline[name])
             except Exception:
                 dur = None
 
-        # fallback: ffprobe duration
+        # Last resort: raw ffprobe of the original (untrimmed) segment file.
         if dur is None:
             audio_path = seg_path_map[name]
             if not audio_path.exists():

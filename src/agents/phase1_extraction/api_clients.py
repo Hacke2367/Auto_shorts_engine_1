@@ -27,7 +27,8 @@ from tenacity import (
     wait_exponential,
 )
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.retry import standard_retry_policy
 from src.agents.core.logger import log_api_call
 from src.agents.core.models import (
     AuthorityTier,
@@ -39,13 +40,8 @@ from src.agents.core.models import (
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    """Standard exponential backoff policy for all external HTTP calls."""
-    return AsyncRetrying(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
-        reraise=True,
-    )
+    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
+    return standard_retry_policy()
 
 
 # ---------------------------------------------------------------------------
@@ -136,12 +132,12 @@ async def tavily_extract(
                     tier = AuthorityTier.SECONDARY
                     if any(
                         netloc == d or netloc.endswith(f".{d}")
-                        for d in settings.primary_authority_domains
+                        for d in APP_CONFIG.primary_authority_domains
                     ):
                         tier = AuthorityTier.PRIMARY
                     elif any(
                         netloc == d or netloc.endswith(f".{d}")
-                        for d in settings.social_authority_domains
+                        for d in APP_CONFIG.social_authority_domains
                     ):
                         tier = AuthorityTier.SOCIAL
 
@@ -176,7 +172,8 @@ async def gemini_extract(
 ) -> TemplateDataset:
     """Use Gemini to map unstructured text into strictly typed JSON rows."""
     key = settings.gemini_api_key.get_secret_value()
-    model_name = settings.gemini_model
+    cfg = APP_CONFIG.llm.extraction
+    model_name = cfg.model
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
     _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
@@ -239,7 +236,7 @@ Do not hallucinate data. Only extract facts found in the texts. If sources disag
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "temperature": settings.gemini_temperature,
+            "temperature": cfg.temperature,
         },
     }
 

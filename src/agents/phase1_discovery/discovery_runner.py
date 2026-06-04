@@ -31,7 +31,8 @@ from typing import Any
 import aiohttp
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from src.agents.core.config import settings
+from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.retry import standard_retry_policy
 from src.agents.core.logger import timed_operation, log_api_call
 from src.agents.core.models import (
     DiscoveryBatch,
@@ -71,7 +72,8 @@ async def _ideate_hypotheses(
 ) -> list[str]:
     """Use Gemini to brainstorm novel topic ideas before we search the web."""
     key = settings.gemini_api_key.get_secret_value()
-    model_name = settings.gemini_model
+    cfg = APP_CONFIG.llm.discovery_ideation
+    model_name = cfg.model
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{model_name}:generateContent"
@@ -85,18 +87,13 @@ async def _ideate_hypotheses(
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "temperature": 0.9,
-            "maxOutputTokens": 1000,
+            "temperature": cfg.temperature,
+            "maxOutputTokens": cfg.max_output_tokens,
         },
     }
 
     try:
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=2, max=10),
-            retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
-            reraise=True,
-        ):
+        async for attempt in standard_retry_policy():
             with attempt:
                 t0 = time.perf_counter()
                 async with session.post(url, json=payload, headers=_headers) as resp:
