@@ -130,6 +130,51 @@ def _record_decision(
         )
         archive.add_to_queue(queued_topic)
 
+
+def _suggest_alternatives(
+    candidates: list[dict[str, Any]],
+    failed_index: int,
+    job_id: str,
+    limit: int = 3,
+) -> None:
+    """Print feasibility-ranked alternative candidates after a hard failure.
+
+    Manual-control contract: we SUGGEST, we never auto-select. The operator
+    explicitly chose the failed topic, so the next decision stays theirs.
+    """
+    # Recovering from a feasibility failure — surface the safest bets first by
+    # ranking remaining candidates on data_feasibility, then overall score.
+    alternatives = [
+        (i, c) for i, c in enumerate(candidates, 1) if i != failed_index
+    ]
+    alternatives.sort(
+        key=lambda pair: (
+            pair[1].get("data_feasibility_score", 0.0),
+            pair[1].get("final_score", 0.0),
+        ),
+        reverse=True,
+    )
+
+    if not alternatives:
+        print("\nNo other candidates remain in this discovery run.")
+        print("Re-run discovery for fresh topics:")
+        print('  python -m src.cli.phase1 discover --niche "<niche>" --top-n 10')
+        return
+
+    print("\nNext-best candidates from THIS run (ranked by data feasibility - you choose):\n")
+    for idx, c in alternatives[:limit]:
+        feas = float(c.get("data_feasibility_score", 0.0))
+        topic = c.get("topic", "Unknown")
+        tmpl = c.get("best_fit_template", "?")
+        print(f"  [{idx}] feasibility {feas:.1f}/10  |  {tmpl}")
+        print(f"      {topic}")
+        print(f"      python -m src.cli.phase1 approve --job-id {job_id} --index {idx}")
+        print()
+
+    print("Or re-run discovery for fresh topics:")
+    print('  python -m src.cli.phase1 discover --niche "<niche>" --top-n 10')
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -294,11 +339,32 @@ async def cmd_approve(args: argparse.Namespace) -> None:
     print("Running extraction...")
     try:
         await run_extraction(job_manager=jm, topic=selected["topic"])
-        print("\n[SUCCESS] Extraction completed.")
-        ArchiveManager().mark_produced(selected["topic"], reason="CLI Approve Extract Success")
     except Exception as e:
-        print(f"\n[ERROR] Extraction failed: {e}")
-        
+        # Graceful hard-fail. The operator explicitly chose this topic, so we
+        # surface the failure and SUGGEST alternatives — we never silently
+        # auto-advance to a topic they did not pick.
+        _print_header("EXTRACTION FAILED — SELECTED TOPIC COULD NOT BE BUILT")
+        print(f"Topic:    {selected['topic']}")
+        print(f"Template: {template} (fallback: {final_fallback or 'none'})")
+        print(f"Reason:   {e}")
+        print()
+        print("This topic was NOT abandoned automatically. You explicitly selected it,")
+        print("so the decision to switch stays yours - no silent auto-advance.")
+
+        feas = selected.get("data_feasibility_score")
+        if feas is not None and float(feas) <= 3:
+            print()
+            print(f"Likely cause: low data feasibility ({float(feas):.1f}/10) - this resembles")
+            print("a DERIVED metric that no single source publishes as a ready-to-extract table.")
+
+        if jm.attempts_dir.exists():
+            print(f"\nPer-attempt failure logs: {jm.attempts_dir}")
+
+        _suggest_alternatives(candidates, args.index, jm.job_id)
+        sys.exit(1)
+
+    print("\n[SUCCESS] Extraction completed.")
+    ArchiveManager().mark_produced(selected["topic"], reason="CLI Approve Extract Success")
     await cmd_inspect(argparse.Namespace(job_id=jm.job_id, template=None))
 
 

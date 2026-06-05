@@ -81,11 +81,18 @@ Return a single JSON object with these exact fields:
 - hook_potential_score: Does the title naturally stop the scroll? 9-10=Instant curiosity, 1-2=Boring.
 - novelty_score: Is this a unique angle or overdone? 9-10=Fresh/surprising, 1-2=Cliché.
 - visual_fit_score: How beautifully does this map into the chosen template? 9-10=Perfect translation, 1-2=Forced.
-- data_feasibility_score: Based on the snippets, does structurable data actually exist? 9-10=Proven in evidence, 1-2=No evidence.
+- data_feasibility_score: Does a SINGLE published source already hold this as a ready-to-extract table, ranking, or list? Grade only what the evidence PROVES exists — never what could theoretically be assembled. 9-10=A pre-compiled table or ranking is provably present in the evidence. 5-6=Real figures exist but lie scattered across prose and would need manual assembly. 1-3=No structured data is shown, OR the metric is derived (see below).
 - freshness_score: Is this incredibly timely/relevant right now? 9-10=Trending today, 1-2=Outdated content.
+
+## The Derived-Metric Trap — read before grading data_feasibility
+A metric is "derived" when NO single source publishes it directly, and producing it would demand joining two or more independent datasets or computing a ratio, per-unit, average, or composite figure. Tell-tale phrasing: "per", "ratio", "vs", "adjusted for", "relative to", "ROI", "average X across Y".
+- The raw ingredients existing separately is IRRELEVANT. If no single source publishes the FINAL computed metric as a structured table, the data is NOT feasibly extractable.
+- The absence of a pre-compiled table for a derived metric is positive evidence that the underlying join is ill-defined. Treat it as a red flag, never a gap for the pipeline to fill.
+- For ANY derived metric where the evidence does not show a single source already publishing the computed result, data_feasibility_score MUST be <= 3.
 
 ## Rules
 - Do NOT inflate scores for boring corporate data unless it has a viral angle.
+- A magnetic hook NEVER rescues weak feasibility — an un-buildable topic is worthless no matter how viral it sounds. Score the two axes independently.
 - If data_feasibility_score is < 5, validation_confidence MUST be low.
 - Return pure JSON only. No markdown formatting wraps.
 
