@@ -103,10 +103,10 @@ class LLMConfig(BaseModel):
 
     # ---- Phase 1: Discovery ----
     discovery_ideation: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.6, max_output_tokens=1000,
+        model="gemini-2.5-flash", temperature=0.6,
     )
     discovery_scoring: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.1, max_output_tokens=1000,
+        model="gemini-2.5-flash", temperature=0.1,
     )
     # ---- Phase 1: Extraction ----
     extraction: PhaseModel = PhaseModel(
