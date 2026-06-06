@@ -89,6 +89,12 @@ class PhaseModel(BaseModel):
     max_output_tokens: int | None = Field(
         default=None, ge=1, description="Optional output token cap (None = provider default)."
     )
+    thinking_budget: int | None = Field(
+        default=None, ge=0,
+        description="Gemini 2.5 thinkingConfig.thinkingBudget. 0 disables thinking (Flash only); "
+                    "Pro requires >=128. None = provider default (dynamic). Thinking tokens are "
+                    "billed at the OUTPUT rate, so this is a direct cost dial.",
+    )
 
 
 class LLMConfig(BaseModel):
@@ -112,9 +118,21 @@ class LLMConfig(BaseModel):
     extraction: PhaseModel = PhaseModel(
         model="gemini-2.5-flash", temperature=0.1,
     )
-    # ---- Phase 2: Scripting (specialized — stronger model) ----
-    # Tip: raise `temperature` (e.g. 0.6–0.8) for more creative scripts; keep it
-    # low if the XML parser is sensitive to format drift.
+    # ---- Phase 2: Scripting — COST-ROUTED across sub-tasks ----
+    # Cheap Flash does the heavy lifting (creative draft + mechanical length-rewrites); expensive
+    # Pro runs ONCE for the final flow polish (script-doctor). This keeps Pro as the final creative
+    # pass while cutting cost ~85%. THE one quality/cost dial: if a persona's draft feels flat,
+    # flip `scripting_draft.model` to "gemini-2.5-pro".
+    scripting_draft: PhaseModel = PhaseModel(
+        model="gemini-2.5-flash", temperature=0.4, thinking_budget=0,
+    )
+    scripting_rewrite: PhaseModel = PhaseModel(
+        model="gemini-2.5-flash", temperature=0.2, thinking_budget=0,
+    )
+    scripting_doctor: PhaseModel = PhaseModel(
+        model="gemini-2.5-pro", temperature=0.3, thinking_budget=512,
+    )
+    # Back-compat alias (was the single Phase-2 route). Not used by the writer anymore.
     scripting: PhaseModel = PhaseModel(
         model="gemini-2.5-pro", temperature=0.3,
     )
@@ -171,6 +189,14 @@ class AppConfig(BaseModel):
     # Shared per-request HTTP timeout (seconds) for ALL external calls
     # (Gemini, Tavily, ElevenLabs). Excludes retry backoff.
     api_timeout_seconds: float = Field(default=60.0, gt=0)
+
+    # Phase 2 script-doctor — a final whole-script flow-polish LLM pass that makes the segmented
+    # monologue sound like one seamless spoken performance. Safe by design: any constraint
+    # violation in its output (bad tags, out-of-budget, number drift) is discarded and the
+    # pre-doctor script is kept. Set False to skip the extra LLM call (and its cost).
+    script_doctor_enabled: bool = Field(
+        default=True, description="Enable the Phase 2 whole-script flow-polish pass."
+    )
 
     # Authority domains for Phase 1 source auditing (operational, not secret).
     primary_authority_domains: list[str] = Field(

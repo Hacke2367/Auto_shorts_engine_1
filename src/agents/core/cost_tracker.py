@@ -7,14 +7,16 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Gemini Pricing (USD per 1M tokens) — verify at: ai.google.dev/pricing
-# gemini-2.5-flash non-thinking tier (prompts <= 200K tokens)
+# Gemini Pricing (USD per 1M tokens) — VERIFY / CALIBRATE at ai.google.dev/pricing.
+# Thinking tokens are billed at the OUTPUT rate (we add thoughtsTokenCount to output below).
+# Pro output ($10/M, prompts <=200K) reconciles with the observed ~₹14/script bill — if your
+# actual billing differs, tune these two numbers (you have the real invoice to calibrate against).
 # ---------------------------------------------------------------------------
 _PRICING: dict[str, dict[str, float]] = {
-    "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
-    "gemini-2.5-pro":   {"input": 1.25,  "output": 10.00},
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-pro":   {"input": 1.25, "output": 10.00},
 }
-_FALLBACK_PRICING = {"input": 0.075, "output": 0.30}
+_FALLBACK_PRICING = {"input": 0.30, "output": 2.50}
 
 
 def _cost_usd(model: str, prompt_tokens: int, output_tokens: int) -> float:
@@ -39,27 +41,33 @@ def track_gemini_call(
     model: str,
     prompt_tokens: int,
     output_tokens: int,
+    thinking_tokens: int = 0,
     job_dir: Path | None = None,
 ) -> None:
     """Record one Gemini API call in the session accumulator and optionally to JSONL.
 
+    `thinking_tokens` (Gemini 2.5 ``thoughtsTokenCount``) are billed at the OUTPUT rate, so they
+    are folded into the billed output here. Without this the dashboard under-reports the real cost.
+
     Fire-and-forget: never raises — pipeline must never crash from cost tracking.
     """
     try:
-        cost = _cost_usd(model, prompt_tokens, output_tokens)
+        billed_output = output_tokens + thinking_tokens
+        cost = _cost_usd(model, prompt_tokens, billed_output)
         record: dict[str, Any] = {
             "phase": phase,
             "model": model,
             "prompt_tokens": prompt_tokens,
             "output_tokens": output_tokens,
-            "total_tokens": prompt_tokens + output_tokens,
+            "thinking_tokens": thinking_tokens,
+            "total_tokens": prompt_tokens + billed_output,
             "cost_usd": round(cost, 8),
             "recorded_at": datetime.now(timezone.utc).isoformat(),
         }
 
         _SESSION["calls"].append(record)
         _SESSION["total_prompt"] += prompt_tokens
-        _SESSION["total_output"] += output_tokens
+        _SESSION["total_output"] += billed_output
         _SESSION["total_cost_usd"] += cost
 
         if job_dir is not None:

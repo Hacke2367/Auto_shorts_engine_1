@@ -70,6 +70,8 @@ async def synthesize(
     tts_settings: AudioSynthesisSettings,
     session: aiohttp.ClientSession,
     log: logging.Logger = logger,
+    previous_text: str | None = None,
+    next_text: str | None = None,
 ) -> bytes:
     if tts_settings.provider != "elevenlabs":
         raise TTSError(f"Unsupported TTS provider: {tts_settings.provider}")
@@ -101,6 +103,14 @@ async def synthesize(
 
     if voice_settings:
         payload["voice_settings"] = voice_settings
+
+    # Cross-segment continuity: feed the neighbouring segments' text so the model
+    # carries prosody/intonation into and out of this segment instead of resetting
+    # per call. This context text is NOT synthesized — it only conditions delivery.
+    if previous_text:
+        payload["previous_text"] = previous_text
+    if next_text:
+        payload["next_text"] = next_text
 
     async for rate_attempt in _get_429_retry():
         with rate_attempt:

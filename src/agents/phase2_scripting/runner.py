@@ -27,7 +27,7 @@ from src.agents.phase2_scripting.timing import build_segment_plan
 
 logger = logging.getLogger(__name__)
 
-ENGINE_VERSION = "v1.2"
+ENGINE_VERSION = "v1.3"
 
 
 def _hash_bytes(b: bytes) -> str:
@@ -171,8 +171,10 @@ def _build_inputs_hash(
         _hash_file(context_dir / "template_visual_rules.md"),
         _hash_file(context_dir / "voice_profiles.yaml"),
         _hash_file(personas_dir / "shared_output_contract.md"),
+        _hash_file(personas_dir / "voice_and_scriptcraft.md"),
         _hash_file(personas_dir / f"{persona_id}.md"),
         _hash_file(sys_dir / f"{persona_id}_system.md"),
+        str(APP_CONFIG.script_doctor_enabled),
         ENGINE_VERSION,
     ]
     payload = "|".join(parts)

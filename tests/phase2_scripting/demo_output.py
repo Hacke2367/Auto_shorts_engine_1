@@ -30,16 +30,15 @@ async def main():
         out.append(f"Template: vs_card | Persona: {persona_id} | Segments: {len(plan.segments)}")
         
         system_prompt = _build_system_prompt(plan.persona_id)
-        visual_rules_text = _load_text(VISUAL_RULES_PATH)
-        user_prompt_full = _build_user_prompt(dataset, plan, visual_rules_text)
-        
-        # Use the centrally-configured scripting model (see config.py:LLMConfig).
-        model_name = APP_CONFIG.llm.scripting.model
+        user_prompt_full = _build_user_prompt(dataset, plan)
+
+        # Demo uses the draft model (Flash) — same route the writer's first pass uses.
+        model_name = APP_CONFIG.llm.scripting_draft.model
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={settings.gemini_api_key.get_secret_value()}"
         payload = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"parts": [{"text": user_prompt_full}]}],
-            "generationConfig": {"temperature": APP_CONFIG.llm.scripting.temperature},
+            "generationConfig": {"temperature": APP_CONFIG.llm.scripting_draft.temperature},
         }
 
         timeout = aiohttp.ClientTimeout(total=45)

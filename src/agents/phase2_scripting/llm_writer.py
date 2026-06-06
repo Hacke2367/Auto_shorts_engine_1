@@ -22,7 +22,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.config import settings, APP_CONFIG, PhaseModel
 from src.agents.core.retry import standard_retry_policy, rate_limit_retry_policy
 from src.agents.core.job_manager import PROJECT_ROOT
 from src.agents.core.logger import log_api_call
@@ -46,6 +46,7 @@ PERSONAS_DIR = CONTEXT_DIR / "personas"
 SYSTEM_PROMPTS_DIR = PERSONAS_DIR / "system_prompt"   # canonical — matches runner.py hash
 
 SHARED_CONTRACT_PATH = PERSONAS_DIR / "shared_output_contract.md"
+SCRIPTCRAFT_PATH = PERSONAS_DIR / "voice_and_scriptcraft.md"
 VISUAL_RULES_PATH = CONTEXT_DIR / "template_visual_rules.md"
 
 
@@ -78,8 +79,13 @@ def _build_system_prompt(persona_id: str) -> str:
     sys_str = _load_text(sys_prompt_path)
     persona_str = _load_text(persona_path)
     contract_str = _load_text(SHARED_CONTRACT_PATH)
+    scriptcraft_str = _load_text(SCRIPTCRAFT_PATH)
 
-    merged = f"""{sys_str}
+    merged = f"""=== VOICE & SCRIPTCRAFT (universal craft — read first) ===
+{scriptcraft_str}
+
+=== PERSONA SYSTEM PROMPT ===
+{sys_str}
 
 === PERSONA DEFINITION ===
 {persona_str}
@@ -89,7 +95,8 @@ def _build_system_prompt(persona_id: str) -> str:
 
 === STRICT REMINDER ===
 Output ONLY <MONOLOGUE>...</MONOLOGUE>
-Exact tags, exact order, roman hinglish, numbers sacred. No JSON.
+Exact tags, exact order, roman hinglish. Numbers SACRED — spoken form is fine, value unchanged. No JSON.
+ZERO YAPPING: no markdown fences (no ```), no pre-text, no post-text, no explanations. First character `<`, last character `>`.
 """
     return merged
 
@@ -97,9 +104,16 @@ Exact tags, exact order, roman hinglish, numbers sacred. No JSON.
 def _build_user_prompt(
     dataset: TemplateDataset,
     plan: SegmentPlan,
-    visual_rules_text: str,
 ) -> str:
     dataset_json = json.dumps([r.model_dump() for r in dataset.rows], indent=2)
+
+    # Topic context — what the video is about + what the numbers measure. Without this the
+    # model narrates bare {name, value} pairs blind. `meta` carries TITLE/SUB/METRIC/UNIT.
+    meta = getattr(dataset, "meta", None) or {}
+    meta_lines = "\n".join(f"- {k}: {v}" for k, v in meta.items() if str(v).strip())
+    topic_block = (
+        f"=== TOPIC / WHAT THIS IS ABOUT ===\n{meta_lines}\n\n" if meta_lines else ""
+    )
 
     plan_lines = []
     for spec in plan.segments:
@@ -116,10 +130,7 @@ def _build_user_prompt(
 Template: {plan.template_name}
 Persona: {plan.persona_id}
 
-=== TEMPLATE VISUAL RULES (reference) ===
-{visual_rules_text}
-
-=== REQUIRED STRUCTURE (exact tags and limits) ===
+{topic_block}=== REQUIRED STRUCTURE (exact tags, limits, and per-segment visual context) ===
 {plan_str}
 
 === DATASET (facts only; do not mutate numbers) ===
@@ -134,7 +145,6 @@ def _build_rewrite_prompt(
     failing_segments: List[Tuple[ParsedSegment, str]],  # (Segment, Reason)
     dataset: TemplateDataset,
     plan: SegmentPlan,
-    visual_rules_text: str,
 ) -> str:
     dataset_json = json.dumps([r.model_dump() for r in dataset.rows], indent=2)
 
@@ -151,11 +161,12 @@ Rewrite ONLY the failing tags listed below.
 Do NOT rewrite passing tags.
 Return ONLY the rewritten tags wrapped in <MONOLOGUE>...</MONOLOGUE>.
 
+Adjust LENGTH only. Keep each line natural, spoken, and connected to its neighbours — a complete
+spoken unit, never a dangling fragment. Do NOT strip it into a robotic stub or pad it with filler
+just to hit the count. Numbers stay exactly the same (spoken form is fine).
+
 Template: {plan.template_name}
 Persona: {plan.persona_id}
-
-=== TEMPLATE VISUAL RULES (reference) ===
-{visual_rules_text}
 
 === FAILING TAGS ===
 {issues_str}
@@ -175,9 +186,11 @@ async def _call_gemini(
     user_prompt: str,
     session: aiohttp.ClientSession,
     log: logging.Logger,
+    phase_model: PhaseModel,
+    cost_phase: str,
 ) -> str:
     key = settings.gemini_api_key.get_secret_value()
-    cfg = APP_CONFIG.llm.scripting
+    cfg = phase_model
     model_name = cfg.model
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -188,6 +201,9 @@ async def _call_gemini(
     gen_config: dict = {"temperature": cfg.temperature}
     if cfg.max_output_tokens is not None:
         gen_config["maxOutputTokens"] = cfg.max_output_tokens
+    if cfg.thinking_budget is not None:
+        # Cap (or disable, budget=0 on Flash) the reasoning tokens billed at the output rate.
+        gen_config["thinkingConfig"] = {"thinkingBudget": cfg.thinking_budget}
 
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
@@ -220,10 +236,11 @@ async def _call_gemini(
 
                         usage = data.get("usageMetadata", {})
                         track_gemini_call(
-                            phase="scripting",
+                            phase=cost_phase,
                             model=model_name,
                             prompt_tokens=usage.get("promptTokenCount", 0),
                             output_tokens=usage.get("candidatesTokenCount", 0),
+                            thinking_tokens=usage.get("thoughtsTokenCount", 0),
                         )
 
                         try:
@@ -263,7 +280,6 @@ async def _run_rewrite_loop(
     dataset: TemplateDataset,
     plan: SegmentPlan,
     system_prompt: str,
-    visual_rules_text: str,
     session: aiohttp.ClientSession,
     log: logging.Logger,
 ) -> bool:
@@ -276,8 +292,11 @@ async def _run_rewrite_loop(
             rewrite_attempt + 1, max_retries,
         )
 
-        user_prompt_rewrite = _build_rewrite_prompt(current_failing, dataset, plan, visual_rules_text)
-        raw_output = await _call_gemini(system_prompt, user_prompt_rewrite, session, log)
+        user_prompt_rewrite = _build_rewrite_prompt(current_failing, dataset, plan)
+        raw_output = await _call_gemini(
+            system_prompt, user_prompt_rewrite, session, log,
+            APP_CONFIG.llm.scripting_rewrite, "scripting_rewrite",
+        )
 
         # Extract only the rewritten tags
         for seg, _ in current_failing:
@@ -303,6 +322,122 @@ async def _run_rewrite_loop(
     return False
 
 
+_DIGITS_RE = re.compile(r"\d+")
+
+
+def _numbers_preserved(
+    before: Dict[str, ParsedSegment],
+    after: Dict[str, ParsedSegment],
+    plan: SegmentPlan,
+) -> bool:
+    """Guard for the script-doctor: every numeric token in each segment must survive unchanged.
+
+    Compares the multiset of digit-runs per segment. Segments with no digits are skipped (nothing
+    numeric to protect). The doctor is told to keep numbers written exactly as-is, so a spoken-form
+    conversion ("95" -> "ninety-five") counts as drift and is rejected.
+    """
+    for spec in plan.segments:
+        b = before.get(spec.tag)
+        a = after.get(spec.tag)
+        if b is None or a is None:
+            return False
+        b_nums = sorted(_DIGITS_RE.findall(b.text))
+        if not b_nums:
+            continue
+        if b_nums != sorted(_DIGITS_RE.findall(a.text)):
+            return False
+    return True
+
+
+def _build_doctor_prompt(ordered_segments: List[ParsedSegment], plan: SegmentPlan) -> str:
+    current_lines = []
+    for seg in ordered_segments:
+        current_lines.append(
+            f"<{seg.tag}>  (keep within {seg.target_min_chars}-{seg.target_max_chars} chars)\n"
+            f"{seg.text}\n"
+            f"</{seg.tag}>"
+        )
+    current_block = "\n".join(current_lines)
+
+    return f"""## TASK: FLOW DOCTOR — polish this into ONE seamless spoken performance
+
+This script is already correct on facts and length. Your ONLY job: make it sound like ONE real
+person talking — smooth the connective flow between segments, kill any robotic / cut-to-cut
+phrasing, vary the rhythm. It will be spoken VERBATIM by a TTS voice.
+
+HARD CONSTRAINTS (violate any -> your output is discarded and the original is kept):
+- Keep the EXACT same tags in the EXACT same order. No added / removed / renamed tags.
+- Each segment MUST stay within its stated char range.
+- Keep every NUMBER written exactly as it appears (same digits). Do not convert to words, round,
+  reorder, or move numbers between segments.
+- Each segment stays a complete spoken unit (clean full stop) — connect by meaning, never leave a
+  dangling conjunction across a segment boundary.
+- Roman Hinglish only. Stay in the same persona voice.
+
+Template: {plan.template_name}    Persona: {plan.persona_id}
+
+=== CURRENT SCRIPT ===
+{current_block}
+
+Return ONLY the <MONOLOGUE>...</MONOLOGUE> block — same tags, same order. NO ``` fences, NO "Here is",
+NO notes or explanations. First character `<`, last character `>`.
+"""
+
+
+async def _run_script_doctor(
+    final_segments: Dict[str, ParsedSegment],
+    plan: SegmentPlan,
+    system_prompt: str,
+    session: aiohttp.ClientSession,
+    log: logging.Logger,
+) -> Tuple[Dict[str, ParsedSegment], str]:
+    """Final whole-script flow polish. Sees ALL segments at once and rewrites them into one
+    seamless spoken performance. Returns (segments, audit_note). Falls back to the input segments
+    on ANY violation (parse failure, out-of-budget, or number drift) — it never worsens the script.
+    """
+    ordered = _order_segments(final_segments, plan)
+    user_prompt = _build_doctor_prompt(ordered, plan)
+
+    try:
+        raw_output = await _call_gemini(
+            system_prompt, user_prompt, session, log,
+            APP_CONFIG.llm.scripting_doctor, "scripting_doctor",
+        )
+    except ScriptGenerationError as e:
+        log.warning("Script-doctor call failed (%s). Keeping pre-doctor script.", e)
+        return final_segments, f"\n\n--- Script Doctor (call failed: {e}) ---"
+
+    note = f"\n\n--- Script Doctor (flow pass) ---\n{raw_output}"
+
+    try:
+        parsed = parse_monologue(raw_output, plan)
+    except ScriptParsingError as e:
+        log.warning("Script-doctor parse failed (%s). Keeping pre-doctor script.", e)
+        return final_segments, note + "\n[DISCARDED: parse failure]"
+
+    polished: Dict[str, ParsedSegment] = {seg.tag: seg for seg in parsed}
+
+    try:
+        failing = _get_failing_segments(polished, plan)
+    except ScriptParsingError as e:
+        log.warning("Script-doctor missing tags (%s). Keeping pre-doctor script.", e)
+        return final_segments, note + "\n[DISCARDED: missing tags]"
+
+    if failing:
+        log.warning(
+            "Script-doctor produced %d out-of-budget segment(s). Keeping pre-doctor script.",
+            len(failing),
+        )
+        return final_segments, note + "\n[DISCARDED: out of budget]"
+
+    if not _numbers_preserved(final_segments, polished, plan):
+        log.warning("Script-doctor altered numbers. Keeping pre-doctor script.")
+        return final_segments, note + "\n[DISCARDED: number drift]"
+
+    log.info("Script-doctor polish applied (flow pass).")
+    return polished, note + "\n[APPLIED]"
+
+
 async def write_script(
     plan: SegmentPlan,
     dataset: TemplateDataset,
@@ -310,21 +445,32 @@ async def write_script(
     log: logging.Logger,
 ) -> Tuple[List[ParsedSegment], str]:
     system_prompt = _build_system_prompt(plan.persona_id)
-    visual_rules_text = _load_text(VISUAL_RULES_PATH)
-
-    user_prompt_full = _build_user_prompt(dataset, plan, visual_rules_text)
+    user_prompt_full = _build_user_prompt(dataset, plan)
 
     max_full_retries = 2
     final_segments: Dict[str, ParsedSegment] = {}
     # Use a list of parts to avoid O(n²) string concatenation across retries.
     history_parts: List[str] = []
 
+    async def _finalize() -> Tuple[List[ParsedSegment], str]:
+        """Optionally run the whole-script flow doctor, then return ordered segments + audit."""
+        segs = final_segments
+        if APP_CONFIG.script_doctor_enabled:
+            segs, doc_note = await _run_script_doctor(
+                final_segments, plan, system_prompt, session, log
+            )
+            history_parts.append(doc_note)
+        return _order_segments(segs, plan), "".join(history_parts)
+
     for attempt in range(max_full_retries + 1):
         log.info(
             "--- Full Monologue Generation (Attempt %d/%d) ---",
             attempt + 1, max_full_retries + 1,
         )
-        raw_output = await _call_gemini(system_prompt, user_prompt_full, session, log)
+        raw_output = await _call_gemini(
+            system_prompt, user_prompt_full, session, log,
+            APP_CONFIG.llm.scripting_draft, "scripting_draft",
+        )
         history_parts.append(f"\n\n--- Full Gen Attempt {attempt + 1} ---\n{raw_output}")
 
         try:
@@ -338,7 +484,7 @@ async def write_script(
 
         failing = _get_failing_segments(final_segments, plan)
         if not failing:
-            return _order_segments(final_segments, plan), "".join(history_parts)
+            return await _finalize()
 
         log.warning("%d segments failed length checks. Entering rewrite loop.", len(failing))
         ok = await _run_rewrite_loop(
@@ -347,12 +493,11 @@ async def write_script(
             dataset,
             plan,
             system_prompt,
-            visual_rules_text,
             session,
             log,
         )
         if ok:
-            return _order_segments(final_segments, plan), "".join(history_parts)
+            return await _finalize()
 
         log.warning("Rewrite loop exhausted; retrying full monologue.")
 
