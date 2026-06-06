@@ -30,6 +30,7 @@ from tenacity import (
 from src.agents.core.config import settings, APP_CONFIG
 from src.agents.core.retry import standard_retry_policy, rate_limit_retry_policy
 from src.agents.core.logger import log_api_call
+from src.agents.core.cost_tracker import track_gemini_call, track_rate_limit_hit
 from src.agents.core.models import TopicCandidate, VALID_TEMPLATES, TEMPLATE_FALLBACKS
 from src.agents.core.rate_limiter import TokenBucketRateLimiter
 
@@ -299,6 +300,7 @@ async def score_single_candidate(
                         )
 
                         if resp.status == 429:
+                            track_rate_limit_hit()
                             log.warning(
                                 "Gemini 429 rate-limited for '%s'. Will backoff 60s.",
                                 title,
@@ -310,6 +312,14 @@ async def score_single_candidate(
 
                         resp.raise_for_status()
                         data = await resp.json()
+
+                        usage = data.get("usageMetadata", {})
+                        track_gemini_call(
+                            phase="scoring",
+                            model=model_name,
+                            prompt_tokens=usage.get("promptTokenCount", 0),
+                            output_tokens=usage.get("candidatesTokenCount", 0),
+                        )
 
                         try:
                             candidate_data = data["candidates"][0]

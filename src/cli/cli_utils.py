@@ -90,6 +90,7 @@ def setup_cli_logger(run_dir: Path) -> logging.Logger:
     
     # File output
     log_file = run_dir / "logs" / "pipeline_execution.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
     file_h = logging.FileHandler(log_file, encoding="utf-8")
     file_h.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s [%(module)s] %(message)s"))
     logger.addHandler(file_h)

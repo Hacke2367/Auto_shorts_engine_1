@@ -116,7 +116,7 @@ class LLMConfig(BaseModel):
     # Tip: raise `temperature` (e.g. 0.6–0.8) for more creative scripts; keep it
     # low if the XML parser is sensitive to format drift.
     scripting: PhaseModel = PhaseModel(
-        model="gemini-2.5-pro", temperature=0.1,
+        model="gemini-2.5-pro", temperature=0.3,
     )
 
     # ---- Shared LLM operational settings ----

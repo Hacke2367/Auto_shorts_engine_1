@@ -20,7 +20,6 @@ import logging
 import os
 import re
 import tempfile
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -83,8 +82,8 @@ class JobManager:
             )
 
         self._template_name: str = template_name
-        self._job_id: str = job_id or self._generate_job_id(template_name)
         self._jobs_root: Path = (jobs_root or PROJECT_ROOT / "jobs").resolve()
+        self._job_id: str = job_id or self._generate_job_id(template_name, self._jobs_root)
 
         # Derived paths
         self._job_dir: Path = self._jobs_root / template_name / self._job_id
@@ -291,12 +290,24 @@ class JobManager:
         return attempt_dir
 
     @staticmethod
-    def _generate_job_id(template_name: str) -> str:
-        """Auto-generate a unique job ID from template + UTC timestamp + random fragment."""
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")[:19]
-        short_id = uuid.uuid4().hex[:4]
+    def _generate_job_id(template_name: str, jobs_root: Path) -> str:
+        """Generate a short sequential job ID: {template}_1, {template}_2, …
+
+        Scans the existing job bucket directory and increments from the
+        highest number found.  Thread-safe enough for single-user CLI use.
+        """
         safe_template = re.sub(r"[^a-zA-Z0-9_-]", "_", template_name)
-        return f"{safe_template}_{ts}_{short_id}"
+        bucket_dir = jobs_root / template_name
+        pattern = re.compile(rf"^{re.escape(safe_template)}_(\d+)$")
+
+        max_n = 0
+        if bucket_dir.is_dir():
+            for entry in bucket_dir.iterdir():
+                m = pattern.match(entry.name)
+                if m:
+                    max_n = max(max_n, int(m.group(1)))
+
+        return f"{safe_template}_{max_n + 1}"
 
     def _read_state(self) -> dict[str, Any] | None:
         """Read and parse the state file.  Returns ``None`` on any error."""

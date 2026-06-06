@@ -162,7 +162,7 @@ class AuditTrail(BaseModel):
                 pass
             raise
 
-        logger.info("Audit trail saved → %s (%d sources)", target, len(self.sources))
+        logger.info("Audit trail saved -> %s (%d sources)", target, len(self.sources))
         return target
 
 

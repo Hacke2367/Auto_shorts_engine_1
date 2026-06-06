@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.cli.cli_utils import resolve_bucket, create_run_dir, get_cli_job_manager, setup_cli_logger
-from src.agents.core.cost_tracker import record_cost
+from src.agents.core.cost_tracker import record_cost, get_session_summary
 from src.agents.phase2_scripting.runner import run_scripting
 from src.agents.phase3_audio.runner import run_phase3
 from src.agents.phase3_audio.contracts import AudioSynthesisSettings
@@ -227,9 +227,9 @@ async def async_phase2(args):
     run_dir = Path(args.job).resolve()
     logger = setup_cli_logger(run_dir)
     log_cost(run_dir, "phase2", "script_generation", "start")
-    
+
     script_file = run_dir / "script" / "script.json"
-    if args.force and script_file.exists():
+    if getattr(args, "force", False) and script_file.exists():
         logger.info(f"Forcing Phase 2: Removed cached script.json")
         script_file.unlink()
         
@@ -245,6 +245,7 @@ async def async_phase2(args):
         await run_scripting(jm, persona_id=args.persona)
         log_cost(run_dir, "phase2", "script_generation", "success")
         logger.info("✅ Phase 2 Completed Successfully")
+        print(get_session_summary(configured_rpm=APP_CONFIG.llm.rpm_limit))
     except Exception as e:
         log_cost(run_dir, "phase2", "script_generation", "fail", str(e))
         logger.error(f"❌ Phase 2 Failed: {e}")

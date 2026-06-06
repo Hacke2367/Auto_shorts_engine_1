@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.agents.core.config import APP_CONFIG
 from src.agents.core.job_manager import JobManager
+from src.agents.core.cost_tracker import get_session_summary
 from src.agents.phase1_discovery.archive_manager import ArchiveManager
 from src.agents.phase1_discovery.discovery_runner import run_discovery
 from src.agents.phase1_extraction.runner import run_extraction
@@ -205,6 +206,7 @@ async def cmd_discover(args: argparse.Namespace) -> None:
         
     print(f"-> Candidates saved to: {jm.discovery_dir / 'candidates.json'}")
     print(f"-> To approve one, run: python -m src.cli.phase1 approve --job-id {jm.job_id} --index <N>")
+    print(get_session_summary(configured_rpm=APP_CONFIG.llm.rpm_limit))
 
 
 async def cmd_auto(args: argparse.Namespace) -> None:
@@ -365,6 +367,7 @@ async def cmd_approve(args: argparse.Namespace) -> None:
 
     print("\n[SUCCESS] Extraction completed.")
     ArchiveManager().mark_produced(selected["topic"], reason="CLI Approve Extract Success")
+    print(get_session_summary(configured_rpm=APP_CONFIG.llm.rpm_limit))
     await cmd_inspect(argparse.Namespace(job_id=jm.job_id, template=None))
 
 
