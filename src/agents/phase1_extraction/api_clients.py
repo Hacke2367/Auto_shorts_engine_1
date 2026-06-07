@@ -194,7 +194,18 @@ async def gemini_extract(
         "vs_card": '{"metric": "Top Speed", "p1_value": "200 mph", "p2_value": "180 mph", "winner": "p1"}',
     }
     example_row = schema_examples.get(template_name, '{"key": "value"}')
-    example_meta = {k: "Example text..." for k in meta_keys}
+    _META_EXAMPLES: dict[str, str] = {
+        "TITLE": "Top 6 Nations",
+        "SUB": "Ranked by personal savings rate.",
+        "METRIC": "Personal Savings Rate",
+        "UNIT": "% of disposable income",
+        "P1": "iPhone 15 Pro",
+        "P2": "Samsung S24",
+        "P1_NAME": "Apple",
+        "P2_NAME": "Samsung",
+        "MODE": "choropleth",
+    }
+    example_meta = {k: _META_EXAMPLES.get(k, "Short descriptive text.") for k in meta_keys}
     
     full_example_payload = f"""{{
   "meta": {json.dumps(example_meta)},

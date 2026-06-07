@@ -36,6 +36,7 @@ from src.agents.phase2_scripting.contracts import (
     count_chars,
     normalize_text,
 )
+from src.agents.phase2_scripting.num_normalizer import build_number_reference
 from src.agents.phase2_scripting.xml_parser import parse_monologue
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,11 @@ SYSTEM_PROMPTS_DIR = PERSONAS_DIR / "system_prompt"   # canonical — matches ru
 SHARED_CONTRACT_PATH = PERSONAS_DIR / "shared_output_contract.md"
 SCRIPTCRAFT_PATH = PERSONAS_DIR / "voice_and_scriptcraft.md"
 VISUAL_RULES_PATH = CONTEXT_DIR / "template_visual_rules.md"
+COMMENTARY_MODE_PATH = CONTEXT_DIR / "commentary_mode.md"
+
+# Templates whose visual is ONE continuous animation (not discrete per-row beats). They get a
+# live-commentary override so the script flows as one broadcast, not per-entity bullet points.
+CONTINUOUS_TEMPLATES = {"scan_race"}
 
 
 class GeminiRateLimitError(Exception):
@@ -95,10 +101,40 @@ def _build_system_prompt(persona_id: str) -> str:
 
 === STRICT REMINDER ===
 Output ONLY <MONOLOGUE>...</MONOLOGUE>
-Exact tags, exact order, roman hinglish. Numbers SACRED — spoken form is fine, value unchanged. No JSON.
+Exact tags, exact order, roman hinglish. Numbers SACRED — copy spoken forms from NUMBER REFERENCE verbatim; never re-translate. No JSON.
 ZERO YAPPING: no markdown fences (no ```), no pre-text, no post-text, no explanations. First character `<`, last character `>`.
 """
     return merged
+
+
+def _topic_block(dataset: TemplateDataset) -> str:
+    """`TOPIC / WHAT THIS IS ABOUT` block from dataset.meta (TITLE/SUB/METRIC/UNIT). Empty if none.
+
+    Without this the model narrates bare {name, value} pairs blind, and the doctor can hallucinate
+    facts (e.g. inventing a 'market fragmented' conclusion on a savings-rate dataset).
+    """
+    meta = getattr(dataset, "meta", None) or {}
+    meta_lines = "\n".join(f"- {k}: {v}" for k, v in meta.items() if str(v).strip())
+    if not meta_lines:
+        return ""
+    unit_hint = ""
+    if not any(k in meta for k in ("UNIT", "METRIC")):
+        unit_hint = "- Each numeric value means what TITLE/SUB says. Do NOT invent a different real-world activity or metric.\n"
+    return f"=== TOPIC / WHAT THIS IS ABOUT ===\n{meta_lines}\n{unit_hint}\n"
+
+
+def _commentary_block(template_name: str) -> str:
+    """Live-commentary OVERRIDE block for continuous templates (e.g. scan_race). Empty otherwise.
+
+    Continuous templates (one fluid background animation) shouldn't be narrated row-by-row; this
+    block tells the model to call the event like a live sports commentator instead.
+    """
+    if template_name not in CONTINUOUS_TEMPLATES or not COMMENTARY_MODE_PATH.exists():
+        return ""
+    return (
+        "=== COMMENTARY MODE (OVERRIDE — read before writing) ===\n"
+        f"{COMMENTARY_MODE_PATH.read_text(encoding='utf-8')}\n\n"
+    )
 
 
 def _build_user_prompt(
@@ -106,14 +142,9 @@ def _build_user_prompt(
     plan: SegmentPlan,
 ) -> str:
     dataset_json = json.dumps([r.model_dump() for r in dataset.rows], indent=2)
-
-    # Topic context — what the video is about + what the numbers measure. Without this the
-    # model narrates bare {name, value} pairs blind. `meta` carries TITLE/SUB/METRIC/UNIT.
-    meta = getattr(dataset, "meta", None) or {}
-    meta_lines = "\n".join(f"- {k}: {v}" for k, v in meta.items() if str(v).strip())
-    topic_block = (
-        f"=== TOPIC / WHAT THIS IS ABOUT ===\n{meta_lines}\n\n" if meta_lines else ""
-    )
+    topic_block = _topic_block(dataset)
+    commentary_block = _commentary_block(plan.template_name)
+    number_ref = build_number_reference(dataset)
 
     plan_lines = []
     for spec in plan.segments:
@@ -130,10 +161,10 @@ def _build_user_prompt(
 Template: {plan.template_name}
 Persona: {plan.persona_id}
 
-{topic_block}=== REQUIRED STRUCTURE (exact tags, limits, and per-segment visual context) ===
+{commentary_block}{topic_block}=== REQUIRED STRUCTURE (exact tags, limits, and per-segment visual context) ===
 {plan_str}
 
-=== DATASET (facts only; do not mutate numbers) ===
+{number_ref}=== DATASET (facts only; do not mutate numbers) ===
 {dataset_json}
 
 Write one continuous script wrapped perfectly in <MONOLOGUE>...</MONOLOGUE>.
@@ -349,7 +380,32 @@ def _numbers_preserved(
     return True
 
 
-def _build_doctor_prompt(ordered_segments: List[ParsedSegment], plan: SegmentPlan) -> str:
+_DANGLING_WORDS = {"lekin", "aur", "par", "jahan", "jaise", "yaani", "toh", "ki", "ya", "kyunki"}
+
+
+def _ends_dangling(text: str) -> bool:
+    """True if a segment ends on a trailing ellipsis or a dangling conjunction (incomplete unit)."""
+    t = text.strip()
+    if t.endswith("...") or t.endswith("…"):
+        return True
+    words = re.findall(r"[A-Za-z]+", t)
+    return bool(words) and words[-1].lower() in _DANGLING_WORDS
+
+
+def _no_dangling_endings(segments: Dict[str, ParsedSegment], plan: SegmentPlan) -> bool:
+    """True if NO segment ends on a dangling conjunction / ellipsis (doctor acceptance guard)."""
+    for spec in plan.segments:
+        seg = segments.get(spec.tag)
+        if seg is None or _ends_dangling(seg.text):
+            return False
+    return True
+
+
+def _build_doctor_prompt(
+    ordered_segments: List[ParsedSegment],
+    plan: SegmentPlan,
+    dataset: TemplateDataset,
+) -> str:
     current_lines = []
     for seg in ordered_segments:
         current_lines.append(
@@ -359,24 +415,34 @@ def _build_doctor_prompt(ordered_segments: List[ParsedSegment], plan: SegmentPla
         )
     current_block = "\n".join(current_lines)
 
-    return f"""## TASK: FLOW DOCTOR — polish this into ONE seamless spoken performance
+    topic_block = _topic_block(dataset)
+    commentary_block = _commentary_block(plan.template_name)
+    dataset_json = json.dumps([r.model_dump() for r in dataset.rows], indent=2)
 
-This script is already correct on facts and length. Your ONLY job: make it sound like ONE real
-person talking — smooth the connective flow between segments, kill any robotic / cut-to-cut
-phrasing, vary the rhythm. It will be spoken VERBATIM by a TTS voice.
+    return f"""## TASK: PERFORMANCE DOCTOR — rewrite this into a vivid, in-character spoken performance
+
+This is a near-final voiceover script. ELEVATE it — do not just smooth or shorten it:
+- Fully ADOPT the persona's voice, attitude, and rhythm (the persona + lexicon are in the system prompt).
+- ENHANCE the storytelling and engagement; make every line land and pull the listener to the next.
+- ERADICATE repetitive patterns — do NOT let every segment follow the same "[name] [number], [gap
+  small]" shape. Vary the openings and the sentence shapes across segments.
+It will be spoken VERBATIM by a TTS voice.
 
 HARD CONSTRAINTS (violate any -> your output is discarded and the original is kept):
-- Keep the EXACT same tags in the EXACT same order. No added / removed / renamed tags.
-- Each segment MUST stay within its stated char range.
-- Keep every NUMBER written exactly as it appears (same digits). Do not convert to words, round,
-  reorder, or move numbers between segments.
-- Each segment stays a complete spoken unit (clean full stop) — connect by meaning, never leave a
-  dangling conjunction across a segment boundary.
-- Roman Hinglish only. Stay in the same persona voice.
+- Keep the EXACT same tags in the EXACT same order. Each segment within its stated char range.
+- Keep every NUMBER exactly as it appears (same digits/words). Do NOT invent, drop, round, or move numbers.
+- Stay TRUE TO THE TOPIC / DATA below — do NOT invent facts, entities, or conclusions it doesn't support.
+- Each segment is a COMPLETE spoken unit ending in a full stop. NEVER end a segment on a dangling
+  conjunction ("lekin", "aur", "par", "jahan", "jaise", "yaani", "toh") or a trailing "...".
+  Connect segments by MEANING (contrast, callback, escalation), not by leaving a sentence unfinished.
+- Roman Hinglish only.
+
+{commentary_block}{topic_block}=== DATASET (facts only; do not contradict) ===
+{dataset_json}
 
 Template: {plan.template_name}    Persona: {plan.persona_id}
 
-=== CURRENT SCRIPT ===
+=== CURRENT SCRIPT (improve every line; keep tags, order, and numbers) ===
 {current_block}
 
 Return ONLY the <MONOLOGUE>...</MONOLOGUE> block — same tags, same order. NO ``` fences, NO "Here is",
@@ -387,16 +453,18 @@ NO notes or explanations. First character `<`, last character `>`.
 async def _run_script_doctor(
     final_segments: Dict[str, ParsedSegment],
     plan: SegmentPlan,
+    dataset: TemplateDataset,
     system_prompt: str,
     session: aiohttp.ClientSession,
     log: logging.Logger,
 ) -> Tuple[Dict[str, ParsedSegment], str]:
-    """Final whole-script flow polish. Sees ALL segments at once and rewrites them into one
-    seamless spoken performance. Returns (segments, audit_note). Falls back to the input segments
-    on ANY violation (parse failure, out-of-budget, or number drift) — it never worsens the script.
+    """Final whole-script performance pass. Sees ALL segments + the topic/dataset at once and
+    rewrites them into one vivid, in-character performance. Returns (segments, audit_note). Falls
+    back to the input segments on ANY violation (parse failure, out-of-budget, number drift, or a
+    dangling conjunction) — it never worsens the script.
     """
     ordered = _order_segments(final_segments, plan)
-    user_prompt = _build_doctor_prompt(ordered, plan)
+    user_prompt = _build_doctor_prompt(ordered, plan, dataset)
 
     try:
         raw_output = await _call_gemini(
@@ -434,7 +502,11 @@ async def _run_script_doctor(
         log.warning("Script-doctor altered numbers. Keeping pre-doctor script.")
         return final_segments, note + "\n[DISCARDED: number drift]"
 
-    log.info("Script-doctor polish applied (flow pass).")
+    if not _no_dangling_endings(polished, plan):
+        log.warning("Script-doctor left a dangling conjunction. Keeping pre-doctor script.")
+        return final_segments, note + "\n[DISCARDED: dangling conjunction]"
+
+    log.info("Script-doctor performance pass applied.")
     return polished, note + "\n[APPLIED]"
 
 
@@ -457,7 +529,7 @@ async def write_script(
         segs = final_segments
         if APP_CONFIG.script_doctor_enabled:
             segs, doc_note = await _run_script_doctor(
-                final_segments, plan, system_prompt, session, log
+                final_segments, plan, dataset, system_prompt, session, log
             )
             history_parts.append(doc_note)
         return _order_segments(segs, plan), "".join(history_parts)

@@ -54,7 +54,7 @@ def test_doctor_falls_back_on_bad_polish():
 
     async def fake_call(system_prompt, user_prompt, session, log, phase_model=None, cost_phase=""):
         # Doctor pass returns a structurally broken monologue -> must be discarded.
-        if "FLOW DOCTOR" in user_prompt:
+        if "PERFORMANCE DOCTOR" in user_prompt:
             return "<MONOLOGUE><HOOK>broken</HOOK></MONOLOGUE>"
         return build_fake_monologue(plan, plan.persona_id)
 
@@ -71,7 +71,7 @@ def test_doctor_skipped_when_disabled():
     plan, dataset = _make_plan_and_dataset()
 
     async def fake_call(system_prompt, user_prompt, session, log, phase_model=None, cost_phase=""):
-        assert "FLOW DOCTOR" not in user_prompt, "doctor must not run when disabled"
+        assert "PERFORMANCE DOCTOR" not in user_prompt, "doctor must not run when disabled"
         return build_fake_monologue(plan, plan.persona_id)
 
     segs, history = _run(plan, dataset, fake_call, doctor_enabled=False)

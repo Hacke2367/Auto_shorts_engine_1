@@ -320,12 +320,12 @@ TEMPLATE_CAPACITIES: dict[str, TemplateCapacity] = {
 
 
 TEMPLATE_META_KEYS: dict[str, list[str]] = {
-    "bar_chart": ["TITLE", "SUB"],
+    "bar_chart": ["TITLE", "SUB", "METRIC", "UNIT"],
     "butterfly_chart": ["TITLE", "SUB", "P1", "P2"],
     "scan_race": ["TITLE", "SUB", "UNIT"],
     "geo_universal": ["TITLE", "SUB", "METRIC", "UNIT", "MODE"],
     "donut_breakdown": ["TITLE", "SUB", "UNIT"],
-    "sort_card": ["TITLE", "SUB"],
+    "sort_card": ["TITLE", "SUB", "METRIC"],
     "vs_card": ["TITLE", "SUB", "P1_NAME", "P2_NAME"],
 }
 
