@@ -1,140 +1,240 @@
 [
   {
-    "t": 2.066666666666669,
-    "event": "riser",
-    "key": "riser",
-    "gain_db": -8.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\riser_short_01.wav",
-    "vol": 0.75,
-    "meta": {
-      "at": "hook_in"
-    }
-  },
-  {
-    "t": 2.833333333333333,
-    "event": "sweep",
-    "key": "sweep",
-    "gain_db": -10.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_transition_sweep_01.wav",
-    "vol": 0.65,
-    "meta": {
-      "at": "donut_reveal"
-    }
-  },
-  {
-    "t": 9.833333333333309,
-    "event": "scan_tick",
-    "key": "scan_tick",
-    "gain_db": -14.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
-    "vol": 0.55,
-    "meta": {
-      "at": "setup_labels"
-    }
-  },
-  {
-    "t": 18.666666666666753,
-    "event": "ui_click",
-    "key": "ui_click",
-    "gain_db": -12.0,
+    "t": 2.400000000000001,
+    "event": "ui_in",
+    "key": "ui_in",
+    "gain_db": 0.0,
     "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
     "vol": 0.6,
     "meta": {
-      "at": "slice_highlight",
-      "i": 1
+      "at": "setup_start"
     }
   },
   {
-    "t": 28.66666666666725,
-    "event": "ui_click",
-    "key": "ui_click",
-    "gain_db": -12.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
-    "vol": 0.6,
+    "t": 18.66666666666662,
+    "event": "whoosh_short",
+    "key": "whoosh_short",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_short_01.wav",
+    "vol": 0.7,
     "meta": {
-      "at": "slice_highlight",
-      "i": 2
-    }
-  },
-  {
-    "t": 38.40000000000038,
-    "event": "ui_click",
-    "key": "ui_click",
-    "gain_db": -12.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
-    "vol": 0.6,
-    "meta": {
-      "at": "slice_highlight",
-      "i": 3
-    }
-  },
-  {
-    "t": 50.86666666666634,
-    "event": "ui_click",
-    "key": "ui_click",
-    "gain_db": -12.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
-    "vol": 0.6,
-    "meta": {
-      "at": "slice_highlight",
-      "i": 4
-    }
-  },
-  {
-    "t": 58.5666666666659,
-    "event": "ui_click",
-    "key": "ui_click",
-    "gain_db": -12.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
-    "vol": 0.6,
-    "meta": {
-      "at": "slice_highlight",
-      "i": 5
-    }
-  },
-  {
-    "t": 65.89999999999883,
-    "event": "ui_click",
-    "key": "ui_click",
-    "gain_db": -12.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
-    "vol": 0.6,
-    "meta": {
-      "at": "slice_highlight",
+      "at": "slice_reveal",
       "i": 6
     }
   },
   {
-    "t": 77.39999999999817,
-    "event": "winner_rise",
-    "key": "winner_rise",
-    "gain_db": -9.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\success_chime_01.wav",
-    "vol": 0.85,
-    "meta": {
-      "at": "winner_reveal"
-    }
-  },
-  {
-    "t": 78.6999999999981,
-    "event": "impact_soft",
-    "key": "impact_soft",
-    "gain_db": -11.0,
-    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
-    "vol": 0.8,
-    "meta": {
-      "at": "winner_banner"
-    }
-  },
-  {
-    "t": 87.53333333333093,
+    "t": 21.199999999999946,
     "event": "ui_pop",
     "key": "ui_pop",
-    "gain_db": -12.0,
+    "gain_db": 0.0,
     "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
     "vol": 0.65,
     "meta": {
-      "at": "outro"
+      "at": "chip_pop",
+      "i": 6
+    }
+  },
+  {
+    "t": 28.39999999999992,
+    "event": "whoosh_soft",
+    "key": "whoosh_soft",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_soft_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "winner_pop",
+      "i": 6
+    }
+  },
+  {
+    "t": 29.266666666666584,
+    "event": "whoosh_short",
+    "key": "whoosh_short",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_short_02.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "slice_reveal",
+      "i": 5
+    }
+  },
+  {
+    "t": 31.79999999999991,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "chip_pop",
+      "i": 5
+    }
+  },
+  {
+    "t": 38.733333333333576,
+    "event": "whoosh_soft",
+    "key": "whoosh_soft",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_soft_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "winner_pop",
+      "i": 5
+    }
+  },
+  {
+    "t": 39.600000000000286,
+    "event": "whoosh_short",
+    "key": "whoosh_short",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_short_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "slice_reveal",
+      "i": 4
+    }
+  },
+  {
+    "t": 42.133333333333745,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "chip_pop",
+      "i": 4
+    }
+  },
+  {
+    "t": 51.80000000000089,
+    "event": "whoosh_soft",
+    "key": "whoosh_soft",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_soft_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "winner_pop",
+      "i": 4
+    }
+  },
+  {
+    "t": 52.6666666666676,
+    "event": "whoosh_short",
+    "key": "whoosh_short",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_short_02.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "slice_reveal",
+      "i": 3
+    }
+  },
+  {
+    "t": 55.20000000000106,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "chip_pop",
+      "i": 3
+    }
+  },
+  {
+    "t": 60.06666666666797,
+    "event": "whoosh_soft",
+    "key": "whoosh_soft",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_soft_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "winner_pop",
+      "i": 3
+    }
+  },
+  {
+    "t": 60.93333333333468,
+    "event": "whoosh_short",
+    "key": "whoosh_short",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_short_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "slice_reveal",
+      "i": 2
+    }
+  },
+  {
+    "t": 63.46666666666814,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "chip_pop",
+      "i": 2
+    }
+  },
+  {
+    "t": 67.9333333333346,
+    "event": "whoosh_soft",
+    "key": "whoosh_soft",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_soft_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "winner_pop",
+      "i": 2
+    }
+  },
+  {
+    "t": 68.80000000000122,
+    "event": "whoosh_short",
+    "key": "whoosh_short",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_short_02.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "slice_reveal",
+      "i": 1
+    }
+  },
+  {
+    "t": 71.33333333333441,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "chip_pop",
+      "i": 1
+    }
+  },
+  {
+    "t": 80.00000000000058,
+    "event": "success",
+    "key": "success",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\success_chime_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "winner_glow",
+      "i": 1
+    }
+  },
+  {
+    "t": 80.8666666666672,
+    "event": "winner_sting",
+    "key": "winner_sting",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\success_chime_01.wav",
+    "vol": 0.85,
+    "meta": {
+      "at": "winner_announce"
     }
   }
 ]
