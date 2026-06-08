@@ -18,7 +18,7 @@ try:
     sys.path.append(project_root)
 
     from src.config import DATA_DIR, BACKGROUND_COLOR, Theme  # type: ignore
-    from src.utils import IntroManager, get_safe_frame  # type: ignore
+    from src.utils import IntroManager, get_safe_frame, add_cinematic_background  # type: ignore
 except Exception:
     HAS_PROJECT = False
     DATA_DIR = "."
@@ -48,6 +48,9 @@ except Exception:
             "cx": 0.0,
             "cy": 0.0,
         }
+
+    def add_cinematic_background(*args, **kwargs):
+        return None
 
 import json
 from pathlib import Path
@@ -1074,6 +1077,7 @@ def load_donut_csv(csv_path: str):
 class DonutBreakdownFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=getattr(Theme, "NEON_BLUE", "#00F0FF"))
         sf = get_safe_frame(margin=0.70)
 
         # Timeline Initialization (current job-aware plumbing)
