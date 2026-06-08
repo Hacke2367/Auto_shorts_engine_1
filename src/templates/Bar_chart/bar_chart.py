@@ -664,6 +664,7 @@ try:
         clamp_x,
         clamp_y,
         make_floating_particles,
+        add_cinematic_background,
         Brand,
     )
 except Exception:
@@ -717,6 +718,9 @@ except Exception:
 
     def make_floating_particles(*args, **kwargs):
         return VGroup()
+
+    def add_cinematic_background(*args, **kwargs):
+        return None
 
 # --- SYNC HELPERS ---
 from src.sync.job import load_job
@@ -874,6 +878,7 @@ def _winner_sweep(scene: Scene, bar: Mobject, rt: float, color_core=WHITE, color
 class BarChartTemplate(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=Brand.CYAN)
 
         # ============================================================
         # ✅ 0) JOB + TIMELINE

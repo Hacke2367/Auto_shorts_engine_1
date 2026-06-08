@@ -35,6 +35,7 @@ try:
         Brand,
         get_safe_frame,
         make_floating_particles,
+        add_cinematic_background,
     )
 except Exception:
     # Full fallback (same as your current except)
@@ -65,6 +66,9 @@ except Exception:
 
     def make_floating_particles(*args, **kwargs):
         return VGroup()
+
+    def add_cinematic_background(*args, **kwargs):
+        return None
 
     class IntroManager:
         @staticmethod
@@ -379,6 +383,7 @@ class ButterflyChart(Scene):
     def construct(self):
         cfg = LayoutCfg()
         self.camera.background_color = Design.BG
+        add_cinematic_background(self, accent=Design.CYAN)
         sf = get_safe_frame(margin=cfg.safe_margin)
         # --- job dir / outputs ---
         import os

@@ -237,6 +237,86 @@ def make_floating_particles(n=30,
 
 
 # ============================================================
+# ✅ CINEMATIC BACKGROUND (shared atmosphere: gradient + brand glow)
+#   - additive only: instant scene.add() + ONE lightweight breathing
+#     updater (same render-cost class as the existing flicker/particles)
+#   - fully fail-safe: any error degrades to the current flat background
+#     and never crashes a render
+# ============================================================
+def add_cinematic_background(scene, accent=None, breathing=True):
+    """
+    Premium background atmosphere shared by every template.
+
+    Draws a subtle vertical gradient (cool charcoal -> near-black) plus a soft
+    radial brand-tinted glow ("pool of light") just above frame centre, and
+    optionally attaches a single slow breathing updater (opacity sway + tiny
+    drift) in the same render-cost class as the existing particle/flicker
+    updaters.
+
+    Sync-safe: no ``self.play()`` / ``run_time`` and no timeline math — only an
+    instant ``scene.add(...)`` plus at most one lightweight updater. Returns the
+    background ``VGroup`` (callers may ``.remove()`` it; not required) or ``None``
+    if anything fails.
+    """
+    try:
+        accent = accent or Brand.CYAN
+
+        W = config.frame_width + 2
+        H = config.frame_height + 2
+
+        # --- Base vertical gradient: cool charcoal (top) -> near-black (bottom).
+        # Stacked full-width strips guarantee a clean top->bottom gradient and
+        # stay fully static (zero per-frame Python cost).
+        strips = VGroup()
+        n_strips = 24
+        strip_h = H / n_strips
+        for i in range(n_strips):
+            strip = Rectangle(width=W, height=strip_h + 0.03, stroke_width=0)
+            strip.set_fill(opacity=1.0)
+            strip.move_to([0.0, (H / 2.0) - strip_h * (i + 0.5), 0.0])
+            strips.add(strip)
+        strips.set_color_by_gradient("#0E1116", "#050608")
+        strips.set_z_index(-100)
+
+        # --- Radial brand glow: concentric low-opacity ellipses approximate a
+        # soft gaussian pool of light with zero per-frame cost.
+        glow_center = np.array([0.0, config.frame_height * 0.12, 0.0])
+        glow_specs = [
+            (config.frame_width * 1.50, config.frame_height * 0.90, 0.060),
+            (config.frame_width * 1.05, config.frame_height * 0.62, 0.045),
+            (config.frame_width * 0.65, config.frame_height * 0.40, 0.030),
+        ]
+        glow = VGroup()
+        base_ops = []
+        for w, h, op in glow_specs:
+            e = Ellipse(width=w, height=h, stroke_width=0)
+            e.set_fill(color=accent, opacity=op)
+            e.move_to(glow_center)
+            glow.add(e)
+            base_ops.append(op)
+        glow.set_z_index(-90)
+
+        bg = VGroup(strips, glow)
+        scene.add(bg)
+
+        # --- Breathing drift: the ONE allowed updater (flicker cost class).
+        # Gently sways glow opacity (~+-25% of base) and nudges it a few
+        # hundredths in Y on a slow sine. O(3) per frame.
+        if breathing:
+            def _breathe(m, dt):
+                phase = np.sin(getattr(scene, "time", 0.0) * 0.4)
+                for e, base_op in zip(m.submobjects, base_ops):
+                    e.set_fill(opacity=base_op * (1.0 + 0.25 * phase))
+                m.move_to(glow_center + np.array([0.0, 0.06 * phase, 0.0]))
+            glow.add_updater(_breathe)
+
+        return bg
+    except Exception:
+        # Decoration must never break a render.
+        return None
+
+
+# ============================================================
 # ✅ INTRO MANAGER (premium + SINGLE SOURCE OF TRUTH)
 #   - prevents double intro calls per Scene
 #   - prevents duplicate overlay/border/watermark per Scene

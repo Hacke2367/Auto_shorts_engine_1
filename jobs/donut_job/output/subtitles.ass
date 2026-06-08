@@ -13,23 +13,59 @@ Style: Cap1_above_bottom,Segoe UI,54,&H00FFFFFF,&H00000000,&H80000000,&H80000000
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
-Dialogue: 0,0:00:00.00,0:00:09.80,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf155}System {\kf156}breach {\kf233}detected. {\kf52}We {\kf104}just\N{\2a&HFF&} {\kf220}intercepted {\kf60}...
-Dialogue: 0,0:00:00.00,0:00:09.80,Cap1_above_bottom,,0,0,0,,System breach detected. We just\Nintercepted ...
-Dialogue: 0,0:00:09.80,0:00:18.60,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf245}Generating {\kf73}the {\kf171}three-D {\kf98}data\N{\2a&HFF&} {\kf183}core. {\kf110}...
-Dialogue: 0,0:00:09.80,0:00:18.60,Cap1_above_bottom,,0,0,0,,Generating the three-D data\Ncore. ...
-Dialogue: 0,0:00:18.60,0:00:28.29,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf145}Apple {\kf144}takes {\kf86}the {\kf202}massive {\kf115}lead\N{\2a&HFF&} {\kf158}with {\kf119}...
-Dialogue: 0,0:00:18.60,0:00:28.29,Cap1_above_bottom,,0,0,0,,Apple takes the massive lead\Nwith ...
-Dialogue: 0,0:00:28.29,0:00:37.72,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf180}Samsung {\kf130}holds {\kf156}strong {\kf52}at {\kf156}twenty\N{\2a&HFF&} {\kf154}five {\kf115}...
-Dialogue: 0,0:00:28.29,0:00:37.72,Cap1_above_bottom,,0,0,0,,Samsung holds strong at twenty\Nfive ...
-Dialogue: 0,0:00:37.72,0:00:49.87,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf209}Xiaomi {\kf208}surges {\kf69}in {\kf139}with {\kf243}fifteen\N{\2a&HFF&} {\kf252}percent. {\kf95}...
-Dialogue: 0,0:00:37.72,0:00:49.87,Cap1_above_bottom,,0,0,0,,Xiaomi surges in with fifteen\Npercent. ...
-Dialogue: 0,0:00:49.87,0:00:57.24,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf87}Oppo {\kf132}carves {\kf66}out {\kf66}ten {\kf175}percent.\N{\2a&HFF&} {\kf132}Heavy {\kf79}...
-Dialogue: 0,0:00:49.87,0:00:57.24,Cap1_above_bottom,,0,0,0,,Oppo carves out ten percent.\NHeavy ...
-Dialogue: 0,0:00:57.24,0:01:04.24,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf83}Vivo {\kf104}locks {\kf42}in {\kf104}eight {\kf167}percent.\N{\2a&HFF&} {\kf140}Offline {\kf60}...
-Dialogue: 0,0:00:57.24,0:01:04.24,Cap1_above_bottom,,0,0,0,,Vivo locks in eight percent.\NOffline ...
-Dialogue: 0,0:01:04.24,0:01:15.42,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf85}The {\kf257}remaining {\kf143}seven {\kf200}percent {\kf114}goes\N{\2a&HFF&} {\kf128}to {\kf191}...
-Dialogue: 0,0:01:04.24,0:01:15.42,Cap1_above_bottom,,0,0,0,,The remaining seven percent goes\Nto ...
-Dialogue: 0,0:01:15.42,0:01:25.53,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf78}The {\kf259}undisputed {\kf285}heavyweight {\kf52}of\N{\2a&HFF&} {\kf193}this {\kf144}...
-Dialogue: 0,0:01:15.42,0:01:25.53,Cap1_above_bottom,,0,0,0,,The undisputed heavyweight of\Nthis ...
-Dialogue: 0,0:01:25.53,0:01:30.62,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf55}Core {\kf122}shutdown. {\kf54}Data {\kf108}secured.\N{\2a&HFF&} {\kf113}Follow {\kf57}...
-Dialogue: 0,0:01:25.53,0:01:30.62,Cap1_above_bottom,,0,0,0,,Core shutdown. Data secured.\NFollow ...
+Dialogue: 0,0:00:00.00,0:00:02.87,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf35}System {\kf36}breach {\kf53}detected. {\kf12}We {\kf24}just\N{\2a&HFF&} {\kf50}intercepted {\kf14}the {\kf37}complete {\kf27}global
+Dialogue: 0,0:00:02.87,0:00:06.25,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf55}smartphone {\kf33}market {\kf28}share {\kf22}data {\kf16}for\N{\2a&HFF&} {\kf43}twenty {\kf43}twenty {\kf35}five. {\kf28}Here {\kf14}is {\kf21}the
+Dialogue: 0,0:00:06.25,0:00:07.36,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf55}classified {\kf56}breakdown.
+Dialogue: 0,0:00:00.00,0:00:02.87,Cap1_above_bottom,,0,0,0,,System breach detected. We just\Nintercepted the complete global
+Dialogue: 0,0:00:02.87,0:00:06.25,Cap1_above_bottom,,0,0,0,,smartphone market share data for\Ntwenty twenty five. Here is the
+Dialogue: 0,0:00:06.25,0:00:07.36,Cap1_above_bottom,,0,0,0,,classified breakdown.
+Dialogue: 0,0:00:07.36,0:00:10.08,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf51}Generating {\kf15}the {\kf35}three-D {\kf20}data\N{\2a&HFF&} {\kf34}core. {\kf21}Six {\kf41}slices {\kf14}of {\kf41}market
+Dialogue: 0,0:00:10.08,0:00:13.27,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf50}dominance {\kf28}about {\kf11}to {\kf11}be {\kf45}exposed.\N{\2a&HFF&} {\kf34}Watch {\kf21}the {\kf35}donut {\kf42}render {\kf14}in {\kf28}real
+Dialogue: 0,0:00:13.27,0:00:14.11,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf84}time.
+Dialogue: 0,0:00:07.36,0:00:10.08,Cap1_above_bottom,,0,0,0,,Generating the three-D data\Ncore. Six slices of market
+Dialogue: 0,0:00:10.08,0:00:13.27,Cap1_above_bottom,,0,0,0,,dominance about to be exposed.\NWatch the donut render in real
+Dialogue: 0,0:00:13.27,0:00:14.11,Cap1_above_bottom,,0,0,0,,time.
+Dialogue: 0,0:00:14.11,0:00:16.96,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf29}Apple {\kf30}takes {\kf18}the {\kf42}massive {\kf24}lead\N{\2a&HFF&} {\kf25}with {\kf37}thirty {\kf25}five {\kf44}percent {\kf12}of
+Dialogue: 0,0:00:16.96,0:00:19.59,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf25}global {\kf42}shipments. {\kf8}An {\kf42}undisputed\N{\2a&HFF&} {\kf34}leader {\kf11}in {\kf17}the {\kf39}premium {\kf45}segment.
+Dialogue: 0,0:00:19.59,0:00:21.99,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf25}The {\kf59}biggest {\kf42}slice {\kf17}of {\kf25}the {\kf25}pie {\kf17}by\N{\2a&HFF&} {\kf30}far.
+Dialogue: 0,0:00:14.11,0:00:16.96,Cap1_above_bottom,,0,0,0,,Apple takes the massive lead\Nwith thirty five percent of
+Dialogue: 0,0:00:16.96,0:00:19.59,Cap1_above_bottom,,0,0,0,,global shipments. An undisputed\Nleader in the premium segment.
+Dialogue: 0,0:00:19.59,0:00:21.99,Cap1_above_bottom,,0,0,0,,The biggest slice of the pie by\Nfar.
+Dialogue: 0,0:00:21.99,0:00:25.09,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf41}Samsung {\kf30}holds {\kf36}strong {\kf12}at {\kf36}twenty\N{\2a&HFF&} {\kf23}five {\kf46}percent. {\kf6}A {\kf46}powerful {\kf34}global
+Dialogue: 0,0:00:25.09,0:00:27.94,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf43}presence {\kf32}across {\kf26}every {\kf26}price\N{\2a&HFF&} {\kf35}tier. {\kf36}Still {\kf22}the {\kf43}number {\kf22}two
+Dialogue: 0,0:00:27.94,0:00:29.54,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf53}threat {\kf18}in {\kf27}the {\kf62}market.
+Dialogue: 0,0:00:21.99,0:00:25.09,Cap1_above_bottom,,0,0,0,,Samsung holds strong at twenty\Nfive percent. A powerful global
+Dialogue: 0,0:00:25.09,0:00:27.94,Cap1_above_bottom,,0,0,0,,presence across every price\Ntier. Still the number two
+Dialogue: 0,0:00:27.94,0:00:29.54,Cap1_above_bottom,,0,0,0,,threat in the market.
+Dialogue: 0,0:00:29.54,0:00:33.02,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf47}Xiaomi {\kf46}surges {\kf15}in {\kf31}with {\kf54}fifteen\N{\2a&HFF&} {\kf44}percent. {\kf21}Fast {\kf37}growth, {\kf53}aggressive
+Dialogue: 0,0:00:33.02,0:00:37.14,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf54}pricing, {\kf20}and {\kf47}massive {\kf53}traction {\kf13}in\N{\2a&HFF&} {\kf42}Asia. {\kf8}A {\kf58}serious {\kf75}contender {\kf17}in {\kf25}the
+Dialogue: 0,0:00:37.14,0:00:38.38,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf48}value {\kf76}segment.
+Dialogue: 0,0:00:29.54,0:00:33.02,Cap1_above_bottom,,0,0,0,,Xiaomi surges in with fifteen\Npercent. Fast growth, aggressive
+Dialogue: 0,0:00:33.02,0:00:37.14,Cap1_above_bottom,,0,0,0,,pricing, and massive traction in\NAsia. A serious contender in the
+Dialogue: 0,0:00:37.14,0:00:38.38,Cap1_above_bottom,,0,0,0,,value segment.
+Dialogue: 0,0:00:38.38,0:00:40.95,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf21}Oppo {\kf32}carves {\kf16}out {\kf16}ten {\kf43}percent.\N{\2a&HFF&} {\kf23}Heavy {\kf41}dominance {\kf9}in {\kf23}Asian {\kf32}markets
+Dialogue: 0,0:00:40.95,0:00:43.12,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf22}with {\kf5}a {\kf38}growing {\kf44}foothold\N{\2a&HFF&} {\kf37}overseas. {\kf28}Quietly {\kf32}climbing {\kf12}the
+Dialogue: 0,0:00:43.12,0:00:43.92,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf80}ranks.
+Dialogue: 0,0:00:38.38,0:00:40.95,Cap1_above_bottom,,0,0,0,,Oppo carves out ten percent.\NHeavy dominance in Asian markets
+Dialogue: 0,0:00:40.95,0:00:43.12,Cap1_above_bottom,,0,0,0,,with a growing foothold\Noverseas. Quietly climbing the
+Dialogue: 0,0:00:43.12,0:00:43.92,Cap1_above_bottom,,0,0,0,,ranks.
+Dialogue: 0,0:00:43.92,0:00:46.69,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf26}Vivo {\kf32}locks {\kf13}in {\kf32}eight {\kf51}percent.\N{\2a&HFF&} {\kf36}Offline {\kf31}retail {\kf41}strength {\kf15}and
+Dialogue: 0,0:00:46.69,0:00:49.46,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf23}solid {\kf41}mid-range {\kf41}offerings {\kf18}keep\N{\2a&HFF&} {\kf17}it {\kf51}firmly {\kf17}in {\kf26}the {\kf43}game.
+Dialogue: 0,0:00:43.92,0:00:46.69,Cap1_above_bottom,,0,0,0,,Vivo locks in eight percent.\NOffline retail strength and
+Dialogue: 0,0:00:46.69,0:00:49.46,Cap1_above_bottom,,0,0,0,,solid mid-range offerings keep\Nit firmly in the game.
+Dialogue: 0,0:00:49.46,0:00:52.47,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf17}The {\kf54}remaining {\kf30}seven {\kf42}percent {\kf24}goes\N{\2a&HFF&} {\kf12}to {\kf30}Other {\kf43}brands. {\kf49}Combined
+Dialogue: 0,0:00:52.47,0:00:55.48,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf37}smaller {\kf38}players {\kf43}fighting {\kf16}for\N{\2a&HFF&} {\kf38}every {\kf61}fraction {\kf15}of {\kf23}the {\kf30}pie.
+Dialogue: 0,0:00:55.48,0:00:57.95,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf37}Volatile, {\kf57}unpredictable, {\kf12}but\N{\2a&HFF&} {\kf47}still {\kf19}in {\kf28}the {\kf47}race.
+Dialogue: 0,0:00:49.46,0:00:52.47,Cap1_above_bottom,,0,0,0,,The remaining seven percent goes\Nto Other brands. Combined
+Dialogue: 0,0:00:52.47,0:00:55.48,Cap1_above_bottom,,0,0,0,,smaller players fighting for\Nevery fraction of the pie.
+Dialogue: 0,0:00:55.48,0:00:57.95,Cap1_above_bottom,,0,0,0,,Volatile, unpredictable, but\Nstill in the race.
+Dialogue: 0,0:00:57.95,0:01:01.12,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf16}The {\kf54}undisputed {\kf60}heavyweight {\kf11}of\N{\2a&HFF&} {\kf26}this {\kf59}breakdown {\kf13}is {\kf39}Apple. {\kf39}Thirty
+Dialogue: 0,0:01:01.12,0:01:04.58,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf31}five {\kf55}percent {\kf16}of {\kf24}the {\kf47}entire\N{\2a&HFF&} {\kf37}global {\kf62}smartphone {\kf43}market. {\kf12}No {\kf19}one
+Dialogue: 0,0:01:04.58,0:01:06.04,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf39}even {\kf49}comes {\kf58}close.
+Dialogue: 0,0:00:57.95,0:01:01.12,Cap1_above_bottom,,0,0,0,,The undisputed heavyweight of\Nthis breakdown is Apple. Thirty
+Dialogue: 0,0:01:01.12,0:01:04.58,Cap1_above_bottom,,0,0,0,,five percent of the entire\Nglobal smartphone market. No one
+Dialogue: 0,0:01:04.58,0:01:06.04,Cap1_above_bottom,,0,0,0,,even comes close.
+Dialogue: 0,0:01:06.04,0:01:08.73,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf19}Core {\kf43}shutdown. {\kf19}Data {\kf38}secured.\N{\2a&HFF&} {\kf41}Follow {\kf20}for {\kf20}the {\kf27}next {\kf41}market
+Dialogue: 0,0:01:08.73,0:01:09.79,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf75}intelligence {\kf31}drop.
+Dialogue: 0,0:01:06.04,0:01:08.73,Cap1_above_bottom,,0,0,0,,Core shutdown. Data secured.\NFollow for the next market
+Dialogue: 0,0:01:08.73,0:01:09.79,Cap1_above_bottom,,0,0,0,,intelligence drop.
