@@ -129,9 +129,22 @@ def load_donut_csv(csv_path: str):
     return meta, df["Category"].tolist(), df["Value"].tolist(), colors
 
 
+# --- Premium visual layer (Visual & Aesthetic Pass) ---
+try:
+    from src.utils import add_cinematic_background
+except Exception:
+    def add_cinematic_background(*_a, **_k):
+        return None
+try:
+    from src.config import FONT_DISPLAY
+except Exception:
+    FONT_DISPLAY = "Montserrat"
+
+
 class DonutBreakdownFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=Theme.NEON_BLUE)
 
         # ✅ 0.0s Intro Rule
         global_start_t0 = float(self.time)
@@ -199,8 +212,11 @@ class DonutBreakdownFinal(Scene):
         # HEADER
         # ============================================================
         title = Text((meta.get("TITLE") or "MARKET BREAKDOWN").upper(),
-                     font="Montserrat", weight=BOLD, font_size=40, color=WHITE)
-        title.to_edge(UP, buff=0.72).set_z_index(500)
+                     font=FONT_DISPLAY, weight=BOLD, font_size=40, color=WHITE)
+        _max_title_w = config.frame_width - 1.2   # edge safety only
+        if title.width > _max_title_w:
+            title.scale(_max_title_w / title.width)
+        title.to_edge(UP, buff=1.15).set_z_index(500)   # sit BELOW the REC/timer HUD row
 
         sub = Text((meta.get("SUB") or "Share Distribution").upper(),
                    font="Consolas", font_size=18, color=Theme.TEXT_SUB)
@@ -329,11 +345,17 @@ class DonutBreakdownFinal(Scene):
         )
 
         sfx.mark("sweep", gain_db=-10, meta={"at": "donut_reveal"})
+        # Build-up reveal: slices sweep in one-by-one (top -> around) instead of
+        # popping all at once. LaggedStart keeps the SAME run_time -> sync untouched.
         self.play(
-            *[sl.animate.set_opacity(0.88) for sl in slices],
-            *[gl.animate.set_opacity(0.18) for gl in glow_slices],
+            LaggedStart(
+                *[AnimationGroup(sl.animate.set_opacity(0.88),
+                                 gl.animate.set_opacity(0.18))
+                  for sl, gl in zip(slices, glow_slices)],
+                lag_ratio=0.34,
+            ),
             FadeIn(tick_lines),
-            run_time=1.05, rate_func=rf.ease_out_cubic,
+            run_time=1.05,
         )
 
         TL.consume("hook", float(self.time) - hook_t0)
@@ -418,9 +440,9 @@ class DonutBreakdownFinal(Scene):
             win_sl.animate.scale(1.10),
             win_gl.animate.set_opacity(0.52),
             win_lbl.animate.set_color(win_col).scale(1.10),
-            *[s.animate.set_opacity(0.20) for s in slices if s is not win_sl],
+            *[s.animate.set_opacity(0.42) for s in slices if s is not win_sl],
             *[g.animate.set_opacity(0.04) for g in glow_slices if g is not win_gl],
-            *[lb.animate.set_opacity(0.24) for lb in label_mobs if lb is not win_lbl],
+            *[lb.animate.set_opacity(0.45) for lb in label_mobs if lb is not win_lbl],
             run_time=t_w, rate_func=rf.ease_out_back,
         )
 

@@ -13,17 +13,49 @@ Style: Cap1_above_bottom,Segoe UI,54,&H00FFFFFF,&H00000000,&H80000000,&H80000000
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
-Dialogue: 0,0:00:00.00,0:00:05.02,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf79}System {\kf80}breach {\kf120}detected. {\kf27}We {\kf53}just\N{\2a&HFF&} {\kf112}intercepted {\kf31}...
-Dialogue: 0,0:00:00.00,0:00:05.02,Cap1_above_bottom,,0,0,0,,System breach detected. We just\Nintercepted ...
-Dialogue: 0,0:00:05.02,0:00:09.98,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf42}The {\kf54}line {\kf68}chart {\kf27}is {\kf163}calibrating.\N{\2a&HFF&} {\kf89}Watch {\kf53}...
-Dialogue: 0,0:00:05.02,0:00:09.98,Cap1_above_bottom,,0,0,0,,The line chart is calibrating.\NWatch ...
-Dialogue: 0,0:00:09.98,0:00:14.71,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf57}Lap {\kf75}one. {\kf56}The {\kf94}early {\kf56}two\N{\2a&HFF&} {\kf104}thousands. {\kf31}...
-Dialogue: 0,0:00:09.98,0:00:14.71,Cap1_above_bottom,,0,0,0,,Lap one. The early two\Nthousands. ...
-Dialogue: 0,0:00:14.71,0:00:20.04,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf43}Lap {\kf59}two. {\kf88}Moving {\kf103}through {\kf88}twenty\N{\2a&HFF&} {\kf76}ten {\kf76}...
-Dialogue: 0,0:00:14.71,0:00:20.04,Cap1_above_bottom,,0,0,0,,Lap two. Moving through twenty\Nten ...
-Dialogue: 0,0:00:20.04,0:00:25.13,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf48}The {\kf81}final {\kf113}sprint. {\kf97}Twenty\N{\2a&HFF&} {\kf124}eighteen {\kf46}...
-Dialogue: 0,0:00:20.04,0:00:25.13,Cap1_above_bottom,,0,0,0,,The final sprint. Twenty\Neighteen ...
-Dialogue: 0,0:00:25.13,0:00:30.15,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf63}Race {\kf144}complete. {\kf48}The {\kf80}final\N{\2a&HFF&} {\kf125}standings {\kf42}...
-Dialogue: 0,0:00:25.13,0:00:30.15,Cap1_above_bottom,,0,0,0,,Race complete. The final\Nstandings ...
-Dialogue: 0,0:00:30.15,0:00:34.75,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf59}Race {\kf58}data {\kf132}archived. {\kf58}Feed\N{\2a&HFF&} {\kf111}secured. {\kf42}...
-Dialogue: 0,0:00:30.15,0:00:34.75,Cap1_above_bottom,,0,0,0,,Race data archived. Feed\Nsecured. ...
+Dialogue: 0,0:00:00.00,0:00:02.00,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf23}System {\kf22}breach {\kf33}detected. {\kf7}We {\kf15}just\N{\2a&HFF&} {\kf40}intercepted {\kf21}twenty {\kf14}four {\kf18}years {\kf7}of
+Dialogue: 0,0:00:02.00,0:00:04.00,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf39}classified {\kf11}GDP {\kf19}data. {\kf11}Ten\N{\2a&HFF&} {\kf40}economies {\kf13}are {\kf22}about {\kf9}to {\kf18}race {\kf18}live
+Dialogue: 0,0:00:04.00,0:00:05.02,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf14}on {\kf22}the {\kf66}timeline.
+Dialogue: 0,0:00:00.00,0:00:02.00,Cap1_above_bottom,,0,0,0,,System breach detected. We just\Nintercepted twenty four years of
+Dialogue: 0,0:00:02.00,0:00:04.00,Cap1_above_bottom,,0,0,0,,classified GDP data. Ten\Neconomies are about to race live
+Dialogue: 0,0:00:04.00,0:00:05.02,Cap1_above_bottom,,0,0,0,,on the timeline.
+Dialogue: 0,0:00:05.02,0:00:06.97,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf13}The {\kf17}line {\kf21}chart {\kf8}is {\kf50}calibrating.\N{\2a&HFF&} {\kf16}Watch {\kf12}each {\kf28}economy's {\kf31}trajectory
+Dialogue: 0,0:00:06.97,0:00:09.23,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf32}render {\kf11}in {\kf20}real {\kf20}time {\kf20}from {\kf20}year\N{\2a&HFF&} {\kf12}two {\kf33}thousand {\kf8}to {\kf25}twenty {\kf25}twenty
+Dialogue: 0,0:00:09.23,0:00:09.98,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf75}four.
+Dialogue: 0,0:00:05.02,0:00:06.97,Cap1_above_bottom,,0,0,0,,The line chart is calibrating.\NWatch each economy's trajectory
+Dialogue: 0,0:00:06.97,0:00:09.23,Cap1_above_bottom,,0,0,0,,render in real time from year\Ntwo thousand to twenty twenty
+Dialogue: 0,0:00:09.23,0:00:09.98,Cap1_above_bottom,,0,0,0,,four.
+Dialogue: 0,0:00:09.98,0:00:11.13,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf10}Lap {\kf14}one. {\kf11}The {\kf18}early {\kf11}two\N{\2a&HFF&} {\kf21}thousands. {\kf6}The {\kf12}United {\kf12}States
+Dialogue: 0,0:00:11.13,0:00:12.34,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf17}starts {\kf17}strong {\kf6}at {\kf9}ten {\kf15}point {\kf9}two\N{\2a&HFF&} {\kf21}trillion. {\kf11}China {\kf4}is {\kf13}barely
+Dialogue: 0,0:00:12.34,0:00:13.68,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf18}visible {\kf5}at {\kf8}one {\kf13}point {\kf10}two. {\kf13}Japan\N{\2a&HFF&} {\kf13}holds {\kf7}the {\kf15}number {\kf7}two {\kf20}position {\kf5}at
+Dialogue: 0,0:00:13.68,0:00:14.71,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf16}four {\kf20}point {\kf20}nine. {\kf12}The {\kf12}gap {\kf8}is\N{\2a&HFF&} {\kf20}enormous.
+Dialogue: 0,0:00:09.98,0:00:11.13,Cap1_above_bottom,,0,0,0,,Lap one. The early two\Nthousands. The United States
+Dialogue: 0,0:00:11.13,0:00:12.34,Cap1_above_bottom,,0,0,0,,starts strong at ten point two\Ntrillion. China is barely
+Dialogue: 0,0:00:12.34,0:00:13.68,Cap1_above_bottom,,0,0,0,,visible at one point two. Japan\Nholds the number two position at
+Dialogue: 0,0:00:13.68,0:00:14.71,Cap1_above_bottom,,0,0,0,,four point nine. The gap is\Nenormous.
+Dialogue: 0,0:00:14.71,0:00:16.62,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf10}Lap {\kf15}two. {\kf22}Moving {\kf26}through {\kf22}twenty\N{\2a&HFF&} {\kf11}ten {\kf8}to {\kf24}twenty {\kf32}sixteen. {\kf20}China
+Dialogue: 0,0:00:16.62,0:00:18.26,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf22}explodes {\kf20}upward, {\kf23}crossing {\kf17}eleven\N{\2a&HFF&} {\kf32}trillion. {\kf18}India {\kf21}begins {\kf11}its
+Dialogue: 0,0:00:18.26,0:00:20.04,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf23}ascent {\kf16}past {\kf12}two {\kf36}trillion. {\kf12}The\N{\2a&HFF&} {\kf27}rankings {\kf10}are {\kf26}shifting {\kf16}fast.
+Dialogue: 0,0:00:14.71,0:00:16.62,Cap1_above_bottom,,0,0,0,,Lap two. Moving through twenty\Nten to twenty sixteen. China
+Dialogue: 0,0:00:16.62,0:00:18.26,Cap1_above_bottom,,0,0,0,,explodes upward, crossing eleven\Ntrillion. India begins its
+Dialogue: 0,0:00:18.26,0:00:20.04,Cap1_above_bottom,,0,0,0,,ascent past two trillion. The\Nrankings are shifting fast.
+Dialogue: 0,0:00:20.04,0:00:21.37,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf8}The {\kf14}final {\kf20}sprint. {\kf17}Twenty\N{\2a&HFF&} {\kf23}eighteen {\kf5}to {\kf16}twenty {\kf16}twenty {\kf14}four.
+Dialogue: 0,0:00:21.37,0:00:22.71,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf11}The {\kf19}United {\kf19}States {\kf19}surges {\kf6}to\N{\2a&HFF&} {\kf14}twenty {\kf12}eight {\kf21}trillion. {\kf12}China
+Dialogue: 0,0:00:22.71,0:00:24.12,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf11}hits {\kf21}eighteen {\kf13}point {\kf13}five. {\kf13}India\N{\2a&HFF&} {\kf23}rockets {\kf7}to {\kf14}four {\kf17}point {\kf10}one
+Dialogue: 0,0:00:24.12,0:00:25.13,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf20}trillion, {\kf22}overtaking {\kf18}multiple\N{\2a&HFF&} {\kf18}European {\kf22}economies.
+Dialogue: 0,0:00:20.04,0:00:21.37,Cap1_above_bottom,,0,0,0,,The final sprint. Twenty\Neighteen to twenty twenty four.
+Dialogue: 0,0:00:21.37,0:00:22.71,Cap1_above_bottom,,0,0,0,,The United States surges to\Ntwenty eight trillion. China
+Dialogue: 0,0:00:22.71,0:00:24.12,Cap1_above_bottom,,0,0,0,,hits eighteen point five. India\Nrockets to four point one
+Dialogue: 0,0:00:24.12,0:00:25.13,Cap1_above_bottom,,0,0,0,,trillion, overtaking multiple\NEuropean economies.
+Dialogue: 0,0:00:25.13,0:00:26.51,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf13}Race {\kf30}complete. {\kf10}The {\kf16}final\N{\2a&HFF&} {\kf25}standings {\kf8}are {\kf19}locked. {\kf17}United
+Dialogue: 0,0:00:26.51,0:00:27.98,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf15}States {\kf21}finishes {\kf16}first. {\kf13}China\N{\2a&HFF&} {\kf27}second. {\kf20}India {\kf23}climbs {\kf8}to {\kf4}a
+Dialogue: 0,0:00:27.98,0:00:29.45,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf20}historic {\kf22}position. {\kf8}The {\kf15}global\N{\2a&HFF&} {\kf23}economic {\kf9}map {\kf9}has {\kf12}been {\kf29}completely
+Dialogue: 0,0:00:29.45,0:00:30.15,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf70}redrawn.
+Dialogue: 0,0:00:25.13,0:00:26.51,Cap1_above_bottom,,0,0,0,,Race complete. The final\Nstandings are locked. United
+Dialogue: 0,0:00:26.51,0:00:27.98,Cap1_above_bottom,,0,0,0,,States finishes first. China\Nsecond. India climbs to a
+Dialogue: 0,0:00:27.98,0:00:29.45,Cap1_above_bottom,,0,0,0,,historic position. The global\Neconomic map has been completely
+Dialogue: 0,0:00:29.45,0:00:30.15,Cap1_above_bottom,,0,0,0,,redrawn.
+Dialogue: 0,0:00:30.15,0:00:33.10,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf25}Race {\kf25}data {\kf56}archived. {\kf25}Feed\N{\2a&HFF&} {\kf49}secured. {\kf55}Subscribe {\kf18}for {\kf18}the {\kf24}next
+Dialogue: 0,0:00:33.10,0:00:34.75,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf23}live {\kf46}economic {\kf68}intelligence {\kf28}drop.
+Dialogue: 0,0:00:30.15,0:00:33.10,Cap1_above_bottom,,0,0,0,,Race data archived. Feed\Nsecured. Subscribe for the next
+Dialogue: 0,0:00:33.10,0:00:34.75,Cap1_above_bottom,,0,0,0,,live economic intelligence drop.

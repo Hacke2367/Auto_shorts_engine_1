@@ -1,220 +1,288 @@
-{
-  "version": 1,
-  "template_id": "sort_card",
-  "marks": [
-    {
-      "t": 2.400000000000001,
-      "key": "ui_pop",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "hook",
-        "at": "title_in"
-      }
-    },
-    {
-      "t": 11.19999999999998,
-      "key": "scan_tick",
-      "gain_db": -14.0,
-      "meta": {
-        "segment": "setup",
-        "at": "dot_travel"
-      }
-    },
-    {
-      "t": 21.266666666666612,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "card_1",
-        "action": "card_in"
-      }
-    },
-    {
-      "t": 22.26666666666661,
-      "key": "ui_pop",
-      "gain_db": -14.0,
-      "meta": {
-        "segment": "card_1",
-        "action": "pill_reveal"
-      }
-    },
-    {
-      "t": 22.666666666666607,
-      "key": "scan_tick",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "card_1",
-        "action": "scan_start"
-      }
-    },
-    {
-      "t": 26.599999999999927,
-      "key": "ui_tick",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "card_1",
-        "action": "route_glow"
-      }
-    },
-    {
-      "t": 26.93333333333326,
-      "key": "impact_soft",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "card_1",
-        "action": "card_store"
-      }
-    },
-    {
-      "t": 32.93333333333329,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "card_2",
-        "action": "card_in"
-      }
-    },
-    {
-      "t": 33.93333333333334,
-      "key": "ui_pop",
-      "gain_db": -14.0,
-      "meta": {
-        "segment": "card_2",
-        "action": "pill_reveal"
-      }
-    },
-    {
-      "t": 34.33333333333336,
-      "key": "scan_tick",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "card_2",
-        "action": "scan_start"
-      }
-    },
-    {
-      "t": 38.266666666666886,
-      "key": "ui_tick",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "card_2",
-        "action": "route_glow"
-      }
-    },
-    {
-      "t": 38.600000000000236,
-      "key": "impact_soft",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "card_2",
-        "action": "card_store"
-      }
-    },
-    {
-      "t": 41.800000000000395,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "card_3",
-        "action": "card_in"
-      }
-    },
-    {
-      "t": 42.800000000000445,
-      "key": "ui_pop",
-      "gain_db": -14.0,
-      "meta": {
-        "segment": "card_3",
-        "action": "pill_reveal"
-      }
-    },
-    {
-      "t": 43.200000000000465,
-      "key": "scan_tick",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "card_3",
-        "action": "scan_start"
-      }
-    },
-    {
-      "t": 47.133333333333994,
-      "key": "ui_tick",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "card_3",
-        "action": "route_glow"
-      }
-    },
-    {
-      "t": 47.466666666667344,
-      "key": "impact_soft",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "card_3",
-        "action": "card_store"
-      }
-    },
-    {
-      "t": 52.80000000000094,
-      "key": "impact_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "card_4",
-        "action": "card_in"
-      }
-    },
-    {
-      "t": 53.80000000000099,
-      "key": "ui_pop",
-      "gain_db": -14.0,
-      "meta": {
-        "segment": "card_4",
-        "action": "pill_reveal"
-      }
-    },
-    {
-      "t": 54.20000000000101,
-      "key": "scan_tick",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "card_4",
-        "action": "scan_start"
-      }
-    },
-    {
-      "t": 58.13333333333454,
-      "key": "ui_tick",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "card_4",
-        "action": "route_glow"
-      }
-    },
-    {
-      "t": 58.46666666666789,
-      "key": "impact_soft",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "card_4",
-        "action": "card_store"
-      }
-    },
-    {
-      "t": 65.86666666666805,
-      "key": "outro_swipe",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "winner"
-      }
-    },
-    {
-      "t": 67.06666666666798,
-      "key": "ui_pop",
-      "gain_db": -8.0,
-      "meta": {
-        "segment": "winner"
-      }
+[
+  {
+    "t": 2.066666666666669,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "segment": "hook",
+      "at": "title_in"
     }
-  ]
-}
+  },
+  {
+    "t": 11.19999999999997,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -14.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "setup",
+      "at": "dot_travel"
+    }
+  },
+  {
+    "t": 21.233333333333547,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "segment": "card_1",
+      "action": "card_in"
+    }
+  },
+  {
+    "t": 22.200000000000262,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -14.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "segment": "card_1",
+      "action": "pill_reveal"
+    }
+  },
+  {
+    "t": 22.566666666666947,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "card_1",
+      "action": "scan_start"
+    }
+  },
+  {
+    "t": 26.3333333333338,
+    "event": "ui_tick",
+    "key": "ui_tick",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_tick_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "card_1",
+      "action": "route_glow"
+    }
+  },
+  {
+    "t": 26.633333333333816,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "segment": "card_1",
+      "action": "card_store"
+    }
+  },
+  {
+    "t": 32.83333333333403,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "segment": "card_2",
+      "action": "card_in"
+    }
+  },
+  {
+    "t": 33.800000000000644,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -14.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "segment": "card_2",
+      "action": "pill_reveal"
+    }
+  },
+  {
+    "t": 34.16666666666729,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "card_2",
+      "action": "scan_start"
+    }
+  },
+  {
+    "t": 37.93333333333374,
+    "event": "ui_tick",
+    "key": "ui_tick",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_tick_02.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "card_2",
+      "action": "route_glow"
+    }
+  },
+  {
+    "t": 38.233333333333725,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "segment": "card_2",
+      "action": "card_store"
+    }
+  },
+  {
+    "t": 41.700000000000195,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "segment": "card_3",
+      "action": "card_in"
+    }
+  },
+  {
+    "t": 42.666666666666806,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -14.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "segment": "card_3",
+      "action": "pill_reveal"
+    }
+  },
+  {
+    "t": 43.03333333333345,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "card_3",
+      "action": "scan_start"
+    }
+  },
+  {
+    "t": 46.799999999999905,
+    "event": "ui_tick",
+    "key": "ui_tick",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_tick_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "card_3",
+      "action": "route_glow"
+    }
+  },
+  {
+    "t": 47.09999999999989,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "segment": "card_3",
+      "action": "card_store"
+    }
+  },
+  {
+    "t": 52.7333333333329,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "segment": "card_4",
+      "action": "card_in"
+    }
+  },
+  {
+    "t": 53.69999999999951,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -14.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "segment": "card_4",
+      "action": "pill_reveal"
+    }
+  },
+  {
+    "t": 54.06666666666616,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "card_4",
+      "action": "scan_start"
+    }
+  },
+  {
+    "t": 57.83333333333261,
+    "event": "ui_tick",
+    "key": "ui_tick",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_tick_02.wav",
+    "vol": 0.55,
+    "meta": {
+      "segment": "card_4",
+      "action": "route_glow"
+    }
+  },
+  {
+    "t": 58.133333333332594,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "segment": "card_4",
+      "action": "card_store"
+    }
+  },
+  {
+    "t": 65.79999999999883,
+    "event": "outro_swipe",
+    "key": "outro_swipe",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_soft_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "segment": "winner"
+    }
+  },
+  {
+    "t": 66.99999999999876,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -8.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_02.wav",
+    "vol": 0.65,
+    "meta": {
+      "segment": "winner"
+    }
+  }
+]

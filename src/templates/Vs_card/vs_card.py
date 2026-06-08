@@ -726,9 +726,22 @@ def build_title_scanner_line(center_y: float, width: float, c_left: str, c_right
 # ============================================================
 # 5) MAIN SCENE
 # ============================================================
+# --- Premium visual layer (Visual & Aesthetic Pass) ---
+try:
+    from src.utils import add_cinematic_background
+except Exception:
+    def add_cinematic_background(*_a, **_k):
+        return None
+try:
+    from src.config import FONT_DISPLAY
+except Exception:
+    FONT_DISPLAY = "Montserrat"
+
+
 class VsCardFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=Theme.NEON_BLUE)
 
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)
@@ -851,8 +864,8 @@ class VsCardFinal(Scene):
         left_title = parts[0].strip() if len(parts) == 2 else p1_name
         right_title = parts[1].strip() if len(parts) == 2 else p2_name
 
-        tL = safe_text(left_title.upper(), font_size=38, color=C_P1, weight=BOLD)
-        tR = safe_text(right_title.upper(), font_size=38, color=C_P2, weight=BOLD)
+        tL = safe_text(left_title.upper(), font=FONT_DISPLAY, font_size=38, color=C_P1, weight=BOLD)
+        tR = safe_text(right_title.upper(), font=FONT_DISPLAY, font_size=38, color=C_P2, weight=BOLD)
 
         vs_box = Square(side_length=0.74, color=C_GOLD, stroke_width=3).rotate(45 * DEGREES)
         vs_txt = safe_text("VS", font="Montserrat", font_size=22, color=C_GOLD, weight=BOLD)

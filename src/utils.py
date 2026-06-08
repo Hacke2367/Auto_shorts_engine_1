@@ -13,6 +13,7 @@ try:
     from src.config import *  # expects: Theme, BACKGROUND_COLOR, etc.
 except Exception:
     BACKGROUND_COLOR = "#050505"
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -20,7 +21,7 @@ except Exception:
         NEON_PURPLE = "#BD00FF"
         NEON_GREEN = "#00FF66"
         TEXT_MAIN = "#FFFFFF"
-        TEXT_SUB = "#B8B8B8"
+        TEXT_SUB = "#AEB7C2"
         AXIS_COLOR = "#00F0FF"
 
     config.frame_height = 16.0
@@ -68,7 +69,7 @@ class Brand:
     WHITE = "#FFFFFF"
     BLACK = "#000000"
     TEXT_MAIN = getattr(Theme, "TEXT_MAIN", "#FFFFFF")
-    TEXT_SUB = getattr(Theme, "TEXT_SUB", "#B8B8B8")
+    TEXT_SUB = getattr(Theme, "TEXT_SUB", "#AEB7C2")
 
 
 # ============================================================
@@ -123,10 +124,13 @@ def get_cinematic_overlay(scene,
     overlay = VGroup()
     overlay.set_z_index(250)
 
-    # Vignette
-    vignette = Rectangle(width=config.frame_width + 2, height=config.frame_height + 2)
-    vignette.set_fill(color=BLACK, opacity=0)
-    vignette.set_stroke(color=BLACK, width=140, opacity=0.45)
+    # Vignette — soft layered falloff (stacked dark strokes ≈ radial gradient)
+    vignette = VGroup()
+    for _w_px, _op in ((180, 0.22), (110, 0.16), (60, 0.10)):
+        _v = Rectangle(width=config.frame_width + 2, height=config.frame_height + 2)
+        _v.set_fill(color=BLACK, opacity=0)
+        _v.set_stroke(color=BLACK, width=_w_px, opacity=_op)
+        vignette.add(_v)
     vignette.set_z_index(240)
 
     # Scanlines
@@ -136,7 +140,7 @@ def get_cinematic_overlay(scene,
         y = sf["bottom"] + (i * (sf["h"] / lines_n))
         ln = Line(LEFT * (config.frame_width), RIGHT * (config.frame_width))
         ln.set_y(y)
-        ln.set_stroke(color=Brand.CYAN, width=1, opacity=0.02)
+        ln.set_stroke(color=Brand.CYAN, width=1, opacity=0.05)
         scanlines.add(ln)
     scanlines.set_z_index(241)
 
@@ -162,9 +166,17 @@ def get_cinematic_overlay(scene,
     timer.move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
     timer.set_opacity(0.9)
 
+    timer._last_str = "00:00"
+
     def _update_timer(m):
+        # Throttle: only rebuild the Text mobject when the displayed MM:SS changes
+        # (previously rebuilt a full Text every frame for the entire video).
+        new_str = _format_time(getattr(scene, "time", 0.0))
+        if new_str == getattr(m, "_last_str", None):
+            return
+        m._last_str = new_str
         m.become(
-            Text(_format_time(getattr(scene, "time", 0.0)),
+            Text(new_str,
                  font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
             .move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
             .set_opacity(0.9)
@@ -218,22 +230,140 @@ def make_floating_particles(n=30,
                             radius_range=(0.02, 0.05),
                             opacity_range=(0.10, 0.25),
                             drift=0.04,
-                            margin=0.60):
+                            margin=0.60,
+                            accent=None,
+                            twinkle=True,
+                            parallax=True):
+    """
+    Floating ambient particles (backward-compatible signature).
+
+    Upgrades, all inside ONE O(n) VGroup updater (same render-cost class):
+      - twinkle: gentle per-particle opacity pulse (precomputed phase)
+      - parallax: two depth bands (near = bigger/brighter/faster)
+      - colour variety: brand cyan + optional template accent + a few whites
+      - soft edge wrap: recycle particles to the bottom once they exit the top
+    """
     sf = get_safe_frame(margin)
-    color = color or Brand.CYAN
+    base_color = color or Brand.CYAN
+
+    palette = [base_color]
+    if accent and accent != base_color:
+        palette.append(accent)
+    palette.append(Brand.WHITE)
+
+    top = sf["top"]
+    bottom = sf["bottom"]
+
+    lo_r, hi_r = radius_range
+    mid_r = (lo_r + hi_r) / 2.0
+    lo_o, hi_o = opacity_range
+    mid_o = (lo_o + hi_o) / 2.0
 
     particles = VGroup()
+    meta = []  # (base_opacity, phase, speed_factor)
     for _ in range(n):
-        r = random.uniform(*radius_range)
-        p = Dot(radius=r, color=color)
-        p.move_to([random.uniform(sf["left"], sf["right"]),
-                   random.uniform(sf["bottom"], sf["top"]), 0])
-        p.set_opacity(random.uniform(*opacity_range))
-        particles.add(p)
+        near = (random.random() < 0.5) if parallax else True
+        if near:
+            r = random.uniform(mid_r, hi_r)
+            op = random.uniform(mid_o, hi_o)
+            sp = random.uniform(1.0, 1.6)
+        else:
+            r = random.uniform(lo_r, mid_r)
+            op = random.uniform(lo_o, mid_o)
+            sp = random.uniform(0.5, 0.9)
 
-    particles.add_updater(lambda m, dt: m.shift(UP * drift * dt))
+        p = Dot(radius=r, color=random.choice(palette))
+        p.move_to([random.uniform(sf["left"], sf["right"]),
+                   random.uniform(bottom, top), 0])
+        p.set_opacity(op)
+        particles.add(p)
+        meta.append((op, random.uniform(0.0, 2.0 * np.pi), sp))
+
+    clock = {"t": 0.0}
+
+    def _upd(m, dt):
+        clock["t"] += dt
+        t = clock["t"]
+        for p, (base_op, phase, sp) in zip(m.submobjects, meta):
+            p.shift(UP * drift * sp * dt)
+            if p.get_y() > top + 0.10:
+                p.move_to([random.uniform(sf["left"], sf["right"]), bottom - 0.10, 0])
+            if twinkle:
+                tw = 0.75 + 0.25 * np.sin(t * 1.4 * sp + phase)
+                p.set_opacity(float(np.clip(base_op * tw, 0.0, 1.0)))
+
+    particles.add_updater(_upd)
     particles.set_z_index(5)
     return particles
+
+
+# ============================================================
+# ✅ CINEMATIC BACKGROUND (premium atmosphere — replaces dead-flat fill)
+#   - additive + sync-safe: only scene.add() + at most ONE cheap updater
+#   - base vertical gradient plate + layered accent "glow pool"
+#   - optional slow breathing drift ("dynamic background shift")
+# ============================================================
+def add_cinematic_background(scene, accent=None, breathing=True):
+    """
+    Adds a premium atmospheric backdrop behind everything (z far below content).
+
+    Sync-safe by construction: no scene.play / no run_time — just scene.add()
+    plus (optionally) ONE lightweight sine updater on the glow group, the same
+    cost class as the existing subtle-flicker effect.
+
+    Returns the background VGroup (callers may remove it; not required).
+    """
+    accent = accent or Brand.CYAN
+
+    try:
+        grp = VGroup()
+
+        # --- base gradient plate (full frame, slightly oversized) ---
+        base = Rectangle(width=config.frame_width + 2, height=config.frame_height + 2)
+        base.set_stroke(width=0)
+        try:
+            base.set_color_by_gradient("#0E1116", "#090C10", "#050608")
+            base.set_fill(opacity=1.0)
+        except Exception:
+            base.set_fill(color="#0A0D11", opacity=1.0)
+        base.set_stroke(width=0)
+        base.set_z_index(-100)
+        grp.add(base)
+
+        # --- radial brand "glow pool" (layered ellipses ≈ soft gaussian) ---
+        glow = VGroup()
+        glow_cy = config.frame_height * 0.12
+        glow_specs = ((1.70, 0.95, 0.034), (1.20, 0.65, 0.024), (0.75, 0.42, 0.015))
+        glow_base = []
+        for (sw, sh, op) in glow_specs:
+            e = Ellipse(width=config.frame_width * sw, height=config.frame_height * sh)
+            e.set_fill(color=accent, opacity=op)
+            e.set_stroke(width=0)
+            e.move_to([0.0, glow_cy, 0.0])
+            glow.add(e)
+            glow_base.append(op)
+        glow.set_z_index(-90)
+        grp.add(glow)
+
+        scene.add(grp)
+
+        # --- optional breathing drift: ONE cheap sine updater ---
+        if breathing:
+            def _bg_breathe(m, dt):
+                t = float(getattr(scene, "time", 0.0))
+                f = 0.75 + 0.45 * (0.5 + 0.5 * np.sin(t * 0.40))   # ~0.75 .. 1.20
+                dy = 0.18 * np.sin(t * 0.27)
+                for ell, b_op in zip(m.submobjects, glow_base):
+                    ell.set_fill(opacity=float(np.clip(b_op * f, 0.0, 0.14)))
+                m.move_to([0.0, glow_cy + dy, 0.0])
+
+            glow.add_updater(_bg_breathe)
+
+        return grp
+
+    except Exception:
+        # Never let atmosphere break a render — degrade to the flat camera fill.
+        return None
 
 
 # ============================================================
@@ -319,7 +449,7 @@ class IntroManager:
         sub.move_to(ORIGIN)
 
         # TITLE (alone)
-        title = Text(brand_title, font="Montserrat", weight=BOLD, font_size=54)
+        title = Text(brand_title, font=FONT_DISPLAY, weight=BOLD, font_size=54)
         title.set_color_by_gradient(Brand.CYAN, Brand.TEXT_MAIN)
         title.set_z_index(501)
         title.move_to(ORIGIN)

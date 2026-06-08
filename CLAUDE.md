@@ -2,6 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Visual Work: Polish-Only Mandate (IMPORTANT)
+
+Whenever doing visual/aesthetic work on the Manim templates (`src/templates/`), the shared visual
+layer (`src/utils.py`), or the retention layer (`src/sync/retention*.py`), the scope is **visual
+polish ONLY**. The standing target on every such task:
+
+- **Do not break anything that already works.** Never alter audio-visual sync, segment timing
+  (`TL.consume` / `hold_breathing` / `Timeline.seg_total`), the core template/scene logic, or the
+  data pipeline. If a thing already looks and works correctly, leave it untouched — improve only what
+  is genuinely flat/cheap.
+- **Additive changes only.** Add visuals via `scene.add()` + lightweight updaters. During a visual
+  pass, **never** introduce new `self.play(..., run_time=...)` calls and **never** change any
+  `TL.consume` / `hold_breathing` durations — those define sync and must stay byte-identical.
+- **Verify after every visual change.** The render must stay full-length and in sync: the Manim video
+  duration must match the audio (compare via `tools/audio_durations.py`; the raw scene render
+  `media/.../<Scene>.mp4` / `_staged_render.mp4` must equal audio length). A shorter final.mp4 than
+  the scene render means the audio was truncated (e.g. silence-trim) — not a visual regression.
+- **Work part-by-part with visual sign-off.** Ship one part at a time, then give the exact render
+  command and wait for the user's own-eyes confirmation before proceeding to the next part.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

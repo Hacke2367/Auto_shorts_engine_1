@@ -13,19 +13,47 @@ Style: Cap1_above_bottom,Segoe UI,54,&H00FFFFFF,&H00000000,&H80000000,&H80000000
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
-Dialogue: 0,0:00:00.00,0:00:11.18,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf37}A {\kf254}massive {\kf218}system {\kf145}leak {\kf145}just\N{\2a&HFF&} {\kf223}exposed {\kf96}...
-Dialogue: 0,0:00:00.00,0:00:11.18,Cap1_above_bottom,,0,0,0,,A massive system leak just\Nexposed ...
-Dialogue: 0,0:00:11.18,0:00:21.21,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf125}Four {\kf187}pieces {\kf62}of {\kf249}evidence {\kf93}are\N{\2a&HFF&} {\kf191}loaded {\kf96}...
-Dialogue: 0,0:00:11.18,0:00:21.21,Cap1_above_bottom,,0,0,0,,Four pieces of evidence are\Nloaded ...
-Dialogue: 0,0:00:21.21,0:00:32.81,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf174}First {\kf104}up, {\kf244}Python. {\kf104}The {\kf70}AI {\kf174}king.\N{\2a&HFF&} {\kf116}No {\kf174}...
-Dialogue: 0,0:00:21.21,0:00:32.81,Cap1_above_bottom,,0,0,0,,First up, Python. The AI king.\NNo ...
-Dialogue: 0,0:00:32.81,0:00:41.67,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf122}Next, {\kf97}Java {\kf146}enters {\kf73}the {\kf195}scanner.\N{\2a&HFF&} {\kf184}Verbose, {\kf69}...
-Dialogue: 0,0:00:32.81,0:00:41.67,Cap1_above_bottom,,0,0,0,,Next, Java enters the scanner.\NVerbose, ...
-Dialogue: 0,0:00:41.67,0:00:52.67,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf157}Now, {\kf157}HTML {\kf236}slides {\kf118}in. {\kf118}The\N{\2a&HFF&} {\kf228}tribunal {\kf86}...
-Dialogue: 0,0:00:41.67,0:00:52.67,Cap1_above_bottom,,0,0,0,,Now, HTML slides in. The\Ntribunal ...
-Dialogue: 0,0:00:52.67,0:01:05.71,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf290}Finally, {\kf36}C {\kf145}plus {\kf181}plus. {\kf109}Raw {\kf217}power,\N{\2a&HFF&} {\kf228}blazing {\kf98}...
-Dialogue: 0,0:00:52.67,0:01:05.71,Cap1_above_bottom,,0,0,0,,Finally, C plus plus. Raw power,\Nblazing ...
-Dialogue: 0,0:01:05.71,0:01:15.27,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf73}All {\kf195}evidence {\kf73}has {\kf98}been {\kf244}processed.\N{\2a&HFF&} {\kf137}The {\kf136}...
-Dialogue: 0,0:01:05.71,0:01:15.27,Cap1_above_bottom,,0,0,0,,All evidence has been processed.\NThe ...
-Dialogue: 0,0:01:15.27,0:01:19.87,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf98}Tribunal {\kf86}session {\kf74}ended. {\kf49}Data\N{\2a&HFF&} {\kf111}secured. {\kf42}...
-Dialogue: 0,0:01:15.27,0:01:19.87,Cap1_above_bottom,,0,0,0,,Tribunal session ended. Data\Nsecured. ...
+Dialogue: 0,0:00:00.00,0:00:03.85,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf10}A {\kf68}massive {\kf58}system {\kf39}leak {\kf39}just\N{\2a&HFF&} {\kf47}exposed {\kf21}the {\kf21}raw {\kf82}intelligence
+Dialogue: 0,0:00:03.85,0:00:08.42,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf57}files. {\kf29}The {\kf19}AI {\kf77}Tribunal {\kf19}is {\kf48}about\N{\2a&HFF&} {\kf16}to {\kf32}sort {\kf24}the {\kf32}most {\kf104}controversial
+Dialogue: 0,0:00:08.42,0:00:11.18,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf70}programming {\kf57}languages {\kf25}into {\kf32}their\N{\2a&HFF&} {\kf37}true {\kf55}tiers.
+Dialogue: 0,0:00:00.00,0:00:03.85,Cap1_above_bottom,,0,0,0,,A massive system leak just\Nexposed the raw intelligence
+Dialogue: 0,0:00:03.85,0:00:08.42,Cap1_above_bottom,,0,0,0,,files. The AI Tribunal is about\Nto sort the most controversial
+Dialogue: 0,0:00:08.42,0:00:11.18,Cap1_above_bottom,,0,0,0,,programming languages into their\Ntrue tiers.
+Dialogue: 0,0:00:11.18,0:00:15.21,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf36}Four {\kf52}pieces {\kf17}of {\kf70}evidence {\kf26}are\N{\2a&HFF&} {\kf49}loaded {\kf32}into {\kf24}the {\kf64}scanner. {\kf32}Each
+Dialogue: 0,0:00:15.21,0:00:18.90,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf28}one {\kf36}will {\kf18}be {\kf82}analyzed,\N{\2a&HFF&} {\kf90}classified, {\kf25}and {\kf49}routed {\kf16}to {\kf25}its
+Dialogue: 0,0:00:18.90,0:00:21.21,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf46}tier. {\kf28}Let {\kf28}the {\kf74}tribunal {\kf55}begin.
+Dialogue: 0,0:00:11.18,0:00:15.21,Cap1_above_bottom,,0,0,0,,Four pieces of evidence are\Nloaded into the scanner. Each
+Dialogue: 0,0:00:15.21,0:00:18.90,Cap1_above_bottom,,0,0,0,,one will be analyzed,\Nclassified, and routed to its
+Dialogue: 0,0:00:18.90,0:00:21.21,Cap1_above_bottom,,0,0,0,,tier. Let the tribunal begin.
+Dialogue: 0,0:00:21.21,0:00:25.73,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf53}First {\kf33}up, {\kf76}Python. {\kf33}The {\kf22}AI {\kf54}king.\N{\2a&HFF&} {\kf13}No {\kf56}contest. {\kf49}Massive {\kf63}adoption,
+Dialogue: 0,0:00:25.73,0:00:29.86,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf44}clean {\kf62}syntax, {\kf26}and {\kf79}dominance {\kf18}in\N{\2a&HFF&} {\kf48}machine {\kf61}learning. {\kf20}The {\kf54}tribunal
+Dialogue: 0,0:00:29.86,0:00:32.81,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf68}routes {\kf23}it {\kf91}straight {\kf23}to {\kf45}Tier {\kf45}One.
+Dialogue: 0,0:00:21.21,0:00:25.73,Cap1_above_bottom,,0,0,0,,First up, Python. The AI king.\NNo contest. Massive adoption,
+Dialogue: 0,0:00:25.73,0:00:29.86,Cap1_above_bottom,,0,0,0,,clean syntax, and dominance in\Nmachine learning. The tribunal
+Dialogue: 0,0:00:29.86,0:00:32.81,Cap1_above_bottom,,0,0,0,,routes it straight to Tier One.
+Dialogue: 0,0:00:32.81,0:00:36.01,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf45}Next, {\kf35}Java {\kf53}enters {\kf26}the {\kf70}scanner.\N{\2a&HFF&} {\kf52}Verbose, {\kf39}heavy,
+Dialogue: 0,0:00:36.01,0:00:40.33,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf80}enterprise-locked. {\kf13}The {\kf36}tribunal\N{\2a&HFF&} {\kf61}flags {\kf25}it {\kf24}as {\kf48}Tier {\kf48}Two. {\kf60}Solid {\kf36}but
+Dialogue: 0,0:00:40.33,0:00:41.67,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf45}not {\kf89}elite.
+Dialogue: 0,0:00:32.81,0:00:36.01,Cap1_above_bottom,,0,0,0,,Next, Java enters the scanner.\NVerbose, heavy,
+Dialogue: 0,0:00:36.01,0:00:40.33,Cap1_above_bottom,,0,0,0,,enterprise-locked. The tribunal\Nflags it as Tier Two. Solid but
+Dialogue: 0,0:00:40.33,0:00:41.67,Cap1_above_bottom,,0,0,0,,not elite.
+Dialogue: 0,0:00:41.67,0:00:45.87,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf46}Now, {\kf47}HTML {\kf70}slides {\kf35}in. {\kf35}The\N{\2a&HFF&} {\kf83}tribunal {\kf52}scans {\kf21}it {\kf31}and
+Dialogue: 0,0:00:45.87,0:00:50.07,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf74}immediately {\kf53}triggers {\kf7}a {\kf53}warning.\N{\2a&HFF&} {\kf30}Not {\kf41}even {\kf10}a {\kf41}real {\kf111}programming
+Dialogue: 0,0:00:50.07,0:00:52.67,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf90}language. {\kf40}Tier {\kf40}Two, {\kf20}no {\kf70}appeal.
+Dialogue: 0,0:00:41.67,0:00:45.87,Cap1_above_bottom,,0,0,0,,Now, HTML slides in. The\Ntribunal scans it and
+Dialogue: 0,0:00:45.87,0:00:50.07,Cap1_above_bottom,,0,0,0,,immediately triggers a warning.\NNot even a real programming
+Dialogue: 0,0:00:50.07,0:00:52.67,Cap1_above_bottom,,0,0,0,,language. Tier Two, no appeal.
+Dialogue: 0,0:00:52.67,0:00:57.87,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf103}Finally, {\kf13}C {\kf51}plus {\kf64}plus. {\kf39}Raw {\kf77}power,\N{\2a&HFF&} {\kf71}blazing {\kf61}speed, {\kf41}zero
+Dialogue: 0,0:00:57.87,0:01:02.56,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf95}hand-holding. {\kf22}The {\kf59}tribunal\N{\2a&HFF&} {\kf121}confirms: {\kf53}Tier {\kf53}One. {\kf13}A {\kf53}true
+Dialogue: 0,0:01:02.56,0:01:05.71,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf79}veteran {\kf22}of {\kf34}the {\kf45}code {\kf135}battlefield.
+Dialogue: 0,0:00:52.67,0:00:57.87,Cap1_above_bottom,,0,0,0,,Finally, C plus plus. Raw power,\Nblazing speed, zero
+Dialogue: 0,0:00:57.87,0:01:02.56,Cap1_above_bottom,,0,0,0,,hand-holding. The tribunal\Nconfirms: Tier One. A true
+Dialogue: 0,0:01:02.56,0:01:05.71,Cap1_above_bottom,,0,0,0,,veteran of the code battlefield.
+Dialogue: 0,0:01:05.71,0:01:10.31,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf22}All {\kf60}evidence {\kf22}has {\kf30}been {\kf75}processed.\N{\2a&HFF&} {\kf31}The {\kf40}sort {\kf20}is {\kf90}complete. {\kf40}Tier {\kf30}One
+Dialogue: 0,0:01:10.31,0:01:15.27,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf47}takes {\kf29}the {\kf48}crown {\kf38}with {\kf57}Python {\kf29}and\N{\2a&HFF&} {\kf11}C {\kf41}plus {\kf41}plus {\kf72}leading {\kf31}the {\kf52}grid.
+Dialogue: 0,0:01:05.71,0:01:10.31,Cap1_above_bottom,,0,0,0,,All evidence has been processed.\NThe sort is complete. Tier One
+Dialogue: 0,0:01:10.31,0:01:15.27,Cap1_above_bottom,,0,0,0,,takes the crown with Python and\NC plus plus leading the grid.
+Dialogue: 0,0:01:15.27,0:01:18.65,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf48}Tribunal {\kf42}session {\kf36}ended. {\kf24}Data\N{\2a&HFF&} {\kf62}secured. {\kf47}Follow {\kf24}for {\kf24}the {\kf31}next
+Dialogue: 0,0:01:18.65,0:01:19.87,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf56}system {\kf66}breach.
+Dialogue: 0,0:01:15.27,0:01:18.65,Cap1_above_bottom,,0,0,0,,Tribunal session ended. Data\Nsecured. Follow for the next
+Dialogue: 0,0:01:18.65,0:01:19.87,Cap1_above_bottom,,0,0,0,,system breach.

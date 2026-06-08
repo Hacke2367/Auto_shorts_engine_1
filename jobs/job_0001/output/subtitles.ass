@@ -12,14 +12,26 @@ Style: Cap0_above_bottom,Segoe UI,54,&H00FFFFFF,&H00000000,&H80000000,&H80000000
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
-Dialogue: 0,0:00:00.00,0:00:02.53,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf8}A {\kf53}massive {\kf45}system {\kf45}breach {\kf30}just\N{\2a&HFF&} {\kf50}exposed {\kf22}...
-Dialogue: 0,0:00:02.53,0:00:05.27,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf23}The {\kf30}bars {\kf23}are {\kf61}loading. {\kf38}Watch {\kf30}each\N{\2a&HFF&} {\kf49}leader's {\kf19}...
-Dialogue: 0,0:00:05.27,0:00:08.27,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf52}NVIDIA {\kf51}enters {\kf34}with {\kf9}a {\kf68}crushing\N{\2a&HFF&} {\kf57}ninety {\kf29}...
-Dialogue: 0,0:00:08.27,0:00:10.80,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf64}Microsoft {\kf49}follows {\kf14}at {\kf42}eighty\N{\2a&HFF&} {\kf56}eight. {\kf28}...
-Dialogue: 0,0:00:10.80,0:00:14.14,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf52}Apple {\kf52}locks {\kf21}in {\kf21}at {\kf62}eighty {\kf42}two.\N{\2a&HFF&} {\kf59}Premium {\kf25}...
-Dialogue: 0,0:00:14.14,0:00:16.78,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf47}Google {\kf38}comes {\kf15}in {\kf15}at {\kf53}seventy {\kf30}six.\N{\2a&HFF&} {\kf46}Search, {\kf20}...
-Dialogue: 0,0:00:16.78,0:00:20.57,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf59}Amazon {\kf58}scores {\kf68}seventy {\kf68}points.\N{\2a&HFF&} {\kf63}AWS {\kf63}...
-Dialogue: 0,0:00:20.57,0:00:23.39,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf36}Meta {\kf44}holds {\kf18}at {\kf44}sixty {\kf44}five. {\kf26}The\N{\2a&HFF&} {\kf52}metaverse {\kf18}...
-Dialogue: 0,0:00:23.39,0:00:25.79,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf40}Tesla {\kf47}rounds {\kf23}out {\kf23}the {\kf31}list {\kf16}at\N{\2a&HFF&} {\kf40}sixty. {\kf20}...
-Dialogue: 0,0:00:25.79,0:00:29.26,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf28}The {\kf48}final {\kf76}rankings {\kf29}are {\kf67}locked.\N{\2a&HFF&} {\kf49}And {\kf50}...
-Dialogue: 0,0:00:29.26,0:00:31.61,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf38}System {\kf50}offline. {\kf25}Data {\kf44}sealed.\N{\2a&HFF&} {\kf52}Follow {\kf26}...
+Dialogue: 0,0:00:00.00,0:00:01.26,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf3}A {\kf18}massive {\kf16}system {\kf16}breach {\kf10}just\N{\2a&HFF&} {\kf17}exposed {\kf8}the {\kf8}raw {\kf15}market {\kf15}leader
+Dialogue: 0,0:00:01.26,0:00:02.53,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf17}scores. {\kf13}Seven {\kf10}tech {\kf15}giants {\kf8}are\N{\2a&HFF&} {\kf16}about {\kf6}to {\kf6}be {\kf19}ranked {\kf16}live.
+Dialogue: 0,0:00:02.53,0:00:04.19,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf10}The {\kf13}bars {\kf10}are {\kf27}loading. {\kf17}Watch {\kf13}each\N{\2a&HFF&} {\kf24}leader's {\kf14}power {\kf14}score {\kf17}render {\kf6}in
+Dialogue: 0,0:00:04.19,0:00:05.27,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf17}real {\kf17}time {\kf9}on {\kf13}the {\kf52}leaderboard.
+Dialogue: 0,0:00:05.27,0:00:06.72,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf20}NVIDIA {\kf19}enters {\kf13}with {\kf3}a {\kf26}crushing\N{\2a&HFF&} {\kf19}ninety {\kf13}five {\kf23}points. {\kf10}The
+Dialogue: 0,0:00:06.72,0:00:08.27,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf36}undisputed {\kf7}AI {\kf14}chip {\kf18}king. {\kf7}No {\kf11}one\N{\2a&HFF&} {\kf15}else {\kf8}is {\kf16}even {\kf23}close.
+Dialogue: 0,0:00:08.27,0:00:09.62,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf22}Microsoft {\kf18}follows {\kf5}at {\kf15}eighty\N{\2a&HFF&} {\kf27}eight. {\kf4}A {\kf22}cloud {\kf13}and {\kf9}AI
+Dialogue: 0,0:00:09.62,0:00:10.80,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf30}powerhouse. {\kf16}Second {\kf14}place {\kf8}but\N{\2a&HFF&} {\kf21}still {\kf4}a {\kf26}titan.
+Dialogue: 0,0:00:10.80,0:00:12.60,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf25}Apple {\kf25}locks {\kf10}in {\kf10}at {\kf30}eighty {\kf20}two.\N{\2a&HFF&} {\kf18}Premium {\kf20}hardware {\kf22}dominance
+Dialogue: 0,0:00:12.60,0:00:14.14,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf41}keeping {\kf12}it {\kf34}firmly {\kf11}in {\kf17}the {\kf17}top\N{\2a&HFF&} {\kf22}three.
+Dialogue: 0,0:00:14.14,0:00:15.64,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf21}Google {\kf17}comes {\kf7}in {\kf7}at {\kf24}seventy {\kf14}six.\N{\2a&HFF&} {\kf21}Search, {\kf9}AI, {\kf9}and {\kf21}Android
+Dialogue: 0,0:00:15.64,0:00:16.78,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf32}ecosystem {\kf26}holding {\kf15}down {\kf4}a {\kf18}solid\N{\2a&HFF&} {\kf20}position.
+Dialogue: 0,0:00:16.78,0:00:18.68,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf21}Amazon {\kf22}scores {\kf26}seventy {\kf26}points.\N{\2a&HFF&} {\kf10}AWS {\kf16}cloud {\kf46}infrastructure {\kf23}keeping
+Dialogue: 0,0:00:18.68,0:00:20.57,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf15}it {\kf15}in {\kf24}the {\kf40}upper {\kf32}half {\kf16}of {\kf24}the\N{\2a&HFF&} {\kf24}board.
+Dialogue: 0,0:00:20.57,0:00:22.11,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf13}Meta {\kf18}holds {\kf7}at {\kf18}sixty {\kf18}five. {\kf10}The\N{\2a&HFF&} {\kf25}metaverse {\kf9}bet {\kf6}is {\kf15}still {\kf15}being
+Dialogue: 0,0:00:22.11,0:00:23.39,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf29}evaluated, {\kf9}but {\kf9}the {\kf18}social {\kf15}media\N{\2a&HFF&} {\kf15}empire {\kf15}stands {\kf18}strong.
+Dialogue: 0,0:00:23.39,0:00:24.31,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf12}Tesla {\kf14}rounds {\kf7}out {\kf7}the {\kf10}list {\kf5}at\N{\2a&HFF&} {\kf9}sixty. {\kf12}Electric {\kf12}vehicles {\kf4}and
+Dialogue: 0,0:00:24.31,0:00:25.16,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf16}autonomous {\kf12}driving {\kf12}pushing {\kf3}it\N{\2a&HFF&} {\kf10}into {\kf8}the {\kf10}tech {\kf15}leader
+Dialogue: 0,0:00:25.16,0:00:25.79,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf63}conversation.
+Dialogue: 0,0:00:25.79,0:00:27.58,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf11}The {\kf17}final {\kf28}rankings {\kf10}are {\kf24}locked.\N{\2a&HFF&} {\kf10}And {\kf10}the {\kf28}absolute {\kf21}market {\kf21}leader
+Dialogue: 0,0:00:27.58,0:00:29.26,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf8}is {\kf30}NVIDIA, {\kf17}with {\kf4}a {\kf34}dominant\N{\2a&HFF&} {\kf21}ninety {\kf14}five {\kf18}point {\kf21}score.
+Dialogue: 0,0:00:29.26,0:00:30.90,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf18}System {\kf23}offline. {\kf12}Data {\kf20}sealed.\N{\2a&HFF&} {\kf19}Follow {\kf10}for {\kf10}the {\kf13}next {\kf39}intelligence
+Dialogue: 0,0:00:30.90,0:00:31.61,Cap0_above_bottom,,0,0,0,,{\2a&HFF&} {\kf71}leak.

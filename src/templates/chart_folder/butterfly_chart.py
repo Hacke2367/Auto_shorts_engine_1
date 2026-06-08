@@ -375,10 +375,23 @@ def clamp(v, lo, hi):
 
 
 
+# --- Premium visual layer (Visual & Aesthetic Pass) ---
+try:
+    from src.utils import add_cinematic_background
+except Exception:
+    def add_cinematic_background(*_a, **_k):
+        return None
+try:
+    from src.config import FONT_DISPLAY
+except Exception:
+    FONT_DISPLAY = "Montserrat"
+
+
 class ButterflyChart(Scene):
     def construct(self):
         cfg = LayoutCfg()
         self.camera.background_color = Design.BG
+        add_cinematic_background(self, accent=Design.CYAN)
         sf = get_safe_frame(margin=cfg.safe_margin)
         # --- job dir / outputs ---
         import os
@@ -558,7 +571,7 @@ class ButterflyChart(Scene):
         scale = hook_action / 2.5
 
         header_top_y = sf["top"] - cfg.header_top_pad
-        title = Text("WHO WILL DOMINATE?", font="Montserrat", weight=BOLD, font_size=26, color=Design.TEXT_SUB).set_z_index(cfg.z_header)
+        title = Text("WHO WILL DOMINATE?", font=FONT_DISPLAY, weight=BOLD, font_size=26, color=Design.TEXT_SUB).set_z_index(cfg.z_header)
         title.move_to([sf["cx"], header_top_y, 0])
 
         underline = Line(LEFT * 3.0, RIGHT * 3.0).set_z_index(cfg.z_header)

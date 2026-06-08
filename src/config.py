@@ -37,7 +37,7 @@ class Theme:
 
     # --- TEXT COLORS ---
     TEXT_MAIN = "#FFFFFF"  # Headers / Values
-    TEXT_SUB = "#CCCCCC"  # Labels / Subtitles
+    TEXT_SUB = "#AEB7C2"  # Labels / Subtitles (cool premium grey)
     TEXT_DIM = "#555555"  # Grid numbers / Less visible text
 
     # --- NEON ACCENTS (For Graphs) ---
@@ -45,7 +45,7 @@ class Theme:
     NEON_PINK = "#FF0055"  # Aggressive
     NEON_GREEN = "#00FF66"  # Success / Money
     NEON_PURPLE = "#BD00FF"  # Royal / Mystery
-    NEON_YELLOW = "#FFFF00"  # Warning / Gold substitute
+    NEON_YELLOW = "#FFC74A"  # Warning / Gold substitute (richer amber-gold)
     NEON_ORANGE = "#FF9900"  # Secondary Highlight
 
     # --- MULTI-COLOR PALETTE (For Donut/Sort Charts) ---
@@ -110,7 +110,45 @@ GROUP_COLORS = {
 
 
 # ----------------------------------------
-# 4. FONT SETTINGS
+# 4. FONT REGISTRATION + DISPLAY FACE
 # ----------------------------------------
+# Register bundled TTFs with Manim's Pango backend so font="Montserrat" (and any
+# premium display face dropped into assets/fonts/) resolves deterministically —
+# regardless of whether the font is installed at the OS level. Fully fail-safe:
+# any failure simply leaves Manim's default font resolution untouched.
+_REGISTERED_FONT_FILES = set()
+
+
+def _register_bundled_fonts():
+    try:
+        import manimpango
+    except Exception:
+        return
+    if not os.path.isdir(FONTS_DIR):
+        return
+    for _fname in sorted(os.listdir(FONTS_DIR)):
+        if _fname.lower().endswith((".ttf", ".otf")):
+            try:
+                if manimpango.register_font(os.path.join(FONTS_DIR, _fname)):
+                    _REGISTERED_FONT_FILES.add(_fname.lower())
+            except Exception:
+                pass
+
+
+_register_bundled_fonts()
+
+# Body text is always Montserrat. FONT_DISPLAY is a premium display face for hero
+# titles: drop one of the OFL .ttf files below into assets/fonts/ to auto-activate
+# it; until then FONT_DISPLAY gracefully falls back to Montserrat so a missing
+# file can never break a render.
 DEFAULT_FONT = "DejaVu Sans"
-# Note: Manim uses 'font="Montserrat"' in calls, ensure it's installed or fallback to Arial.
+FONT_BODY = "Montserrat"
+FONT_DISPLAY = "Montserrat"
+for _disp_file, _disp_family in (
+    ("SpaceGrotesk-Bold.ttf", "Space Grotesk"),
+    ("Anton-Regular.ttf", "Anton"),
+    ("ClashDisplay-Bold.ttf", "Clash Display"),
+):
+    if _disp_file.lower() in _REGISTERED_FONT_FILES:
+        FONT_DISPLAY = _disp_family
+        break

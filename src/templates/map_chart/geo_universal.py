@@ -163,9 +163,22 @@ def _timeline_defaults(hook: str, setup: str, node_segments: list, winner: str, 
     return d
 
 
+# --- Premium visual layer (Visual & Aesthetic Pass) ---
+try:
+    from src.utils import add_cinematic_background
+except Exception:
+    def add_cinematic_background(*_a, **_k):
+        return None
+try:
+    from src.config import FONT_DISPLAY
+except Exception:
+    FONT_DISPLAY = "Montserrat"
+
+
 class GeoUniversalMap(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=Theme.NEON_BLUE)
         job_dir = _resolve_job_dir()
         job = load_job(default={"template_id": "geo_universal", "timeline": {}, "audio": {"order": []}})
         audio_order = _extract_audio_order(job)
@@ -301,7 +314,7 @@ class GeoUniversalMap(Scene):
         # ===========================
         title = Text(
             meta.get("TITLE", "GLOBAL ALLIANCE MAP"),
-            font="Montserrat",
+            font=FONT_DISPLAY,
             weight=BOLD,
             font_size=42,
             color=Theme.TEXT_MAIN,

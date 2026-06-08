@@ -1,114 +1,90 @@
-{
-  "version": 1,
-  "template_id": "scan_race",
-  "marks": [
-    {
-      "t": 0.0,
-      "key": "intro_glitch",
-      "gain_db": -9.0,
-      "meta": {
-        "at": "breach"
-      }
-    },
-    {
-      "t": 0.7999999999999999,
-      "key": "intro_rise",
-      "gain_db": -8.0,
-      "meta": {
-        "at": "brand_in"
-      }
-    },
-    {
-      "t": 1.9333333333333331,
-      "key": "whoosh_soft",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "frame_in"
-      }
-    },
-    {
-      "t": 3.0666666666666695,
-      "key": "charge_up",
-      "gain_db": -10.0,
-      "meta": {
-        "at": "header"
-      }
-    },
-    {
-      "t": 5.066666666666668,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "at": "dock_in"
-      }
-    },
-    {
-      "t": 5.7333333333333325,
-      "key": "ui_tick",
-      "gain_db": -13.0,
-      "meta": {
-        "at": "slots_in"
-      }
-    },
-    {
-      "t": 6.53333333333333,
-      "key": "scan_tick",
-      "gain_db": -14.0,
-      "meta": {
-        "at": "axes_in"
-      }
-    },
-    {
-      "t": 10.06666666666665,
-      "key": "scan_tick",
-      "gain_db": -14.0,
-      "meta": {
-        "segment": "lap_1",
-        "lap": 1
-      }
-    },
-    {
-      "t": 14.799999999999967,
-      "key": "scan_tick",
-      "gain_db": -14.0,
-      "meta": {
-        "segment": "lap_2",
-        "lap": 2
-      }
-    },
-    {
-      "t": 20.133333333333283,
-      "key": "scan_tick",
-      "gain_db": -14.0,
-      "meta": {
-        "segment": "sprint",
-        "lap": 3
-      }
-    },
-    {
-      "t": 25.266666666666598,
-      "key": "winner_rise",
-      "gain_db": -10.0,
-      "meta": {
-        "segment": "finish"
-      }
-    },
-    {
-      "t": 25.666666666666597,
-      "key": "impact_soft",
-      "gain_db": -13.0,
-      "meta": {
-        "segment": "finish",
-        "at": "lock_flash"
-      }
-    },
-    {
-      "t": 30.333333333333247,
-      "key": "ui_pop",
-      "gain_db": -12.0,
-      "meta": {
-        "segment": "outro"
-      }
+[
+  {
+    "t": 2.066666666666669,
+    "event": "riser",
+    "key": "riser",
+    "gain_db": -8.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\riser_short_01.wav",
+    "vol": 0.75,
+    "meta": {
+      "at": "hook_in"
     }
-  ]
-}
+  },
+  {
+    "t": 2.833333333333333,
+    "event": "sweep",
+    "key": "sweep",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_transition_sweep_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "labels_in"
+    }
+  },
+  {
+    "t": 5.033333333333325,
+    "event": "charge_up",
+    "key": "charge_up",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_transition_sweep_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "at": "setup_bars"
+    }
+  },
+  {
+    "t": 9.999999999999975,
+    "event": "scan_tick",
+    "key": "scan_tick",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.55,
+    "meta": {
+      "at": "middle_race"
+    }
+  },
+  {
+    "t": 13.233333333333297,
+    "event": "hit_soft",
+    "key": "hit_soft",
+    "gain_db": -10.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.75,
+    "meta": {
+      "at": "finish_race"
+    }
+  },
+  {
+    "t": 14.633333333333292,
+    "event": "winner_rise",
+    "key": "winner_rise",
+    "gain_db": -9.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\success_chime_01.wav",
+    "vol": 0.85,
+    "meta": {
+      "at": "winner_highlight"
+    }
+  },
+  {
+    "t": 18.266666666666733,
+    "event": "impact_soft",
+    "key": "impact_soft",
+    "gain_db": -11.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\impact_hit_soft_01.wav",
+    "vol": 0.8,
+    "meta": {
+      "at": "winner_banner"
+    }
+  },
+  {
+    "t": 18.900000000000098,
+    "event": "ui_pop",
+    "key": "ui_pop",
+    "gain_db": -12.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_click_01.wav",
+    "vol": 0.65,
+    "meta": {
+      "at": "outro"
+    }
+  }
+]

@@ -75,7 +75,7 @@ def _apply_living_data_breath(
     duration: float,
     *,
     period: float = 3.0,
-    glow_max_opacity: float = 0.18,
+    glow_max_opacity: float = 0.20,
     glow_color: str = "#FFFFFF",
     glow_stroke_width: float = 5.0,
     glow_buff: float = 0.10,
@@ -112,7 +112,7 @@ def _apply_living_data_breath(
             t = float(scene.time) - t0
             phase = np.sin(t * (2.0 * np.pi / period))        # −1 … +1
             op  = glow_max_opacity * (0.5 + 0.5 * phase)      #  0 … max_op
-            sw  = glow_stroke_width * (1.0 + 0.25 * (0.5 + 0.5 * phase))
+            sw  = glow_stroke_width * (1.0 + 0.32 * (0.5 + 0.5 * phase))
             m.set_stroke(opacity=float(np.clip(op, 0.0, glow_max_opacity)), width=sw)
 
         glow.add_updater(_glow_upd)
@@ -140,7 +140,7 @@ def _build_confidence_tick(
     *,
     accent: str = "#00F0FF",
     track_opacity: float = 0.25,
-    fill_opacity: float = 0.50,
+    fill_opacity: float = 0.60,
     height: float = 0.05,
     width_ratio: float = 0.96,
     y_offset: float = -0.05,
@@ -292,6 +292,55 @@ def _build_narrative_cursor(
 
 
 # -----------------------------------------------------------------------
+# Concept D — Focus Aura (opt-in)
+# A soft accent-tinted radial glow fades in behind the active focus Mobject.
+# Reuses the cinematic-glow primitive; OFF by default (enable_aura=True).
+# -----------------------------------------------------------------------
+
+def _apply_focus_aura(
+    scene: Scene,
+    focus: Mobject,
+    duration: float,
+    *,
+    accent: str = "#00F0FF",
+    max_opacity: float = 0.16,
+    period: float = 3.4,
+) -> List[Callable]:
+    """Soft accent glow behind the focus Mobject. Returns cleanup callables."""
+    if focus is None or duration < 0.40:
+        return []
+    try:
+        w = max(0.20, float(getattr(focus, "width", 1.0))) + 0.55
+        h = max(0.20, float(getattr(focus, "height", 1.0))) + 0.55
+        aura = Ellipse(width=w * 1.45, height=h * 1.45)
+        aura.set_fill(accent, opacity=0.0)
+        aura.set_stroke(width=0)
+        aura.move_to(focus.get_center())
+        aura.set_z_index(focus.get_z_index() - 2)
+        scene.add(aura)
+
+        t0 = float(scene.time)
+
+        def _aura_upd(m, dt):
+            t = float(scene.time) - t0
+            fade = min(1.0, t / 0.35)
+            breathe = 0.6 + 0.4 * (0.5 + 0.5 * np.sin(t * (2.0 * np.pi / period)))
+            m.set_fill(opacity=float(np.clip(max_opacity * fade * breathe, 0.0, max_opacity)))
+            m.move_to(focus.get_center())
+
+        aura.add_updater(_aura_upd)
+
+        return [
+            lambda: aura.clear_updaters(),
+            lambda: scene.remove(aura),
+        ]
+
+    except Exception as e:
+        _log.warning("retention: Focus Aura layer failed: %s", e, exc_info=True)
+        return []
+
+
+# -----------------------------------------------------------------------
 # PUBLIC: hold_breathing  (new tiered implementation)
 # -----------------------------------------------------------------------
 
@@ -304,6 +353,7 @@ def hold_breathing(
     accent: str = "#00F0FF",
     enable_tick: bool = True,
     enable_cursor: bool = False,   # opt-in; template authors pass enable_cursor=True
+    enable_aura: bool = False,     # opt-in; soft accent glow behind focus (Concept D)
     template_accent: Optional[Callable] = None,
     glow_shape: Optional[Mobject] = None,
 ) -> None:
@@ -324,6 +374,7 @@ def hold_breathing(
         accent:          Template accent color for tick + cursor border.
         enable_tick:     Toggle Concept B (default True).
         enable_cursor:   Toggle Concept C (default False — template opts in).
+        enable_aura:     Toggle Concept D focus aura (default False — opt in).
         template_accent: Per-template accent callable(scene, focus, seconds).
         glow_shape:      Override glow shape for non-rectangular focus Mobjects.
     """
@@ -338,6 +389,12 @@ def hold_breathing(
     if focus is not None:
         cleanups.extend(
             _apply_living_data_breath(scene, focus, s, glow_color=accent, glow_shape=glow_shape)
+        )
+
+    # — Layer A2: Focus Aura (opt-in) ———————————————————————————————
+    if focus is not None and enable_aura:
+        cleanups.extend(
+            _apply_focus_aura(scene, focus, s, accent=accent)
         )
 
     # — Layer B: Confidence Tick ————————————————————————————————————

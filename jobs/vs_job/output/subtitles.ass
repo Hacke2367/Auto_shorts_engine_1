@@ -13,23 +13,51 @@ Style: Cap1_above_bottom,Segoe UI,54,&H00FFFFFF,&H00000000,&H80000000,&H80000000
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
-Dialogue: 0,0:00:00.00,0:00:11.05,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf35}A {\kf343}classified {\kf137}data {\kf137}leak {\kf137}just\N{\2a&HFF&} {\kf221}exposed {\kf95}...
-Dialogue: 0,0:00:00.00,0:00:11.05,Cap1_above_bottom,,0,0,0,,A classified data leak just\Nexposed ...
-Dialogue: 0,0:00:11.05,0:00:18.89,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf63}Six {\kf124}brutal {\kf145}rounds. {\kf104}Every {\kf124}metric\N{\2a&HFF&} {\kf157}scanned {\kf67}...
-Dialogue: 0,0:00:11.05,0:00:18.89,Cap1_above_bottom,,0,0,0,,Six brutal rounds. Every metric\Nscanned ...
-Dialogue: 0,0:00:18.89,0:00:28.69,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf134}Round {\kf108}one. {\kf81}Net {\kf162}Worth. {\kf215}Abhishek\N{\2a&HFF&} {\kf175}comes {\kf105}...
-Dialogue: 0,0:00:18.89,0:00:28.69,Cap1_above_bottom,,0,0,0,,Round one. Net Worth. Abhishek\Ncomes ...
-Dialogue: 0,0:00:28.69,0:00:39.45,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf148}Round {\kf120}two. {\kf120}Over {\kf329}Confidence.\N{\2a&HFF&} {\kf261}Abhishek {\kf98}...
-Dialogue: 0,0:00:28.69,0:00:39.45,Cap1_above_bottom,,0,0,0,,Round two. Over Confidence.\NAbhishek ...
-Dialogue: 0,0:00:39.45,0:00:46.14,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf86}Round {\kf102}three. {\kf120}Loyalty {\kf102}check. {\kf68}Both\N{\2a&HFF&} {\kf109}show {\kf82}...
-Dialogue: 0,0:00:39.45,0:00:46.14,Cap1_above_bottom,,0,0,0,,Round three. Loyalty check. Both\Nshow ...
-Dialogue: 0,0:00:46.14,0:00:54.11,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf106}Round {\kf105}four. {\kf63}Gay {\kf211}Supporter. {\kf84}Both\N{\2a&HFF&} {\kf166}Abhishek {\kf62}...
-Dialogue: 0,0:00:46.14,0:00:54.11,Cap1_above_bottom,,0,0,0,,Round four. Gay Supporter. Both\NAbhishek ...
-Dialogue: 0,0:00:54.11,0:01:02.47,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf103}Round {\kf103}five. {\kf227}Girlfriends {\kf124}count.\N{\2a&HFF&} {\kf203}Abhishek {\kf76}...
-Dialogue: 0,0:00:54.11,0:01:02.47,Cap1_above_bottom,,0,0,0,,Round five. Girlfriends count.\NAbhishek ...
-Dialogue: 0,0:01:02.47,0:01:13.47,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf146}Final {\kf176}round. {\kf235}Backchod {\kf176}level.\N{\2a&HFF&} {\kf210}Both {\kf157}...
-Dialogue: 0,0:01:02.47,0:01:13.47,Cap1_above_bottom,,0,0,0,,Final round. Backchod level.\NBoth ...
-Dialogue: 0,0:01:13.47,0:01:21.31,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf63}All {\kf124}rounds {\kf207}processed. {\kf62}The {\kf104}final\N{\2a&HFF&} {\kf179}calculations {\kf45}...
-Dialogue: 0,0:01:13.47,0:01:21.31,Cap1_above_bottom,,0,0,0,,All rounds processed. The final\Ncalculations ...
-Dialogue: 0,0:01:21.31,0:01:26.64,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf77}Arena {\kf108}session {\kf108}sealed. {\kf62}Data\N{\2a&HFF&} {\kf125}locked. {\kf53}...
-Dialogue: 0,0:01:21.31,0:01:26.64,Cap1_above_bottom,,0,0,0,,Arena session sealed. Data\Nlocked. ...
+Dialogue: 0,0:00:00.00,0:00:04.45,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf9}A {\kf97}classified {\kf39}data {\kf39}leak {\kf39}just\N{\2a&HFF&} {\kf57}exposed {\kf25}two {\kf91}individuals {\kf33}head {\kf17}to
+Dialogue: 0,0:00:04.45,0:00:09.29,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf34}head. {\kf54}Abhishek {\kf41}versus {\kf47}Pandey.\N{\2a&HFF&} {\kf35}The {\kf24}AI {\kf59}Arena {\kf24}is {\kf59}about {\kf24}to {\kf83}deliver
+Dialogue: 0,0:00:09.29,0:00:11.05,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf28}the {\kf74}ultimate {\kf74}verdict.
+Dialogue: 0,0:00:00.00,0:00:04.45,Cap1_above_bottom,,0,0,0,,A classified data leak just\Nexposed two individuals head to
+Dialogue: 0,0:00:04.45,0:00:09.29,Cap1_above_bottom,,0,0,0,,head. Abhishek versus Pandey.\NThe AI Arena is about to deliver
+Dialogue: 0,0:00:09.29,0:00:11.05,Cap1_above_bottom,,0,0,0,,the ultimate verdict.
+Dialogue: 0,0:00:11.05,0:00:14.97,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf21}Six {\kf44}brutal {\kf51}rounds. {\kf36}Every {\kf44}metric\N{\2a&HFF&} {\kf51}scanned {\kf22}and {\kf65}verified. {\kf36}Watch {\kf22}the
+Dialogue: 0,0:00:14.97,0:00:18.89,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf58}scores {\kf49}stack {\kf20}up {\kf20}in {\kf39}real {\kf49}time.\N{\2a&HFF&} {\kf26}Let {\kf26}the {\kf44}arena {\kf61}decide.
+Dialogue: 0,0:00:11.05,0:00:14.97,Cap1_above_bottom,,0,0,0,,Six brutal rounds. Every metric\Nscanned and verified. Watch the
+Dialogue: 0,0:00:14.97,0:00:18.89,Cap1_above_bottom,,0,0,0,,scores stack up in real time.\NLet the arena decide.
+Dialogue: 0,0:00:18.89,0:00:23.18,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf34}Round {\kf28}one. {\kf21}Net {\kf41}Worth. {\kf55}Abhishek\N{\2a&HFF&} {\kf52}comes {\kf21}in {\kf42}with {\kf31}ten {\kf52}lakhs {\kf21}on {\kf31}the
+Dialogue: 0,0:00:23.18,0:00:27.17,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf49}board. {\kf48}Pandey {\kf40}shows {\kf8}a {\kf32}flat {\kf40}zero.\N{\2a&HFF&} {\kf55}Abhishek {\kf35}takes {\kf21}the {\kf35}first {\kf35}point
+Dialogue: 0,0:00:27.17,0:00:28.69,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf36}with {\kf18}no {\kf98}resistance.
+Dialogue: 0,0:00:18.89,0:00:23.18,Cap1_above_bottom,,0,0,0,,Round one. Net Worth. Abhishek\Ncomes in with ten lakhs on the
+Dialogue: 0,0:00:23.18,0:00:27.17,Cap1_above_bottom,,0,0,0,,board. Pandey shows a flat zero.\NAbhishek takes the first point
+Dialogue: 0,0:00:27.17,0:00:28.69,Cap1_above_bottom,,0,0,0,,with no resistance.
+Dialogue: 0,0:00:28.69,0:00:32.52,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf36}Round {\kf28}two. {\kf28}Over {\kf78}Confidence.\N{\2a&HFF&} {\kf65}Abhishek {\kf41}stays {\kf66}grounded {\kf33}with {\kf8}a
+Dialogue: 0,0:00:32.52,0:00:38.13,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf32}no. {\kf65}Pandey {\kf65}lights {\kf22}up {\kf43}with {\kf11}a {\kf43}yes.\N{\2a&HFF&} {\kf33}And {\kf32}the {\kf54}point {\kf43}goes {\kf22}to {\kf65}Pandey {\kf32}for
+Dialogue: 0,0:00:38.13,0:00:39.45,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf88}owning {\kf44}it.
+Dialogue: 0,0:00:28.69,0:00:32.52,Cap1_above_bottom,,0,0,0,,Round two. Over Confidence.\NAbhishek stays grounded with a
+Dialogue: 0,0:00:32.52,0:00:38.13,Cap1_above_bottom,,0,0,0,,no. Pandey lights up with a yes.\NAnd the point goes to Pandey for
+Dialogue: 0,0:00:38.13,0:00:39.45,Cap1_above_bottom,,0,0,0,,owning it.
+Dialogue: 0,0:00:39.45,0:00:43.52,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf31}Round {\kf36}three. {\kf42}Loyalty {\kf36}check. {\kf24}Both\N{\2a&HFF&} {\kf39}show {\kf10}a {\kf28}no. {\kf66}Neither {\kf38}side {\kf47}earns {\kf9}a
+Dialogue: 0,0:00:43.52,0:00:46.14,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf61}point. {\kf11}A {\kf40}rare {\kf40}draw {\kf20}in {\kf30}the {\kf60}arena.
+Dialogue: 0,0:00:39.45,0:00:43.52,Cap1_above_bottom,,0,0,0,,Round three. Loyalty check. Both\Nshow a no. Neither side earns a
+Dialogue: 0,0:00:43.52,0:00:46.14,Cap1_above_bottom,,0,0,0,,point. A rare draw in the arena.
+Dialogue: 0,0:00:46.14,0:00:51.12,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf42}Round {\kf42}four. {\kf25}Gay {\kf84}Supporter. {\kf33}Both\N{\2a&HFF&} {\kf84}Abhishek {\kf31}and {\kf63}Pandey {\kf42}show {\kf10}a {\kf42}yes.
+Dialogue: 0,0:00:51.12,0:00:54.11,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf69}Another {\kf50}draw. {\kf70}Respect {\kf20}to {\kf40}both\N{\2a&HFF&} {\kf50}sides.
+Dialogue: 0,0:00:46.14,0:00:51.12,Cap1_above_bottom,,0,0,0,,Round four. Gay Supporter. Both\NAbhishek and Pandey show a yes.
+Dialogue: 0,0:00:51.12,0:00:54.11,Cap1_above_bottom,,0,0,0,,Another draw. Respect to both\Nsides.
+Dialogue: 0,0:00:54.11,0:00:58.48,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf33}Round {\kf32}five. {\kf71}Girlfriends {\kf39}count.\N{\2a&HFF&} {\kf82}Abhishek {\kf60}flexes {\kf40}with {\kf30}one {\kf20}on {\kf30}the
+Dialogue: 0,0:00:58.48,0:01:02.47,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf50}board. {\kf51}Pandey {\kf34}hits {\kf42}zero.\N{\2a&HFF&} {\kf66}Abhishek {\kf41}takes {\kf25}the {\kf41}point {\kf49}clean.
+Dialogue: 0,0:00:54.11,0:00:58.48,Cap1_above_bottom,,0,0,0,,Round five. Girlfriends count.\NAbhishek flexes with one on the
+Dialogue: 0,0:00:58.48,0:01:02.47,Cap1_above_bottom,,0,0,0,,board. Pandey hits zero.\NAbhishek takes the point clean.
+Dialogue: 0,0:01:02.47,0:01:07.45,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf39}Final {\kf48}round. {\kf64}Backchod {\kf48}level.\N{\2a&HFF&} {\kf45}Both {\kf55}sides {\kf44}show {\kf11}a {\kf100}confident {\kf44}yes.
+Dialogue: 0,0:01:07.45,0:01:12.43,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf77}Another {\kf54}draw. {\kf54}These {\kf32}two {\kf32}are\N{\2a&HFF&} {\kf67}mirror {\kf68}images {\kf23}in {\kf34}the {\kf57}chaos
+Dialogue: 0,0:01:12.43,0:01:13.47,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf104}department.
+Dialogue: 0,0:01:02.47,0:01:07.45,Cap1_above_bottom,,0,0,0,,Final round. Backchod level.\NBoth sides show a confident yes.
+Dialogue: 0,0:01:07.45,0:01:12.43,Cap1_above_bottom,,0,0,0,,Another draw. These two are\Nmirror images in the chaos
+Dialogue: 0,0:01:12.43,0:01:13.47,Cap1_above_bottom,,0,0,0,,department.
+Dialogue: 0,0:01:13.47,0:01:17.76,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf23}All {\kf48}rounds {\kf79}processed. {\kf24}The {\kf40}final\N{\2a&HFF&} {\kf106}calculations {\kf27}are {\kf27}in. {\kf27}And {\kf27}the
+Dialogue: 0,0:01:17.76,0:01:21.31,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf83}absolute {\kf61}winner {\kf20}of {\kf31}the {\kf20}AI {\kf51}Arena\N{\2a&HFF&} {\kf16}is {\kf73}revealed.
+Dialogue: 0,0:01:13.47,0:01:17.76,Cap1_above_bottom,,0,0,0,,All rounds processed. The final\Ncalculations are in. And the
+Dialogue: 0,0:01:17.76,0:01:21.31,Cap1_above_bottom,,0,0,0,,absolute winner of the AI Arena\Nis revealed.
+Dialogue: 0,0:01:21.31,0:01:25.29,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf38}Arena {\kf54}session {\kf54}sealed. {\kf31}Data\N{\2a&HFF&} {\kf59}locked. {\kf76}Subscribe {\kf26}for {\kf26}the {\kf34}next
+Dialogue: 0,0:01:25.29,0:01:26.64,Cap0_bottom,,0,0,0,,{\2a&HFF&} {\kf75}classified {\kf60}matchup.
+Dialogue: 0,0:01:21.31,0:01:25.29,Cap1_above_bottom,,0,0,0,,Arena session sealed. Data\Nlocked. Subscribe for the next
+Dialogue: 0,0:01:25.29,0:01:26.64,Cap1_above_bottom,,0,0,0,,classified matchup.

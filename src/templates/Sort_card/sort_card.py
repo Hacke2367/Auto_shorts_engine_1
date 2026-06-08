@@ -260,9 +260,9 @@ def build_header(meta_title: str, meta_sub: str) -> Dict[str, Mobject]:
         left_txt = parts[0].strip() or "TIER 1"
         right_txt = parts[1].strip() or "TIER 2"
 
-    left = safe_text(left_txt.upper(), font_size=46, color=blue, weight=BOLD)
+    left = safe_text(left_txt.upper(), font=FONT_DISPLAY, font_size=46, color=blue, weight=BOLD)
     vs = safe_text("vs", font_size=30, color=GREY_B, weight=BOLD)
-    right = safe_text(right_txt.upper(), font_size=46, color=pink, weight=BOLD)
+    right = safe_text(right_txt.upper(), font=FONT_DISPLAY, font_size=46, color=pink, weight=BOLD)
     title = VGroup(left, vs, right).arrange(RIGHT, buff=0.22)
 
     try:
@@ -705,9 +705,22 @@ def pack_positions(inner_rect: Mobject, n: int, cols: int = 3) -> List[np.ndarra
 # ============================================================
 # MAIN SCENE
 # ============================================================
+# --- Premium visual layer (Visual & Aesthetic Pass) ---
+try:
+    from src.utils import add_cinematic_background
+except Exception:
+    def add_cinematic_background(*_a, **_k):
+        return None
+try:
+    from src.config import FONT_DISPLAY
+except Exception:
+    FONT_DISPLAY = "Montserrat"
+
+
 class SortCardTribunalFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=Theme.NEON_BLUE)
 
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)

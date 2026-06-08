@@ -871,9 +871,22 @@ def _winner_sweep(scene: Scene, bar: Mobject, rt: float, color_core=WHITE, color
     scene.remove(sweep)
 
 
+# --- Premium visual layer (Visual & Aesthetic Pass) ---
+try:
+    from src.utils import add_cinematic_background
+except Exception:
+    def add_cinematic_background(*_a, **_k):
+        return None
+try:
+    from src.config import FONT_DISPLAY
+except Exception:
+    FONT_DISPLAY = "Montserrat"
+
+
 class BarChartTemplate(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=Theme.NEON_BLUE)
 
         # ============================================================
         # ✅ 0) JOB + TIMELINE
@@ -1002,7 +1015,7 @@ class BarChartTemplate(Scene):
         title_text = (meta.get("TITLE", "MARKET LEADERS") or "MARKET LEADERS").strip()
         sub_text = (meta.get("SUB", "Tech leaders comparison") or "Tech leaders comparison").strip()
 
-        title = Text(title_text, font="Montserrat", weight=BOLD, font_size=52, color=Theme.TEXT_MAIN)
+        title = Text(title_text, font=FONT_DISPLAY, weight=BOLD, font_size=52, color=Theme.TEXT_MAIN)
         title.move_to([sf["cx"], sf["top"] - 1.05, 0])
         title.set_z_index(60)
         title_shadow = _soft_shadow_text(title, opacity=0.28)
@@ -1256,7 +1269,7 @@ class BarChartTemplate(Scene):
             sheen.set_stroke(width=0).set_fill(color=WHITE, opacity=0.18)
             sheen.align_to(final_bar, UP).align_to(final_bar, LEFT).set_opacity(0)
 
-            val_num = DecimalNumber(0, num_decimal_places=0, font_size=24, color=Theme.NEON_BLUE)
+            val_num = DecimalNumber(0, num_decimal_places=0, font_size=26, color=WHITE)
             val_num.set_z_index(60)
             self.add(val_num)
 
@@ -1380,7 +1393,7 @@ class BarChartTemplate(Scene):
             others = [g for j, g in enumerate(bar_groups) if j != winner_index]
 
             t_dim = clamp(winner_total * 0.12, 0.25, 0.45)
-            self.play(*[g.animate.set_opacity(0.20) for g in others], run_time=t_dim)
+            self.play(*[g.animate.set_opacity(0.40) for g in others], run_time=t_dim)
 
             winner_bar = winner[6]
             winner_val = winner[9]

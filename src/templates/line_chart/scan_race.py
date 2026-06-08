@@ -153,9 +153,22 @@ def _rank_order(entities, values, colors):
     return list(es), list(vs), list(cs)
 
 
+# --- Premium visual layer (Visual & Aesthetic Pass) ---
+try:
+    from src.utils import add_cinematic_background
+except Exception:
+    def add_cinematic_background(*_a, **_k):
+        return None
+try:
+    from src.config import FONT_DISPLAY
+except Exception:
+    FONT_DISPLAY = "Montserrat"
+
+
 class CinematicLineRace(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=Theme.NEON_BLUE)
 
         # ✅ 0.0s Intro Rule
         global_start_t0 = float(self.time)
@@ -216,7 +229,7 @@ class CinematicLineRace(Scene):
         # HEADER
         # ============================================================
         title = Text((meta.get("TITLE") or "THE RACE").upper(),
-                     font="Montserrat", weight=BOLD, font_size=40, color=WHITE)
+                     font=FONT_DISPLAY, weight=BOLD, font_size=40, color=WHITE)
         title.to_edge(UP, buff=0.72).set_z_index(500)
 
         sub = Text((meta.get("SUB") or "Competitor Analysis").upper(),
@@ -285,8 +298,8 @@ class CinematicLineRace(Scene):
             bw = bar_w(val)
             bx = BAR_X0 + bw / 2
 
-            g["bar"].set_width(bw, stretch=True).move_to([bx, y, 0])
-            g["bar_glow"].set_width(bw + 0.14, stretch=True).move_to([BAR_X0 + (bw + 0.14) / 2, y, 0])
+            g["bar"].stretch_to_fit_width(bw).move_to([bx, y, 0])
+            g["bar_glow"].stretch_to_fit_width(bw + 0.14).move_to([BAR_X0 + (bw + 0.14) / 2, y, 0])
             g["lbl"].move_to([LABEL_X + g["lbl"].width / 2, y, 0])
 
             new_val = Text(f"{val:.0f}{unit}", font="Montserrat", weight=BOLD, font_size=17, color=WHITE)
@@ -442,9 +455,9 @@ class CinematicLineRace(Scene):
         self.play(
             groups[winner]["bar"].animate.set_opacity(1.0),
             groups[winner]["bar_glow"].animate.set_opacity(0.42),
-            *[groups[e]["bar"].animate.set_opacity(0.22) for e in others],
+            *[groups[e]["bar"].animate.set_opacity(0.40) for e in others],
             *[groups[e]["bar_glow"].animate.set_opacity(0.05) for e in others],
-            *[groups[e]["lbl"].animate.set_opacity(0.28) for e in others],
+            *[groups[e]["lbl"].animate.set_opacity(0.45) for e in others],
             run_time=0.50, rate_func=rf.ease_out_cubic,
         )
 
