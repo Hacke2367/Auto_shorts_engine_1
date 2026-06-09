@@ -12,7 +12,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 sys.path.append(project_root)
 
-from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme
+from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY
 from src.utils import IntroManager, get_safe_frame, make_floating_particles, add_cinematic_background
 from src.geo_data.map_coords import COORDINATES
 from src.sync.job import load_job
@@ -302,7 +302,7 @@ class GeoUniversalMap(Scene):
         # ===========================
         title = Text(
             meta.get("TITLE", "GLOBAL ALLIANCE MAP"),
-            font="Montserrat",
+            font=FONT_DISPLAY,
             weight=BOLD,
             font_size=42,
             color=Theme.TEXT_MAIN,

@@ -90,6 +90,36 @@ ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 FONTS_DIR = os.path.join(ASSETS_DIR, "fonts")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
+# ----------------------------------------
+# 3b. FONT REGISTRATION (bundle -> guarantee resolution regardless of OS install)
+# ----------------------------------------
+# Register the bundled TTFs with Pango so font="Montserrat" ALWAYS resolves to
+# our shipped files, even on machines where Montserrat isn't OS-installed
+# (otherwise Manim silently falls back to a default face). Fully fail-safe: any
+# registration error degrades to the current behaviour and never breaks a render.
+try:
+    import manimpango as _manimpango
+    for _font_file in ("Montserrat-Regular.ttf", "Montserrat-Bold.ttf",
+                       "SpaceGrotesk-Bold.ttf", "Anton-Regular.ttf"):
+        _font_path = os.path.join(FONTS_DIR, _font_file)
+        if os.path.exists(_font_path):
+            try:
+                _manimpango.register_font(_font_path)
+            except Exception:
+                pass
+except Exception:
+    pass
+
+# Premium display face for hero/titles (body text stays Montserrat). Resolve to
+# the bundled display font only if it actually registered; otherwise fall back to
+# Montserrat so a missing/failed TTF can NEVER break a render.
+try:
+    FONT_DISPLAY = "Space Grotesk" if any(
+        "Space Grotesk" in _f for _f in _manimpango.list_fonts()
+    ) else "Montserrat"
+except Exception:
+    FONT_DISPLAY = "Montserrat"
+
 # -----------------------------------------
 # map setting
 

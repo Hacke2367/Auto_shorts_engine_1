@@ -188,4 +188,4 @@ Pure render-time reduction, no visual change. Include only if touching that func
    timeline must be **identical** (we added no timed animations).
 4. **Font-fallback proof:** confirm titles change between pre/post (verifies registration took effect); confirm
    render still succeeds with the display `.ttf` temporarily removed (verifies graceful fallback).
-5. Run the relevant template/pipeline tests if any cover rendering hooks; otherwise compile + render is the gate.
+5. Run the relevant template/pipeline tests if any cover rendering hooks; otherwise compile + render is the gate. 

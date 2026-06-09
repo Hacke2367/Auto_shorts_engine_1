@@ -34,13 +34,14 @@ try:
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
     sys.path.append(project_root)
 
-    from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme  # type: ignore
+    from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY  # type: ignore
     from src.utils import IntroManager, get_branding_border, make_floating_particles, add_cinematic_background  # type: ignore
 except Exception:
     project_root = os.getcwd()
     DATA_DIR = os.path.join(project_root, "data")
     ASSETS_DIR = os.path.join(project_root, "assets")
     BACKGROUND_COLOR = "#050505"
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#2DD4FF"
@@ -263,9 +264,9 @@ def build_header(meta_title: str, meta_sub: str) -> Dict[str, Mobject]:
         left_txt = parts[0].strip() or "TIER 1"
         right_txt = parts[1].strip() or "TIER 2"
 
-    left = safe_text(left_txt.upper(), font_size=46, color=blue, weight=BOLD)
+    left = safe_text(left_txt.upper(), font=FONT_DISPLAY, font_size=46, color=blue, weight=BOLD)
     vs = safe_text("vs", font_size=30, color=GREY_B, weight=BOLD)
-    right = safe_text(right_txt.upper(), font_size=46, color=pink, weight=BOLD)
+    right = safe_text(right_txt.upper(), font=FONT_DISPLAY, font_size=46, color=pink, weight=BOLD)
     title = VGroup(left, vs, right).arrange(RIGHT, buff=0.22)
 
     try:

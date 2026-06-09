@@ -35,13 +35,14 @@ try:
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
     sys.path.append(project_root)
 
-    from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme  # type: ignore
+    from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY  # type: ignore
     from src.utils import IntroManager, add_cinematic_background  # type: ignore
 except Exception:
     project_root = os.getcwd()
     DATA_DIR = os.path.join(project_root, "data")
     ASSETS_DIR = os.path.join(project_root, "assets")
     BACKGROUND_COLOR = "#050505"
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -855,8 +856,8 @@ class VsCardFinal(Scene):
         left_title = parts[0].strip() if len(parts) == 2 else p1_name
         right_title = parts[1].strip() if len(parts) == 2 else p2_name
 
-        tL = safe_text(left_title.upper(), font_size=38, color=C_P1, weight=BOLD)
-        tR = safe_text(right_title.upper(), font_size=38, color=C_P2, weight=BOLD)
+        tL = safe_text(left_title.upper(), font=FONT_DISPLAY, font_size=38, color=C_P1, weight=BOLD)
+        tR = safe_text(right_title.upper(), font=FONT_DISPLAY, font_size=38, color=C_P2, weight=BOLD)
 
         vs_box = Square(side_length=0.74, color=C_GOLD, stroke_width=3).rotate(45 * DEGREES)
         vs_txt = safe_text("VS", font="Montserrat", font_size=22, color=C_GOLD, weight=BOLD)

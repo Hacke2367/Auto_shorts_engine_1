@@ -19,7 +19,7 @@ sys.path.append(project_root)
 
 # --- IMPORTS (Robust) ---
 try:
-    from src.config import DATA_DIR, BACKGROUND_COLOR, Theme
+    from src.config import DATA_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY
     from src.utils import (
         Brand,
         get_safe_frame,
@@ -34,6 +34,7 @@ try:
 except Exception:
     DATA_DIR = "./geo_data"
     BACKGROUND_COLOR = "#050505"
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -521,7 +522,7 @@ class CinematicLineRace(Scene):
         kicker.set_opacity(0.82).set_z_index(60)
         kicker.move_to([sf["cx"], header_y + 0.44, 0])
 
-        title = Text(meta.title, font="Montserrat", weight=BOLD, font_size=42, color=Design.TEXT_MAIN)
+        title = Text(meta.title, font=FONT_DISPLAY, weight=BOLD, font_size=42, color=Design.TEXT_MAIN)
         title.move_to([sf["cx"], header_y, 0]).set_z_index(60)
         title_shadow = title.copy().set_color(BLACK).set_opacity(0.30).shift(DOWN * 0.05 + RIGHT * 0.04).set_z_index(59)
 

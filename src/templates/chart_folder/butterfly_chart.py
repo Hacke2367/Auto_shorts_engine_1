@@ -24,9 +24,10 @@ sys.path.append(project_root)
 # --- IMPORTS (Robust) ---
 # 1) config background (optional)
 try:
-    from src.config import BACKGROUND_COLOR
+    from src.config import BACKGROUND_COLOR, FONT_DISPLAY
 except Exception:
     BACKGROUND_COLOR = "#050505"
+    FONT_DISPLAY = "Montserrat"
 
 # 2) utils are REQUIRED for proper template behavior
 try:
@@ -563,7 +564,7 @@ class ButterflyChart(Scene):
         scale = hook_action / 2.5
 
         header_top_y = sf["top"] - cfg.header_top_pad
-        title = Text("WHO WILL DOMINATE?", font="Montserrat", weight=BOLD, font_size=26, color=Design.TEXT_SUB).set_z_index(cfg.z_header)
+        title = Text("WHO WILL DOMINATE?", font=FONT_DISPLAY, weight=BOLD, font_size=26, color=Design.TEXT_SUB).set_z_index(cfg.z_header)
         title.move_to([sf["cx"], header_top_y, 0])
 
         underline = Line(LEFT * 3.0, RIGHT * 3.0).set_z_index(cfg.z_header)

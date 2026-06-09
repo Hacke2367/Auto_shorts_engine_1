@@ -657,7 +657,7 @@ sys.path.append(project_root)
 
 # --- IMPORTS (Robust) ---
 try:
-    from src.config import Theme, BACKGROUND_COLOR, DATA_DIR
+    from src.config import Theme, BACKGROUND_COLOR, DATA_DIR, FONT_DISPLAY
     from src.utils import (
         IntroManager,
         get_safe_frame,
@@ -670,6 +670,7 @@ try:
 except Exception:
     BACKGROUND_COLOR = "#050505"
     DATA_DIR = os.path.join(project_root, "data")
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -1007,7 +1008,7 @@ class BarChartTemplate(Scene):
         title_text = (meta.get("TITLE", "MARKET LEADERS") or "MARKET LEADERS").strip()
         sub_text = (meta.get("SUB", "Tech leaders comparison") or "Tech leaders comparison").strip()
 
-        title = Text(title_text, font="Montserrat", weight=BOLD, font_size=52, color=Theme.TEXT_MAIN)
+        title = Text(title_text, font=FONT_DISPLAY, weight=BOLD, font_size=52, color=Theme.TEXT_MAIN)
         title.move_to([sf["cx"], sf["top"] - 1.05, 0])
         title.set_z_index(60)
         title_shadow = _soft_shadow_text(title, opacity=0.28)

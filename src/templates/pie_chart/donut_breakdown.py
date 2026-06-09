@@ -17,12 +17,13 @@ try:
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
     sys.path.append(project_root)
 
-    from src.config import DATA_DIR, BACKGROUND_COLOR, Theme  # type: ignore
+    from src.config import DATA_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY  # type: ignore
     from src.utils import IntroManager, get_safe_frame, add_cinematic_background  # type: ignore
 except Exception:
     HAS_PROJECT = False
     DATA_DIR = "."
     BACKGROUND_COLOR = "#0A0A0A"
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         TEXT_MAIN = "#FFFFFF"
@@ -620,7 +621,7 @@ def build_background(sf: Dict[str, float], center: np.ndarray, outer_r: float) -
 def build_header(sf: Dict[str, float], title_text: str, sub_text: str) -> Tuple[Mobject, Mobject, Mobject, Mobject]:
     title = _safe_text(
         title_text,
-        font="Montserrat",
+        font=FONT_DISPLAY,
         font_size=44,
         color=getattr(Theme, "TEXT_MAIN", "#FFFFFF"),
         weight=BOLD,
