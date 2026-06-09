@@ -35,7 +35,7 @@ try:
     sys.path.append(project_root)
 
     from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme  # type: ignore
-    from src.utils import IntroManager, get_branding_border, make_floating_particles  # type: ignore
+    from src.utils import IntroManager, get_branding_border, make_floating_particles, add_cinematic_background  # type: ignore
 except Exception:
     project_root = os.getcwd()
     DATA_DIR = os.path.join(project_root, "data")
@@ -58,6 +58,9 @@ except Exception:
 
     def make_floating_particles(*args, **kwargs):
         return VGroup()
+
+    def add_cinematic_background(*args, **kwargs):
+        return None
 
     class IntroManager:
         @staticmethod
@@ -708,6 +711,7 @@ def pack_positions(inner_rect: Mobject, n: int, cols: int = 3) -> List[np.ndarra
 class SortCardTribunalFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=getattr(Theme, "NEON_BLUE", "#00F0FF"))
 
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)
