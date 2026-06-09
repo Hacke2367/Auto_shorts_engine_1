@@ -36,7 +36,7 @@ try:
     sys.path.append(project_root)
 
     from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme  # type: ignore
-    from src.utils import IntroManager  # type: ignore
+    from src.utils import IntroManager, add_cinematic_background  # type: ignore
 except Exception:
     project_root = os.getcwd()
     DATA_DIR = os.path.join(project_root, "data")
@@ -50,6 +50,9 @@ except Exception:
         NEON_GREEN = "#00FF66"
         TEXT_MAIN = "#FFFFFF"
         TEXT_SUB = "#B8B8B8"
+
+    def add_cinematic_background(*args, **kwargs):
+        return None
 
     class IntroManager:
         @staticmethod
@@ -729,6 +732,7 @@ def build_title_scanner_line(center_y: float, width: float, c_left: str, c_right
 class VsCardFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=getattr(Theme, "NEON_BLUE", "#00F0FF"))
 
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)
@@ -1113,11 +1117,12 @@ class VsCardFinal(Scene):
             rate_func=rf.ease_out_cubic,
         )
         
-        TL.consume(hook_seg, float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining(hook_seg), focus=header, text="INITIALIZING BOOT SEQUENCE")
+        # NOTE: hook budget is consumed AFTER the full board reveal below, so the whole
+        # layout builds right after the intro instead of holding on a boot screen for ~8s.
 
         # ----------------------------------------------------------------
-        # [SETUP SEGMENT] -> 5-8) Metrics / Cards / Terminals
+        # [HOOK cont.] -> 5-8) Metrics / Cards / Terminals reveal immediately
+        # (was [SETUP SEGMENT]; moved up so the board builds right after the intro)
         # ----------------------------------------------------------------
         setup_t0 = float(self.time)
         setup_total = TL.seg_total(setup_seg, 3.8)
@@ -1175,7 +1180,15 @@ class VsCardFinal(Scene):
 
         set_status("system boot: ready | backend: online | awaiting round 1", color=C_SUB)
         
-        TL.consume(setup_seg, float(self.time) - setup_t0)
+        # ── HOOK budget: intro + title + the full board reveal above just played. Consume
+        # the elapsed hook time and hold the REMAINING hook on the COMPLETE board (no long
+        # boot-screen hold). Per-segment durations are unchanged → sync stays exact.
+        TL.consume(hook_seg, float(self.time) - hook_t0)
+        hold_breathing(self, TL.remaining(hook_seg), focus=header, text="INITIALIZING BOOT SEQUENCE")
+
+        # ── SETUP budget: hold on the fully-built board before the round loop begins.
+        setup_anchor = float(self.time)
+        TL.consume(setup_seg, float(self.time) - setup_anchor)
         hold_breathing(self, TL.remaining(setup_seg), focus=header, text="SYSTEM STATUS: ONLINE")
 
         # ----------------------------------------------------------------
