@@ -172,8 +172,15 @@ def get_cinematic_overlay(scene,
     timer.set_opacity(0.9)
 
     def _update_timer(m):
+        # Throttle: only rebuild the Text when the displayed MM:SS actually
+        # changes (~1x/sec) instead of every frame (~30x/sec). Pure render-time
+        # win — the on-screen result is identical.
+        new_str = _format_time(getattr(scene, "time", 0.0))
+        if getattr(m, "_last_str", None) == new_str:
+            return
+        m._last_str = new_str
         m.become(
-            Text(_format_time(getattr(scene, "time", 0.0)),
+            Text(new_str,
                  font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
             .move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
             .set_opacity(0.9)
