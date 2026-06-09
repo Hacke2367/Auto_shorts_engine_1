@@ -13,7 +13,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 sys.path.append(project_root)
 
 from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme
-from src.utils import IntroManager, get_safe_frame, make_floating_particles
+from src.utils import IntroManager, get_safe_frame, make_floating_particles, add_cinematic_background
 from src.geo_data.map_coords import COORDINATES
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp
@@ -166,6 +166,7 @@ def _timeline_defaults(hook: str, setup: str, node_segments: list, winner: str, 
 class GeoUniversalMap(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=getattr(Theme, "NEON_BLUE", "#00F0FF"))
         job_dir = _resolve_job_dir()
         job = load_job(default={"template_id": "geo_universal", "timeline": {}, "audio": {"order": []}})
         audio_order = _extract_audio_order(job)

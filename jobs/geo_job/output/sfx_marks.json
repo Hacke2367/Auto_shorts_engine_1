@@ -1,103 +1,132 @@
-{
-  "version": 1,
-  "template_id": "geo_universal",
-  "marks": [
-    {
-      "t": 4.200000000000005,
-      "key": "map_intro",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "hook"
-      }
-    },
-    {
-      "t": 11.866666666666644,
-      "key": "node_reveal",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "node_1",
-        "node": 1
-      }
-    },
-    {
-      "t": 14.399999999999968,
-      "key": "node_reveal",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "node_2",
-        "node": 2
-      }
-    },
-    {
-      "t": 17.333333333333293,
-      "key": "node_reveal",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "node_3",
-        "node": 3
-      }
-    },
-    {
-      "t": 20.466666666666615,
-      "key": "node_reveal",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "node_4",
-        "node": 4
-      }
-    },
-    {
-      "t": 23.133333333333272,
-      "key": "node_reveal",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "node_5",
-        "node": 5
-      }
-    },
-    {
-      "t": 26.066666666666595,
-      "key": "node_reveal",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "node_6",
-        "node": 6
-      }
-    },
-    {
-      "t": 28.99999999999992,
-      "key": "node_reveal",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "node_7",
-        "node": 7
-      }
-    },
-    {
-      "t": 31.93333333333324,
-      "key": "node_reveal",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "node_8",
-        "node": 8
-      }
-    },
-    {
-      "t": 39.933333333333636,
-      "key": "winner_sting",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "winner",
-        "winner_index": 2
-      }
-    },
-    {
-      "t": 41.200000000000365,
-      "key": "outro_swipe",
-      "gain_db": 0.0,
-      "meta": {
-        "segment": "outro"
-      }
+[
+  {
+    "t": 4.200000000000005,
+    "event": "map_intro",
+    "key": "map_intro",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_transition_sweep_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "segment": "hook"
     }
-  ]
-}
+  },
+  {
+    "t": 11.866666666666644,
+    "event": "node_reveal",
+    "key": "node_reveal",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.58,
+    "meta": {
+      "segment": "node_1",
+      "node": 1
+    }
+  },
+  {
+    "t": 14.399999999999968,
+    "event": "node_reveal",
+    "key": "node_reveal",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.58,
+    "meta": {
+      "segment": "node_2",
+      "node": 2
+    }
+  },
+  {
+    "t": 17.333333333333293,
+    "event": "node_reveal",
+    "key": "node_reveal",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.58,
+    "meta": {
+      "segment": "node_3",
+      "node": 3
+    }
+  },
+  {
+    "t": 20.466666666666615,
+    "event": "node_reveal",
+    "key": "node_reveal",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.58,
+    "meta": {
+      "segment": "node_4",
+      "node": 4
+    }
+  },
+  {
+    "t": 23.133333333333272,
+    "event": "node_reveal",
+    "key": "node_reveal",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.58,
+    "meta": {
+      "segment": "node_5",
+      "node": 5
+    }
+  },
+  {
+    "t": 26.066666666666595,
+    "event": "node_reveal",
+    "key": "node_reveal",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.58,
+    "meta": {
+      "segment": "node_6",
+      "node": 6
+    }
+  },
+  {
+    "t": 28.99999999999992,
+    "event": "node_reveal",
+    "key": "node_reveal",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_01.wav",
+    "vol": 0.58,
+    "meta": {
+      "segment": "node_7",
+      "node": 7
+    }
+  },
+  {
+    "t": 31.93333333333324,
+    "event": "node_reveal",
+    "key": "node_reveal",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\scan_beep_02.wav",
+    "vol": 0.58,
+    "meta": {
+      "segment": "node_8",
+      "node": 8
+    }
+  },
+  {
+    "t": 39.933333333333636,
+    "event": "winner_sting",
+    "key": "winner_sting",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\success_chime_01.wav",
+    "vol": 0.85,
+    "meta": {
+      "segment": "winner",
+      "winner_index": 2
+    }
+  },
+  {
+    "t": 41.200000000000365,
+    "event": "outro_swipe",
+    "key": "outro_swipe",
+    "gain_db": 0.0,
+    "rel_path": "C:\\MANIM_VIDEOS_CODE_TEMPALTE\\assets\\sfx\\ui_whoosh_soft_01.wav",
+    "vol": 0.7,
+    "meta": {
+      "segment": "outro"
+    }
+  }
+]

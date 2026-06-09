@@ -175,10 +175,11 @@ def retain_accent_geo(
                 progress = t_local / ring_dur             # 0→1
                 new_r    = base_r + (max_r - base_r) * progress
                 new_d    = new_r * 2.0
-                # set_width + set_height with stretch=True correctly resizes a Circle
-                # without distorting it (both axes scaled independently to same value).
-                m.set_width(new_d, stretch=True)
-                m.set_height(new_d, stretch=True)
+                # Resize the ring to diameter new_d on both axes (Manim 0.19-safe:
+                # `set_width(..., stretch=True)` is not supported — the auto-generated
+                # width setter rejects the kwarg. stretch_to_fit_* is the correct API).
+                m.stretch_to_fit_width(new_d)
+                m.stretch_to_fit_height(new_d)
                 m.move_to(center)
                 op = 0.45 * (1.0 - progress)
                 m.set_stroke(opacity=float(np.clip(op, 0.0, 0.50)))
