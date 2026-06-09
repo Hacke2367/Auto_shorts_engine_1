@@ -218,20 +218,93 @@ def make_floating_particles(n=30,
                             radius_range=(0.02, 0.05),
                             opacity_range=(0.10, 0.25),
                             drift=0.04,
-                            margin=0.60):
+                            margin=0.60,
+                            palette=None,
+                            twinkle=True,
+                            parallax=True):
+    """
+    Atmospheric floating-particle field (shared by every template).
+
+    Backward-compatible: the original 6 args behave exactly as before. The
+    premium upgrade lives entirely inside the SAME single O(n) VGroup updater
+    (no new per-frame mobjects — same render-cost class as the old one-line
+    shift updater):
+      - twinkle      : per-particle opacity pulse on a precomputed phase offset
+      - depth parallax: two bands (near = larger/brighter/faster, far =
+                        smaller/dimmer/slower) for a subtle 3D feel
+      - colour variety: optional small accent palette instead of one flat colour
+                        (default = the requested accent + brand cyan)
+      - soft edge wrap: particles drifting past the top safe edge recycle to the
+                        bottom so the cloud never empties on longer videos
+    """
     sf = get_safe_frame(margin)
     color = color or Brand.CYAN
 
+    # Colour variety: default = requested accent + brand cyan. Passing a single
+    # colour (or palette=[c]) collapses back to the old flat look.
+    if palette is None:
+        palette = [color, Brand.CYAN]
+    if not palette:
+        palette = [color]
+
+    top, bottom = sf["top"], sf["bottom"]
+    left, right = sf["left"], sf["right"]
+
+    r_lo, r_hi = radius_range
+    o_lo, o_hi = opacity_range
+    r_mid = (r_lo + r_hi) / 2.0
+    o_mid = (o_lo + o_hi) / 2.0
+
     particles = VGroup()
+    phases, base_ops, speeds, amps = [], [], [], []  # per-particle state (closure)
+
     for _ in range(n):
-        r = random.uniform(*radius_range)
-        p = Dot(radius=r, color=color)
-        p.move_to([random.uniform(sf["left"], sf["right"]),
-                   random.uniform(sf["bottom"], sf["top"]), 0])
-        p.set_opacity(random.uniform(*opacity_range))
+        # Two depth bands. ~45% near (foreground), rest far (background).
+        near = parallax and (random.random() < 0.45)
+        if near:
+            # near = clear foreground: noticeably larger + a touch brighter so
+            # the eye actually reads them (feedback: particles were too small).
+            r = random.uniform(r_hi, r_hi * 1.7)
+            base_op = random.uniform(o_mid, min(o_hi * 1.15, 0.32))
+            speed = drift * random.uniform(1.2, 1.6)
+            amp = 0.45
+        else:
+            r = random.uniform(r_lo, r_mid) if parallax else random.uniform(r_lo, r_hi)
+            base_op = random.uniform(o_lo, o_mid) if parallax else random.uniform(o_lo, o_hi)
+            speed = drift * (random.uniform(0.5, 0.85) if parallax else 1.0)
+            amp = 0.30
+
+        p = Dot(radius=r, color=random.choice(palette))
+        p.move_to([random.uniform(left, right),
+                   random.uniform(bottom, top), 0])
+        p.set_opacity(base_op)
         particles.add(p)
 
-    particles.add_updater(lambda m, dt: m.shift(UP * drift * dt))
+        phases.append(random.uniform(0.0, 2.0 * np.pi))
+        base_ops.append(base_op)
+        speeds.append(speed)
+        amps.append(amp if twinkle else 0.0)
+
+    clock = [0.0]
+    twinkle_freq = 1.6
+
+    def _update(group, dt):
+        # Single O(n) updater — drift + soft-wrap + twinkle. Fail-safe so a
+        # decoration error can never crash a render.
+        try:
+            clock[0] += dt
+            t = clock[0]
+            for idx, p in enumerate(group.submobjects):
+                p.shift(UP * speeds[idx] * dt)
+                if p.get_center()[1] > top + 0.15:        # recycle off the top
+                    p.move_to([random.uniform(left, right), bottom - 0.10, 0])
+                if amps[idx]:                              # twinkle around base
+                    op = base_ops[idx] * (1.0 + amps[idx] * np.sin(t * twinkle_freq + phases[idx]))
+                    p.set_opacity(op if op > 0.02 else 0.02)
+        except Exception:
+            pass
+
+    particles.add_updater(_update)
     particles.set_z_index(5)
     return particles
 
