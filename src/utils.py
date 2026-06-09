@@ -20,7 +20,7 @@ except Exception:
         NEON_PURPLE = "#BD00FF"
         NEON_GREEN = "#00FF66"
         TEXT_MAIN = "#FFFFFF"
-        TEXT_SUB = "#B8B8B8"
+        TEXT_SUB = "#AEB7C2"
         AXIS_COLOR = "#00F0FF"
 
     config.frame_height = 16.0
@@ -68,7 +68,7 @@ class Brand:
     WHITE = "#FFFFFF"
     BLACK = "#000000"
     TEXT_MAIN = getattr(Theme, "TEXT_MAIN", "#FFFFFF")
-    TEXT_SUB = getattr(Theme, "TEXT_SUB", "#B8B8B8")
+    TEXT_SUB = getattr(Theme, "TEXT_SUB", "#AEB7C2")
 
 
 # ============================================================
@@ -123,10 +123,19 @@ def get_cinematic_overlay(scene,
     overlay = VGroup()
     overlay.set_z_index(250)
 
-    # Vignette
-    vignette = Rectangle(width=config.frame_width + 2, height=config.frame_height + 2)
-    vignette.set_fill(color=BLACK, opacity=0)
-    vignette.set_stroke(color=BLACK, width=140, opacity=0.45)
+    # Vignette — soft radial-ish edge falloff (replaces the old hard 140px band).
+    # Stacked black strokes on the same oversized frame: a wide low-opacity stroke
+    # reaches furthest inward (gentle falloff) while narrower, slightly denser
+    # strokes darken the very edge. Cumulatively this fades edge->centre like a
+    # gradient instead of a hard ring. Fully static (zero per-frame cost).
+    vignette = VGroup()
+    vig_w = config.frame_width + 2
+    vig_h = config.frame_height + 2
+    for _w, _op in [(240, 0.10), (160, 0.13), (100, 0.16), (50, 0.20)]:
+        _ring = Rectangle(width=vig_w, height=vig_h)
+        _ring.set_fill(opacity=0)
+        _ring.set_stroke(color=BLACK, width=_w, opacity=_op)
+        vignette.add(_ring)
     vignette.set_z_index(240)
 
     # Scanlines
@@ -136,7 +145,7 @@ def get_cinematic_overlay(scene,
         y = sf["bottom"] + (i * (sf["h"] / lines_n))
         ln = Line(LEFT * (config.frame_width), RIGHT * (config.frame_width))
         ln.set_y(y)
-        ln.set_stroke(color=Brand.CYAN, width=1, opacity=0.02)
+        ln.set_stroke(color=Brand.CYAN, width=1, opacity=0.05)
         scanlines.add(ln)
     scanlines.set_z_index(241)
 

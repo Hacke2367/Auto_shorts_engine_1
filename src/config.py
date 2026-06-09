@@ -37,7 +37,7 @@ class Theme:
 
     # --- TEXT COLORS ---
     TEXT_MAIN = "#FFFFFF"  # Headers / Values
-    TEXT_SUB = "#CCCCCC"  # Labels / Subtitles
+    TEXT_SUB = "#AEB7C2"  # Labels / Subtitles (cool premium grey; unified w/ utils fallback)
     TEXT_DIM = "#555555"  # Grid numbers / Less visible text
 
     # --- NEON ACCENTS (For Graphs) ---
@@ -45,7 +45,7 @@ class Theme:
     NEON_PINK = "#FF0055"  # Aggressive
     NEON_GREEN = "#00FF66"  # Success / Money
     NEON_PURPLE = "#BD00FF"  # Royal / Mystery
-    NEON_YELLOW = "#FFFF00"  # Warning / Gold substitute
+    NEON_YELLOW = "#FFC74A"  # Warning / Gold (richer amber-gold; was harsh #FFFF00)
     NEON_ORANGE = "#FF9900"  # Secondary Highlight
 
     # --- MULTI-COLOR PALETTE (For Donut/Sort Charts) ---
