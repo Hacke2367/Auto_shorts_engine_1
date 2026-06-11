@@ -208,9 +208,23 @@ async def cmd_discover(args: argparse.Namespace) -> None:
         print(f'      python -m src.cli.phase1 discover --niche "{args.niche}" --top-n {args.top_n}\n')
         return
 
+    if batch.error == "no_feasible_candidates":
+        _print_header("DISCOVERY STOPPED — NO PROVABLE DATA")
+        print(f"Topics were ideated and scored, but ALL {batch.gated_candidate_count} failed the")
+        print("data-feasibility gate: no single published source proves extractable data")
+        print("for any of them. A topic without data is worthless downstream, so nothing")
+        print("was passed on (extraction on dataless topics would waste far more).")
+        print("Re-run in a moment, or broaden/adjust the niche:\n")
+        print(f'      python -m src.cli.phase1 discover --niche "{args.niche}" --top-n {args.top_n}\n')
+        return
+
     _print_header("TOP CANDIDATES")
     for i, c in enumerate(batch.candidates, 1):
         _print_candidate(i, c)
+
+    if batch.gated_candidate_count:
+        print(f"[GATE] {batch.gated_candidate_count} additional topic(s) were scored but dropped "
+              f"for lacking provable data (see log for which).")
 
     print(f"-> Candidates saved to: {jm.discovery_dir / 'candidates.json'}")
     print(f"-> To approve one, run: python -m src.cli.phase1 approve --job-id {jm.job_id} --index <N>")

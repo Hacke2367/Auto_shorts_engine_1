@@ -48,8 +48,17 @@ class GeminiRateLimitError(Exception):
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
-    return standard_retry_policy()
+    """Patient transient-error retry for scoring (config-driven, see APP_CONFIG.retry).
+
+    Scoring runs ~10 calls concurrently; on flaky-503 days the default 3-attempt
+    profile drops candidates. These use the more patient ``scoring_*`` profile.
+    """
+    rc = APP_CONFIG.retry
+    return standard_retry_policy(
+        min_wait=rc.scoring_min_wait,
+        max_wait=rc.scoring_max_wait,
+        max_attempts=rc.scoring_max_attempts,
+    )
 
 
 def _get_429_retry_policy() -> AsyncRetrying:

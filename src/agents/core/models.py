@@ -621,11 +621,16 @@ class DiscoveryBatch(BaseModel):
     returned_candidate_count: int = Field(
         default=0, description="How many scored candidates are returned."
     )
+    gated_candidate_count: int = Field(
+        default=0,
+        description="How many scored candidates were dropped by the "
+        "data-feasibility gate (judged dataless — worthless downstream).",
+    )
     error: str | None = Field(
         default=None,
         description="Machine-readable failure reason when the batch is empty "
-        "due to an upstream failure (e.g. 'ideation_unavailable'), as opposed "
-        "to simply finding no candidates.",
+        "due to an upstream failure (e.g. 'ideation_unavailable', "
+        "'no_feasible_candidates'), as opposed to simply finding no candidates.",
     )
 
 

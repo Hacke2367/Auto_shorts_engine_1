@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
@@ -34,6 +35,76 @@ logger = logging.getLogger(__name__)
 def _get_retry_policy() -> AsyncRetrying:
     """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
     return standard_retry_policy()
+
+
+async def fetch_trending_context(
+    niche_hint: str | None,
+    session: aiohttp.ClientSession,
+    log: logging.Logger,
+    max_results: int = 6,
+    request_timeout: float = APP_CONFIG.api_timeout_seconds,
+) -> str:
+    """Fetch a condensed snapshot of what is CURRENTLY trending in the niche.
+
+    Runs a single broad Tavily *news* search so ideation can brainstorm from live
+    signals instead of stale model memory. This is an ENHANCEMENT, not a hard
+    dependency: ANY failure returns "" and ideation proceeds on model knowledge
+    alone — trend-seeding must never be able to break a discovery run.
+    """
+    topic_hint = niche_hint or "business technology finance"
+    now = datetime.now(timezone.utc)
+    query = f"latest trending {topic_hint} news and developments {now.strftime('%B %Y')}"
+
+    payload = {
+        "api_key": settings.tavily_api_key.get_secret_value(),
+        "query": query,
+        "search_depth": "basic",
+        "max_results": max_results,
+        "include_raw_content": False,
+        "topic": "news",   # biases toward recent/timely results
+        "days": 21,
+    }
+    per_req_timeout = aiohttp.ClientTimeout(total=request_timeout)
+
+    try:
+        async for attempt in _get_retry_policy():
+            with attempt:
+                t0 = time.perf_counter()
+                async with session.post(
+                    "https://api.tavily.com/search", json=payload, timeout=per_req_timeout
+                ) as resp:
+                    elapsed = (time.perf_counter() - t0) * 1000
+                    log_api_call(
+                        log,
+                        service="tavily.search.trending",
+                        status_code=resp.status,
+                        retry_count=attempt.retry_state.attempt_number - 1,
+                        duration_ms=elapsed,
+                    )
+                    resp.raise_for_status()
+                    data = await resp.json()
+
+                    headlines: list[str] = []
+                    for res in data.get("results", []):
+                        title = (res.get("title") or "").strip()
+                        content = (res.get("content") or "").strip()
+                        if not title:
+                            continue
+                        # Keep each line short: title + a clipped lead so ideation
+                        # input stays lean (we only need a fresh signal, not articles).
+                        clip = content[:160].rsplit(" ", 1)[0] if content else ""
+                        headlines.append(f"- {title}" + (f" — {clip}" if clip else ""))
+
+                    if not headlines:
+                        return ""
+                    log.info("Trend-seeding: fetched %d fresh headlines for ideation.", len(headlines))
+                    return "\n".join(headlines[:max_results])
+    except Exception as e:
+        log.warning(
+            "Trend-seeding search failed (%s); ideation will rely on model knowledge.", e
+        )
+        return ""
+    return ""
 
 
 async def _validate_hypothesis(

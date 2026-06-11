@@ -167,6 +167,15 @@ class RetryConfig(BaseModel):
     ideation_min_wait: float = Field(default=4.0, ge=0)
     ideation_max_wait: float = Field(default=45.0, ge=0)
 
+    # ---- Scoring retry (Phase 1 per-candidate scoring) ----
+    # Scoring fires ~10 calls concurrently; on a flaky-503 day the standard
+    # 3-attempt profile drops candidates (we lost 1/10). These calls run in
+    # parallel, so a few extra patient attempts cost little wall-clock time but
+    # save whole candidates from a transient blip.
+    scoring_max_attempts: int = Field(default=5, ge=1)
+    scoring_min_wait: float = Field(default=2.0, ge=0)
+    scoring_max_wait: float = Field(default=20.0, ge=0)
+
     # ---- Rate-limit (HTTP 429) retry — slower, more conservative ----
     rate_limit_max_attempts: int = Field(default=4, ge=1)
     rate_limit_multiplier: float = Field(default=60.0, gt=0)
@@ -198,6 +207,19 @@ class AppConfig(BaseModel):
     # Shared per-request HTTP timeout (seconds) for ALL external calls
     # (Gemini, Tavily, ElevenLabs). Excludes retry backoff.
     api_timeout_seconds: float = Field(default=60.0, gt=0)
+
+    # ---- Phase 1 discovery: data-feasibility gate + ideation over-provisioning ----
+    # A topic without provable published data is worthless downstream (extraction
+    # would burn money and fail), no matter how viral the hook. The scoring judge
+    # already detects this (data_feasibility_score); this gate ENFORCES the verdict:
+    # candidates scoring below the threshold are dropped from the returned batch.
+    # 5.0 = the scoring rubric's boundary between "real figures exist in prose"
+    # (5-6, extractable) and "no structured data / derived metric" (1-3, unbuildable).
+    discovery_min_data_feasibility: float = Field(default=5.0, ge=1, le=10)
+    # Because the gate culls dataless ideas, ideation over-provisions by this many
+    # extra hypotheses (top_n + buffer) so a gated run still fills the batch.
+    # Each extra idea costs ~1 Tavily basic search + 1 scoring call (~$0.001).
+    discovery_ideation_buffer: int = Field(default=4, ge=0)
 
     # Phase 2 script-doctor — a final whole-script flow-polish LLM pass that makes the segmented
     # monologue sound like one seamless spoken performance. Safe by design: any constraint

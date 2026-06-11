@@ -35,6 +35,10 @@ WORD_CAPS = {
 }
 # Above this share, a single template is "dominating" — a bias warning, not an error.
 DOMINANCE_THRESHOLD = 0.60
+# Data-feasibility gate threshold. Kept in sync with
+# APP_CONFIG.discovery_min_data_feasibility (not imported: config requires API
+# keys at import time and this tool must stay runnable anywhere, key-free).
+FEASIBILITY_GATE = 5.0
 
 
 def _wc(text: str | None) -> int:
@@ -85,6 +89,16 @@ def audit_candidates(candidates: list[dict[str, Any]]) -> dict[str, Any]:
                 f"feasibility={feas} but confidence='{conf}' (rule: must be 'low') on '{topic}'"
             )
 
+    # Gate breaches: dataless candidates that survived into the FINAL list.
+    # After the feasibility gate (2026-06) this must always be empty — any entry
+    # here means the gate regressed or was bypassed.
+    gate_breaches = [
+        f"feasibility={float(c.get('data_feasibility_score', 10.0)):.1f} "
+        f"(< {FEASIBILITY_GATE}) on '{c.get('topic', '?')[:48]}'"
+        for c in candidates
+        if float(c.get("data_feasibility_score", 10.0)) < FEASIBILITY_GATE
+    ]
+
     return {
         "total": total,
         "distribution": dict(dist),
@@ -95,6 +109,7 @@ def audit_candidates(candidates: list[dict[str, Any]]) -> dict[str, Any]:
         "missing_summary": missing_summary,
         "word_violations": word_violations,
         "score_violations": score_violations,
+        "gate_breaches": gate_breaches,
         "final_score_min": min(finals) if finals else 0.0,
         "final_score_max": max(finals) if finals else 0.0,
         "final_score_avg": (sum(finals) / len(finals)) if finals else 0.0,
@@ -140,6 +155,14 @@ def print_report(report: dict[str, Any]) -> None:
             print(f"     - {v}")
     else:
         print("[OK]   Scoring sane (in-range; feasibility<5 => confidence low held).")
+
+    if report["gate_breaches"]:
+        print(f"[WARN] GATE BREACH — dataless topics in the FINAL list ({len(report['gate_breaches'])}):")
+        for v in report["gate_breaches"]:
+            print(f"     - {v}")
+        print("       (A topic without provable data is worthless downstream.)")
+    else:
+        print("[OK]   Feasibility gate held: every returned topic has provable data.")
 
     print()
     print(f"final_score: min={report['final_score_min']:.2f}  "

@@ -166,6 +166,67 @@ def test_ideation_prompt_has_story_lenses():
     return "ideation prompt carries all 6 story lenses (no quotas)"
 
 
+def test_ideation_prompt_is_de_anchored_and_formats():
+    # Regression guard for the earlier mistake: NO hardcoded year in the template.
+    import re as _re
+    assert not _re.search(r"\b20\d\d\b", _IDEATION_PROMPT), "hardcoded year re-anchors ideation"
+    # Must format cleanly with the 4 runtime keys (no KeyError, no leftover braces).
+    rendered = _IDEATION_PROMPT.format(
+        idea_count=14,
+        current_date="June 2026",
+        niche_context="focus on finance",
+        trend_context="- Some fresh headline",
+    )
+    assert "{" not in rendered and "}" not in rendered      # all placeholders filled
+    assert "June 2026" in rendered                          # current date injected
+    assert "Ideate 14" in rendered                          # over-provision count wired
+    assert "TRENDING" in rendered and "EVERGREEN" in rendered  # trending+valuable mix asked
+    return "ideation prompt has no hardcoded year, formats cleanly, asks trending+valuable mix"
+
+
+def test_trend_context_fetcher_is_importable():
+    # Trend-seeding must exist and be wired (live call is the user's to run).
+    from src.agents.phase1_discovery.scourer import fetch_trending_context
+    assert callable(fetch_trending_context)
+    return "fetch_trending_context present and wired into ideation"
+
+
+# --------------------------------------------------------------------------- #
+# 7. Data-Feasibility Gate                                                      #
+# --------------------------------------------------------------------------- #
+def test_feasibility_gate_enforces_verdict():
+    import logging
+    from src.agents.core.models import TopicCandidate
+    from src.agents.phase1_discovery.discovery_runner import _apply_feasibility_gate
+
+    def mk(feas: float) -> TopicCandidate:
+        return TopicCandidate(
+            topic=f"topic-feas-{feas}", normalized_topic=f"topic-feas-{feas}",
+            best_fit_template="bar_chart", data_feasibility_score=feas,
+            hook_potential_score=9.0,   # strong hook must NOT rescue a dataless topic
+        )
+
+    log = logging.getLogger("gate-test")
+    eligible, gated = _apply_feasibility_gate([mk(9), mk(5), mk(3), mk(1)], 5.0, log)
+    assert [c.data_feasibility_score for c in eligible] == [9.0, 5.0]   # >= 5 stays
+    assert [c.data_feasibility_score for c in gated] == [3.0, 1.0]      # < 5 dropped
+    # empty input degrades cleanly
+    e2, g2 = _apply_feasibility_gate([], 5.0, log)
+    assert e2 == [] and g2 == []
+    return "gate keeps feas>=5, drops dataless even with a 9.0 hook"
+
+
+def test_audit_detects_gate_breach():
+    # A dataless candidate in the FINAL list = gate regression -> must be flagged.
+    breached = [_cand("bar_chart", feas=2, conf="low"), _cand("vs_card", feas=8)]
+    rep = audit_candidates(breached)
+    assert len(rep["gate_breaches"]) == 1
+    assert "feasibility=2.0" in rep["gate_breaches"][0]
+    clean = [_cand("bar_chart", feas=6), _cand("vs_card", feas=9)]
+    assert audit_candidates(clean)["gate_breaches"] == []
+    return "audit flags dataless topics that leak past the gate"
+
+
 # --------------------------------------------------------------------------- #
 # 5. Ideation JSON extractor                                                    #
 # --------------------------------------------------------------------------- #

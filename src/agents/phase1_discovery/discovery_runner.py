@@ -40,7 +40,7 @@ from src.agents.core.models import (
 )
 from src.agents.phase1_discovery.archive_manager import ArchiveManager
 from src.agents.phase1_discovery.candidate_score import score_candidates_batch
-from src.agents.phase1_discovery.scourer import fetch_raw_candidates
+from src.agents.phase1_discovery.scourer import fetch_raw_candidates, fetch_trending_context
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +58,27 @@ class IdeationUnavailableError(Exception):
 _IDEATION_PROMPT = """You are the Lead Creative Director for AutoShorts, a studio that
 produces premium, data-driven short-form videos.
 
+Today is {current_date}. Think about what is relevant and interesting RIGHT NOW, in the
+current period — do NOT anchor to specific past years out of habit.
+
 Every video renders a structured dataset into ONE of several visual formats (rankings,
 head-to-heads, breakdowns, races, mirrored comparisons, maps, countdowns). You are NOT
 limited to rankings.
 
 {niche_context}
 
+## Live signal — what's currently in the news for this niche
+{trend_context}
+
 ## Your Task
-Ideate 10 novel, highly engaging topic hypotheses for this niche. Act like a free, unbiased
-journalist hunting the best trending stories — with awareness of what we can visualise.
+Ideate {idea_count} novel, highly engaging topic hypotheses for this niche. Act like a free,
+unbiased journalist hunting the best stories — with awareness of what we can visualise.
+
+Deliver a deliberate MIX, because a great slate needs both:
+- TRENDING: a few topics riding the live signal above (timely, in-the-moment).
+- EVERGREEN / VALUABLE: a few topics that may not be breaking news but are genuinely useful
+  and almost certainly have solid, extractable published data behind them.
+Trending alone is risky (the data may not exist yet); valuable alone can feel stale. Mix both.
 
 ## Story Lenses — hunt through ALL of these (they are SEARCH DIRECTIONS, not quotas)
 - THE RIVALRY     — two giants locked head-to-head (X vs Y: who actually wins?)
@@ -78,24 +90,26 @@ journalist hunting the best trending stories — with awareness of what we can v
 
 ## Rules of the hunt
 1. Story quality ALWAYS beats lens coverage. NEVER force a weak story into a lens just to
-   tick it — if a lens has no genuinely trending story today, skip it.
-2. But if most of your 10 ideas came from the SAME lens, you defaulted instead of hunting.
+   tick it — if a lens has no genuinely good story, skip it.
+2. But if most of your ideas came from the SAME lens, you defaulted instead of hunting.
    Replace the weakest duplicates using other lenses.
 3. ENOUGH DATA: each topic must yield EITHER ~5-8 comparable items, a clean 2-entity
    head-to-head, a parts-of-a-whole split, or a progression. Avoid thin "Top 3" framings
    that leave a chart empty.
-4. DYNAMIC & BUILDABLE: frame with tension/recency (never "History of X"); each must
-   plausibly have real, published, extractable numbers — not vibes.
+4. DYNAMIC & BUILDABLE: frame with tension/recency; each must plausibly have real, published,
+   extractable numbers — not vibes. Bake in a year ONLY when it is genuinely part of the story
+   (e.g. an annual ranking), and then use the CURRENT period, not an arbitrary past year.
 
 ## Output
-A JSON list of 10 strings (topic titles only). No commentary, and NO comments inside the JSON.
-Example — note these four deliberately span DIFFERENT lenses (a rivalry, an autopsy, a
-map/shift, a sleeper), NOT four rankings (DO NOT copy these topics):
+A JSON list of exactly {idea_count} strings (topic titles only). No commentary, and NO
+comments inside the JSON.
+The examples below only illustrate the SHAPE/lens variety (a rivalry, an autopsy, a map/shift,
+a sleeper) — do NOT copy them, and do NOT treat their phrasing or any year as a template:
 [
-  "FinTech vs legacy banks: who actually won 2024's deposits",
-  "Where every rupee of a 100-rupee grocery bill really goes",
-  "The countries where cash died the fastest this decade",
-  "The 'boring' assets that quietly beat the S&P over 5 years"
+  "<entity A> vs <entity B>: who actually wins on <shared metric>",
+  "Where every unit of <a total budget/price> really goes",
+  "The places where <a behaviour> is changing fastest",
+  "The overlooked <asset/option> quietly beating the obvious choice"
 ]
 
 Output EXACTLY AND ONLY the JSON list (a flat array of strings).
@@ -133,12 +147,52 @@ def _extract_json_array(raw_text: str) -> list[str]:
     return []
 
 
+def _apply_feasibility_gate(
+    scored: list[TopicCandidate],
+    min_feasibility: float,
+    log: logging.Logger,
+) -> tuple[list[TopicCandidate], list[TopicCandidate]]:
+    """Split scored candidates into (eligible, gated_out) by data feasibility.
+
+    A topic with no provable published data is worthless downstream — extraction
+    would burn money and fail. The scoring judge already detects this
+    (data_feasibility_score + 'No data found' reasoning); this gate ENFORCES the
+    verdict instead of letting a strong hook smuggle a dataless topic through the
+    weighted final score (feasibility is only 20% of final_score).
+    """
+    eligible: list[TopicCandidate] = []
+    gated: list[TopicCandidate] = []
+    for c in scored:
+        if c.data_feasibility_score >= min_feasibility:
+            eligible.append(c)
+        else:
+            gated.append(c)
+            log.info(
+                "Feasibility gate: dropped '%s' (data_feasibility=%.1f < %.1f) — no provable data.",
+                c.topic, c.data_feasibility_score, min_feasibility,
+            )
+    if gated:
+        log.warning(
+            "Feasibility gate dropped %d/%d scored candidates lacking provable data.",
+            len(gated), len(scored),
+        )
+    return eligible, gated
+
+
 async def _ideate_hypotheses(
     niche_hint: str | None,
+    trend_context: str,
     session: aiohttp.ClientSession,
     log: logging.Logger,
+    idea_count: int = 10,
 ) -> list[str]:
-    """Use Gemini to brainstorm novel topic ideas before we search the web."""
+    """Use Gemini to brainstorm novel topic ideas before we search the web.
+
+    ``trend_context`` is a fresh, live news snapshot (may be "") used to seed the
+    brainstorm with what's currently happening — see ``fetch_trending_context``.
+    ``idea_count`` over-provisions ideas so the downstream data-feasibility gate
+    can cull dataless ones and still fill the requested batch.
+    """
     key = settings.gemini_api_key.get_secret_value()
     cfg = APP_CONFIG.llm.discovery_ideation
     model_name = cfg.model
@@ -150,7 +204,18 @@ async def _ideate_hypotheses(
 
     niche_context = f"Please focus exclusively on this niche/theme: '{niche_hint}'" if niche_hint else "Focus on broad general internet trends, business, tech, and pop culture."
 
-    prompt = _IDEATION_PROMPT.format(niche_context=niche_context)
+    current_date = datetime.now(timezone.utc).strftime("%B %Y")
+    trend_block = (
+        trend_context.strip() if (trend_context and trend_context.strip())
+        else "(No live trend data available right now — rely on your own most up-to-date knowledge.)"
+    )
+
+    prompt = _IDEATION_PROMPT.format(
+        idea_count=idea_count,
+        current_date=current_date,
+        niche_context=niche_context,
+        trend_context=trend_block,
+    )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -238,13 +303,24 @@ async def run_discovery(
     with timed_operation(log, "phase1a_discovery", niche=niche_hint or "broad"):
         log.info("=== Phase 1A: Discovery Start (Idea-First) ===")
         
+        # -- 1.5 Trend-seed with a live signal --
+        # Fetch what's CURRENTLY trending in the niche so ideation brainstorms from
+        # fresh data, not stale model memory (Gemini has no live web access on its
+        # own). Fail-safe by design: returns "" on any error and ideation proceeds.
+        trend_context = await fetch_trending_context(niche_hint, session, log)
+
         # -- 2. Ideate Hypotheses --
         # Ideation is the foundation of the whole run. If the call fails outright
         # (e.g. repeated 503s), abort NOW — before spending any Tavily/scoring
         # budget on the 3-topic hardcoded fallback that would just be discarded
         # on the next re-run anyway.
+        # Over-provision ideas: the feasibility gate below will cull dataless
+        # ones, so ask for top_n + buffer to still fill the requested batch.
+        idea_count = top_n + APP_CONFIG.discovery_ideation_buffer
         try:
-            hypotheses = await _ideate_hypotheses(niche_hint, session, log)
+            hypotheses = await _ideate_hypotheses(
+                niche_hint, trend_context, session, log, idea_count=idea_count
+            )
         except IdeationUnavailableError as e:
             log.error(
                 "Ideation unavailable (%s). Aborting discovery before any "
@@ -260,10 +336,12 @@ async def run_discovery(
 
         if not hypotheses:
             log.warning("Ideation returned 0 hypotheses. Falling back to default topics.")
+            base = niche_hint or "business"
+            # Year-agnostic, shape-varied fallbacks (no hardcoded year => no anchor).
             hypotheses = [
-                f"{niche_hint or 'Business'} revenue comparisons",
-                f"Most popular {niche_hint or 'tech'} trends",
-                "Fastest growing companies 2024"
+                f"The biggest players in {base}, ranked",      # leaderboard
+                f"Where the money really goes in {base}",      # autopsy / breakdown
+                f"What's rising vs falling in {base} right now",  # shift
             ]
 
         log.info("Ideated %d hypotheses from LLM.", len(hypotheses))
@@ -329,6 +407,27 @@ async def run_discovery(
                 queued_candidate_count=0,
                 returned_candidate_count=0,
                 niche_hint=niche_hint,
+            )
+
+        # -- 5.5 Data-Feasibility Gate --
+        # Enforce the scoring judge's verdict: topics without provable published
+        # data are dropped HERE, before they can reach extraction and waste real
+        # money downstream. A great hook never rescues a dataless topic.
+        scored, gated_out = _apply_feasibility_gate(
+            scored, APP_CONFIG.discovery_min_data_feasibility, log
+        )
+        if not scored:
+            log.warning(
+                "ALL scored candidates failed the data-feasibility gate. "
+                "Nothing usable this run — re-run or adjust the niche."
+            )
+            return DiscoveryBatch(
+                raw_candidate_count=raw_count,
+                queued_candidate_count=0,
+                returned_candidate_count=0,
+                gated_candidate_count=len(gated_out),
+                niche_hint=niche_hint,
+                error="no_feasible_candidates",
             )
 
         # Attach merged source URLs from raw candidates
@@ -431,6 +530,7 @@ async def run_discovery(
             raw_candidate_count=raw_count,
             queued_candidate_count=queued_injected,
             returned_candidate_count=len(top_candidates),
+            gated_candidate_count=len(gated_out),
         )
 
         # Atomic write of candidates.json
