@@ -319,6 +319,24 @@ TEMPLATE_CAPACITIES: dict[str, TemplateCapacity] = {
 }
 
 
+# Human-readable data-shape descriptions for each template. Used to build the
+# Phase 1 scoring/routing prompt so the LLM picks a template from the DATA's
+# nature (Summary-First routing) instead of defaulting to a familiar name.
+TEMPLATE_DESCRIPTIONS: dict[str, str] = {
+    "bar_chart": "vertical ranked comparison of numeric values; best for 5-8 comparable "
+    "items; do NOT use for fewer than 4 items",
+    "vs_card": "strict 1-versus-1 between EXACTLY 2 entities across several shared metrics",
+    "sort_card": "countdown / ranked reveal, one card at a time, each with a short reason; "
+    "best for 'Top N' lists with qualitative reasons",
+    "donut_breakdown": "parts-of-a-whole percentage split of ONE total; use only when "
+    "values sum to ~100%",
+    "butterfly_chart": "two GROUPS mirrored left/right across shared rows; best for "
+    "'Group A vs Group B across the same dimensions'",
+    "scan_race": "animated race / progression of change or ranking movement over time or stages",
+    "geo_universal": "values plotted on a map, tied to countries / locations",
+}
+
+
 TEMPLATE_META_KEYS: dict[str, list[str]] = {
     "bar_chart": ["TITLE", "SUB", "METRIC", "UNIT"],
     "butterfly_chart": ["TITLE", "SUB", "P1", "P2"],
@@ -507,6 +525,11 @@ class TopicCandidate(BaseModel):
     best_fit_template: str = Field(..., description="Best template.")
     fallback_template: str | None = Field(default=None)
     fit_reason: str = Field(default="", description="Why this template works.")
+    data_summary: str | None = Field(
+        default=None,
+        description="Summary-First routing bridge: a 1-2 sentence description of the "
+        "data's nature that the LLM used to deduce best_fit_template. Persisted for audit.",
+    )
     source_hint: str | None = Field(
         default=None, description="Hint about likely data sources."
     )
@@ -597,6 +620,12 @@ class DiscoveryBatch(BaseModel):
     )
     returned_candidate_count: int = Field(
         default=0, description="How many scored candidates are returned."
+    )
+    error: str | None = Field(
+        default=None,
+        description="Machine-readable failure reason when the batch is empty "
+        "due to an upstream failure (e.g. 'ideation_unavailable'), as opposed "
+        "to simply finding no candidates.",
     )
 
 

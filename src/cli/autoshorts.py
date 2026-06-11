@@ -16,6 +16,11 @@ from pathlib import Path
 # Fix python path for local execution from root
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+# Windows consoles default stdout/stderr to cp1252, which can't encode the
+# emoji used in CLI status messages (✅/❌) — force UTF-8 so prints don't crash.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 from src.cli.cli_utils import resolve_bucket, create_run_dir, get_cli_job_manager, setup_cli_logger
 from src.agents.core.cost_tracker import record_cost, get_session_summary
 from src.agents.phase2_scripting.runner import run_scripting

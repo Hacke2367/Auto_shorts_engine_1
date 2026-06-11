@@ -17,7 +17,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -131,12 +130,14 @@ def ensure_audio_aliases(job_dir: Path, tag_to_name: dict[str, str]) -> None:
             logger.debug(f"Same file on case-insensitive FS: {upper_name}")
             continue
 
-        if lower_path.exists() and lower_path.stat().st_size == upper_path.stat().st_size:
-            logger.debug(f"Alias already up-to-date: {lower_name}")
-            continue
+        if lower_path.exists():
+            if lower_path.stat().st_ino == upper_path.stat().st_ino:
+                logger.debug(f"Alias already linked: {lower_name}")
+                continue
+            lower_path.unlink()
 
-        shutil.copy2(upper_path, lower_path)
-        logger.info(f"Created audio alias: {upper_name} → {lower_name}")
+        os.link(upper_path, lower_path)
+        logger.info(f"Created audio hardlink: {upper_name} → {lower_name}")
 
 
 # ---------------------------------------------------------------------------

@@ -44,26 +44,94 @@ from src.agents.phase1_discovery.scourer import fetch_raw_candidates
 
 logger = logging.getLogger(__name__)
 
-_IDEATION_PROMPT = """You are the Lead Creative Director for AutoShorts.
-Your job is to ideate 10 novel, highly engaging topic hypotheses that could make incredible, data-driven short-form videos.
+
+class IdeationUnavailableError(Exception):
+    """Raised when the ideation LLM call fails outright (e.g. repeated 503s).
+
+    This is distinct from ideation *succeeding but returning an empty list*:
+    a true failure means the foundation of the run is gone, so the caller
+    should abort BEFORE spending any Tavily/scoring budget on hardcoded
+    fallback topics.
+    """
+
+
+_IDEATION_PROMPT = """You are the Lead Creative Director for AutoShorts, a studio that
+produces premium, data-driven short-form videos.
+
+Every video renders a structured dataset into ONE of several visual formats (rankings,
+head-to-heads, breakdowns, races, mirrored comparisons, maps, countdowns). You are NOT
+limited to rankings.
 
 {niche_context}
 
-Requirements for a good hypothesis:
-1. Must be high-interest, viral, or deeply curious.
-2. Must have a high likelihood of having actual rankable or comparable data backing it up (e.g., revenue, user count, market share, tiers, populations).
-3. Do not just say "History of X". Say "Fastest growing X of 2024". Frame it dynamically.
+## Your Task
+Ideate 10 novel, highly engaging topic hypotheses for this niche. Act like a free, unbiased
+journalist hunting the best trending stories — with awareness of what we can visualise.
 
-Format your output strictly as a JSON list of strings representing the topic titles.
-Example:
+## Story Lenses — hunt through ALL of these (they are SEARCH DIRECTIONS, not quotas)
+- THE RIVALRY     — two giants locked head-to-head (X vs Y: who actually wins?)
+- THE AUTOPSY     — where the money / a total really goes when you cut it open
+- THE SHIFT       — something rising or collapsing across years or stages
+- THE MAP         — a story where geography IS the story (where in the world...)
+- THE LEADERBOARD — a ranking with a surprise at the top or the bottom
+- THE SLEEPER     — the boring / ignored thing quietly beating the famous thing
+
+## Rules of the hunt
+1. Story quality ALWAYS beats lens coverage. NEVER force a weak story into a lens just to
+   tick it — if a lens has no genuinely trending story today, skip it.
+2. But if most of your 10 ideas came from the SAME lens, you defaulted instead of hunting.
+   Replace the weakest duplicates using other lenses.
+3. ENOUGH DATA: each topic must yield EITHER ~5-8 comparable items, a clean 2-entity
+   head-to-head, a parts-of-a-whole split, or a progression. Avoid thin "Top 3" framings
+   that leave a chart empty.
+4. DYNAMIC & BUILDABLE: frame with tension/recency (never "History of X"); each must
+   plausibly have real, published, extractable numbers — not vibes.
+
+## Output
+A JSON list of 10 strings (topic titles only). No commentary, and NO comments inside the JSON.
+Example — note these four deliberately span DIFFERENT lenses (a rivalry, an autopsy, a
+map/shift, a sleeper), NOT four rankings (DO NOT copy these topics):
 [
-  "Top 10 AI companies by computing power",
-  "Richest gaming companies vs their most profitable game",
-  "Most subscribed YouTubers who lost the most views this year"
+  "FinTech vs legacy banks: who actually won 2024's deposits",
+  "Where every rupee of a 100-rupee grocery bill really goes",
+  "The countries where cash died the fastest this decade",
+  "The 'boring' assets that quietly beat the S&P over 5 years"
 ]
 
-Output EXACTLY AND ONLY the JSON list.
+Output EXACTLY AND ONLY the JSON list (a flat array of strings).
 """
+
+def _extract_json_array(raw_text: str) -> list[str]:
+    """Best-effort extraction of a flat JSON array of strings from LLM output.
+
+    Tolerates markdown code fences, surrounding prose, and trailing junk. Always
+    returns a list (never raises) so a malformed-but-successful response degrades
+    gracefully into the caller's fallback instead of aborting the whole run.
+    """
+    if not raw_text:
+        return []
+
+    # Try, in order: the raw text, a ```json ...``` fenced block, then the first
+    # balanced [...] span. First variant that parses into a non-empty string list wins.
+    attempts: list[str] = [raw_text.strip()]
+    fenced = re.search(r"```(?:json)?\s*(.+?)```", raw_text, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        attempts.append(fenced.group(1).strip())
+    bracket = re.search(r"\[.*\]", raw_text, re.DOTALL)
+    if bracket:
+        attempts.append(bracket.group(0))
+
+    for text in attempts:
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(parsed, list):
+            out = [str(x).strip() for x in parsed if isinstance(x, str) and x.strip()]
+            if out:
+                return out
+    return []
+
 
 async def _ideate_hypotheses(
     niche_hint: str | None,
@@ -92,8 +160,17 @@ async def _ideate_hypotheses(
         },
     }
 
+    rc = APP_CONFIG.retry
+    # -- HTTP call only (with patient retry). ONLY true network/5xx failures
+    #    abort the run; JSON parsing is deliberately OUTSIDE this block so a
+    #    malformed-but-successful reply never masquerades as an outage. --
+    data: dict | None = None
     try:
-        async for attempt in standard_retry_policy():
+        async for attempt in standard_retry_policy(
+            min_wait=rc.ideation_min_wait,
+            max_wait=rc.ideation_max_wait,
+            max_attempts=rc.ideation_max_attempts,
+        ):
             with attempt:
                 t0 = time.perf_counter()
                 async with session.post(url, json=payload, headers=_headers) as resp:
@@ -107,20 +184,28 @@ async def _ideate_hypotheses(
                     )
                     resp.raise_for_status()
                     data = await resp.json()
-                    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-
-                    # Simple brace extraction if it got markdown wrapped
-                    match = re.search(r'\[.*\]', raw_text, re.DOTALL)
-                    if match:
-                        raw_text = match.group(0)
-
-                    ideas = json.loads(raw_text)
-                    if isinstance(ideas, list) and all(isinstance(x, str) for x in ideas):
-                        return [x.strip() for x in ideas if x.strip()]
-                    return []
     except Exception as e:
-        log.warning("Failed to ideate hypotheses after retries: %s", e)
+        # The call itself never succeeded (e.g. repeated 503s / timeouts).
+        # Signal this distinctly so the caller can abort before spending any
+        # downstream Tavily/scoring budget on hardcoded fallback topics.
+        log.warning("Ideation call failed outright after retries: %s", e)
+        raise IdeationUnavailableError(str(e)) from e
+
+    # -- Parse the SUCCESSFUL response robustly. A parse failure here is NOT an
+    #    outage — the model replied, we just couldn't read it — so we return []
+    #    and let the caller's default-topic fallback take over (never abort). --
+    if data is None:  # defensive; the loop either assigns data or raises above
         return []
+    try:
+        raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError, TypeError) as e:
+        log.warning("Ideation response carried no text payload: %s", e)
+        return []
+
+    ideas = _extract_json_array(raw_text)
+    if not ideas:
+        log.warning("Ideation succeeded but no parseable topic list was found.")
+    return ideas
 
 
 async def run_discovery(
@@ -154,7 +239,25 @@ async def run_discovery(
         log.info("=== Phase 1A: Discovery Start (Idea-First) ===")
         
         # -- 2. Ideate Hypotheses --
-        hypotheses = await _ideate_hypotheses(niche_hint, session, log)
+        # Ideation is the foundation of the whole run. If the call fails outright
+        # (e.g. repeated 503s), abort NOW — before spending any Tavily/scoring
+        # budget on the 3-topic hardcoded fallback that would just be discarded
+        # on the next re-run anyway.
+        try:
+            hypotheses = await _ideate_hypotheses(niche_hint, session, log)
+        except IdeationUnavailableError as e:
+            log.error(
+                "Ideation unavailable (%s). Aborting discovery before any "
+                "search/scoring spend. Re-run in a moment.", e
+            )
+            return DiscoveryBatch(
+                raw_candidate_count=0,
+                queued_candidate_count=0,
+                returned_candidate_count=0,
+                niche_hint=niche_hint,
+                error="ideation_unavailable",
+            )
+
         if not hypotheses:
             log.warning("Ideation returned 0 hypotheses. Falling back to default topics.")
             hypotheses = [
@@ -162,7 +265,7 @@ async def run_discovery(
                 f"Most popular {niche_hint or 'tech'} trends",
                 "Fastest growing companies 2024"
             ]
-            
+
         log.info("Ideated %d hypotheses from LLM.", len(hypotheses))
 
         # -- 3. Archive Filtering (Pre-Search) --

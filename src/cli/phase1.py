@@ -200,10 +200,18 @@ async def cmd_discover(args: argparse.Namespace) -> None:
             top_n=args.top_n
         )
         
+    if batch.error == "ideation_unavailable":
+        _print_header("DISCOVERY ABORTED — IDEATION UNAVAILABLE")
+        print("⚠️  Gemini ideation API was unavailable (likely a transient 503).")
+        print("    The run was stopped BEFORE any search/scoring spend — $0 wasted.")
+        print("    Nothing usable was produced; just re-run in a moment:\n")
+        print(f'      python -m src.cli.phase1 discover --niche "{args.niche}" --top-n {args.top_n}\n')
+        return
+
     _print_header("TOP CANDIDATES")
     for i, c in enumerate(batch.candidates, 1):
         _print_candidate(i, c)
-        
+
     print(f"-> Candidates saved to: {jm.discovery_dir / 'candidates.json'}")
     print(f"-> To approve one, run: python -m src.cli.phase1 approve --job-id {jm.job_id} --index <N>")
     print(get_session_summary(configured_rpm=APP_CONFIG.llm.rpm_limit))

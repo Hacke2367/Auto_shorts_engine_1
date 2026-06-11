@@ -158,6 +158,15 @@ class RetryConfig(BaseModel):
     min_wait: float = Field(default=2.0, ge=0)
     max_wait: float = Field(default=10.0, ge=0)
 
+    # ---- Ideation retry (Phase 1 discovery foundation call) ----
+    # Ideation is the single call the whole discovery run depends on; everything
+    # downstream (Tavily search + scoring) only runs if it succeeds. Give it a
+    # more patient retry than the standard profile so a transient 503 doesn't
+    # collapse the run into the 3-topic hardcoded fallback.
+    ideation_max_attempts: int = Field(default=6, ge=1)
+    ideation_min_wait: float = Field(default=4.0, ge=0)
+    ideation_max_wait: float = Field(default=45.0, ge=0)
+
     # ---- Rate-limit (HTTP 429) retry — slower, more conservative ----
     rate_limit_max_attempts: int = Field(default=4, ge=1)
     rate_limit_multiplier: float = Field(default=60.0, gt=0)
