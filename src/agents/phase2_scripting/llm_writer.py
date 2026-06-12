@@ -55,6 +55,17 @@ COMMENTARY_MODE_PATH = CONTEXT_DIR / "commentary_mode.md"
 # live-commentary override so the script flows as one broadcast, not per-entity bullet points.
 CONTINUOUS_TEMPLATES = {"scan_race"}
 
+# Rough chars→words heuristic for roman Hinglish (avg word + trailing space ≈ 6
+# chars). Used ONLY to translate Python-measured char counts/deltas into
+# word-level guidance the model can actually act on — LLMs cannot count
+# characters, but they estimate word counts reasonably well.
+_CHARS_PER_WORD = 6.0
+
+
+def _approx_words(chars: int) -> int:
+    """Translate a character count into an approximate word count (min 1)."""
+    return max(1, round(chars / _CHARS_PER_WORD))
+
 
 class GeminiRateLimitError(Exception):
     """Raised when Gemini returns HTTP 429 Too Many Requests."""
@@ -62,8 +73,19 @@ class GeminiRateLimitError(Exception):
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
-    return standard_retry_policy()
+    """Patient transient-error retry for the Phase 2 monologue calls.
+
+    Phase 2 fires several sequential Gemini calls (draft + rewrites + doctor); a
+    transient 503 burst on any one used to kill the whole phase under the default
+    3-attempt profile. Use the patient ``scripting_*`` profile (mirrors Phase 1
+    extraction) so short Gemini blips are ridden out instead of failing the run.
+    """
+    rc = APP_CONFIG.retry
+    return standard_retry_policy(
+        min_wait=rc.scripting_min_wait,
+        max_wait=rc.scripting_max_wait,
+        max_attempts=rc.scripting_max_attempts,
+    )
 
 
 def _get_429_retry_policy() -> AsyncRetrying:
@@ -149,8 +171,15 @@ def _build_user_prompt(
     plan_lines = []
     for spec in plan.segments:
         rule = spec.visual_rule or "No specific visual rule."
+        # Anchor on a single TARGET (the window midpoint), not the [min, max]
+        # range. Given a range, models chase the top edge and then overshoot it
+        # (observed ~13% over the ceiling). Given one target stated in WORDS
+        # (which they estimate far better than characters) they land inside the
+        # window; the ceiling is restated as a hard, do-not-cross limit.
+        target_chars = (spec.min_chars + spec.max_chars) // 2
         plan_lines.append(
-            f"<{spec.tag}> (Min chars: {spec.min_chars}, Max chars: {spec.max_chars})\n"
+            f"<{spec.tag}> TARGET ~{_approx_words(target_chars)} words (~{target_chars} chars). "
+            f"HARD CEILING {spec.max_chars} chars — NEVER exceed. Floor {spec.min_chars} chars.\n"
             f"  Visual context: {rule}\n"
             f"</{spec.tag}>"
         )
@@ -163,6 +192,11 @@ Persona: {plan.persona_id}
 
 {commentary_block}{topic_block}=== REQUIRED STRUCTURE (exact tags, limits, and per-segment visual context) ===
 {plan_str}
+
+=== LENGTH DISCIPLINE (critical) ===
+Hit each segment's TARGET length — do NOT drift up toward the ceiling. Any segment longer than its
+HARD CEILING is rejected and the whole take is regenerated. A tight, punchy line at the target beats
+a long, padded one. Count by WORDS as you write and keep every segment at its stated target.
 
 {number_ref}=== DATASET (facts only; do not mutate numbers) ===
 {dataset_json}
@@ -179,11 +213,27 @@ def _build_rewrite_prompt(
 ) -> str:
     dataset_json = json.dumps([r.model_dump() for r in dataset.rows], indent=2)
 
+    # Give the model a Python-MEASURED, actionable instruction (cut/add N words to
+    # reach the midpoint) instead of a raw range it has to re-count itself. Python
+    # owns the counting; the model only performs the edit. Aiming at the midpoint
+    # (not the just-passing edge) leaves headroom so the rewrite lands inside.
     issues = []
     for seg, reason in failing_segments:
-        issues.append(
-            f"- <{seg.tag}>: {reason} (current {seg.char_count}, target {seg.target_min_chars}-{seg.target_max_chars})"
-        )
+        target_mid = (seg.target_min_chars + seg.target_max_chars) // 2
+        if seg.char_count > seg.target_max_chars:
+            delta_words = _approx_words(seg.char_count - target_mid)
+            issues.append(
+                f"- <{seg.tag}>: TOO LONG by {seg.char_count - seg.target_max_chars} chars. "
+                f"Cut about {delta_words} word(s) — drop a clause or adjective, do NOT just shave "
+                f"letters — to land near ~{target_mid} chars (ceiling {seg.target_max_chars})."
+            )
+        else:
+            delta_words = _approx_words(target_mid - seg.char_count)
+            issues.append(
+                f"- <{seg.tag}>: TOO SHORT by {seg.target_min_chars - seg.char_count} chars. "
+                f"Add about {delta_words} word(s) — one concrete detail, not filler — to land near "
+                f"~{target_mid} chars (floor {seg.target_min_chars})."
+            )
     issues_str = "\n".join(issues)
 
     return f"""## TASK: REWRITE FAILING SEGMENTS ONLY
@@ -192,9 +242,10 @@ Rewrite ONLY the failing tags listed below.
 Do NOT rewrite passing tags.
 Return ONLY the rewritten tags wrapped in <MONOLOGUE>...</MONOLOGUE>.
 
-Adjust LENGTH only. Keep each line natural, spoken, and connected to its neighbours — a complete
-spoken unit, never a dangling fragment. Do NOT strip it into a robotic stub or pad it with filler
-just to hit the count. Numbers stay exactly the same (spoken form is fine).
+Adjust LENGTH only, by exactly the word amount stated per tag. Keep each line natural, spoken, and
+connected to its neighbours — a complete spoken unit, never a dangling fragment. Do NOT strip it into
+a robotic stub or pad it with filler just to hit the count. Numbers stay exactly the same (spoken
+form is fine).
 
 Template: {plan.template_name}
 Persona: {plan.persona_id}
@@ -314,7 +365,10 @@ async def _run_rewrite_loop(
     session: aiohttp.ClientSession,
     log: logging.Logger,
 ) -> bool:
-    max_retries = 2
+    # 3 rounds (was 2): each round re-sends ONLY the still-failing segments, so the
+    # set shrinks every round and the extra round cheaply catches the long tail when
+    # many segments miss at once (e.g. a 7-card sort_card with 9+ initial misses).
+    max_retries = 3
     current_failing = initial_failing
 
     for rewrite_attempt in range(max_retries):
@@ -558,6 +612,16 @@ async def write_script(
         if not failing:
             return await _finalize()
 
+        # DIAGNOSTIC: per-segment breakdown so we can see whether segments are
+        # missing on the MIN side (too short) or MAX side (too long) — this tells
+        # us if the persona writes terse (below floor) vs the windows being too
+        # tight. Safe to remove once tuning is locked.
+        for _seg, _reason in failing:
+            log.warning(
+                "  length miss: <%s> %s — got %d chars, allowed window %d-%d",
+                _seg.tag, _reason, _seg.char_count,
+                _seg.target_min_chars, _seg.target_max_chars,
+            )
         log.warning("%d segments failed length checks. Entering rewrite loop.", len(failing))
         ok = await _run_rewrite_loop(
             failing,

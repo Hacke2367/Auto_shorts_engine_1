@@ -123,11 +123,17 @@ class LLMConfig(BaseModel):
     # Pro runs ONCE for the final flow polish (script-doctor). This keeps Pro as the final creative
     # pass while cutting cost ~85%. THE one quality/cost dial: if a persona's draft feels flat,
     # flip `scripting_draft.model` to "gemini-2.5-pro".
+    #
+    # thinking_budget is the STRUCTURE dial (not the same as the model dial): Flash with thinking
+    # OFF (=0) fumbles long, strict-structure jobs — e.g. a 7-card sort_card needs 11 exact tags in
+    # exact order within per-segment char budgets, and zero-thinking Flash drops tags / overshoots
+    # length. Giving the draft a planning budget lets Flash lay out all tags first (keeps it cheap
+    # Flash, NOT Pro); the rewrite gets a smaller budget so it can actually land each char window.
     scripting_draft: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.4, thinking_budget=0,
+        model="gemini-2.5-flash", temperature=0.4, thinking_budget=1024,
     )
     scripting_rewrite: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.2, thinking_budget=0,
+        model="gemini-2.5-flash", temperature=0.2, thinking_budget=512,
     )
     scripting_doctor: PhaseModel = PhaseModel(
         model="gemini-2.5-pro", temperature=0.3, thinking_budget=512,
@@ -175,6 +181,24 @@ class RetryConfig(BaseModel):
     scoring_max_attempts: int = Field(default=5, ge=1)
     scoring_min_wait: float = Field(default=2.0, ge=0)
     scoring_max_wait: float = Field(default=20.0, ge=0)
+
+    # ---- Extraction retry (Phase 1B Gemini extract call) ----
+    # Extraction is one heavy Gemini call per attempt and the WHOLE topic depends
+    # on it; the default 3-attempt profile let a transient 503 burst kill a run.
+    # Mirror ideation's patience so short Gemini blips are ridden out.
+    extraction_max_attempts: int = Field(default=6, ge=1)
+    extraction_min_wait: float = Field(default=4.0, ge=0)
+    extraction_max_wait: float = Field(default=45.0, ge=0)
+
+    # ---- Scripting retry (Phase 2 monologue calls) ----
+    # Phase 2 fires SEVERAL sequential Gemini calls per run (draft + each rewrite
+    # round + the doctor pass). The default 3-attempt profile let a transient 503
+    # burst kill the whole phase mid-rewrite-loop — even when the draft was nearly
+    # valid. Mirror extraction's patience so a short Gemini blip is ridden out
+    # instead of discarding an otherwise-good script.
+    scripting_max_attempts: int = Field(default=6, ge=1)
+    scripting_min_wait: float = Field(default=4.0, ge=0)
+    scripting_max_wait: float = Field(default=45.0, ge=0)
 
     # ---- Rate-limit (HTTP 429) retry — slower, more conservative ----
     rate_limit_max_attempts: int = Field(default=4, ge=1)

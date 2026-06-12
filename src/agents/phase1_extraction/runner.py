@@ -39,6 +39,7 @@ from src.agents.core.models import (
     TemplateDataset,
     TemplateSpec,
     TEMPLATE_CAPACITIES,
+    TEMPLATE_PRESENTATION_FIELDS,
     TEMPLATE_ROW_MAP,
     VALID_TEMPLATES,
 )
@@ -165,12 +166,18 @@ def _validate_dataset_quality(
     if cap and len(dataset.rows) > cap.max:
         return False, f"Exceeds max capacity: {len(dataset.rows)} > {cap.max}."
 
-    # Check null / empty rate (numeric zero is explicitly VALID data)
+    # Check null / empty rate (numeric zero is explicitly VALID data).
+    # Presentation-only fields (e.g. sort_card 'image' slug) are decorative
+    # polish, not data content — a blank image is not a missing fact, so they
+    # are excluded from the gate to avoid false quality_failure rejections.
+    presentation_fields = TEMPLATE_PRESENTATION_FIELDS.get(template_name, set())
     total_fields = 0
     null_fields = 0
     for row in dataset.rows:
         dump = row.model_dump()
         for key, val in dump.items():
+            if key in presentation_fields:
+                continue
             total_fields += 1
             # Explicitly exclude numeric zero and floating point zero from being flagged as null
             if val is None or val == "":
@@ -379,7 +386,12 @@ async def run_extraction(
                     "template_name": t_name,
                     "csv_relpath": f"{rel_dir}/{t_name}_data.csv",
                     "dataset_relpath": f"{rel_dir}/{t_name}_dataset.json",
-                    "audit_relpath": f"{rel_dir}/sources_audit.json"
+                    "audit_relpath": f"{rel_dir}/sources_audit.json",
+                    # Operator-facing sourcing notes for visual assets. Maps the
+                    # slug filename placed in the CSV 'Image' column to a
+                    # human-readable description so the operator can drop the
+                    # real asset into assets/images/. Renderer never reads this.
+                    "image_sourcing_guide": dict(dataset.image_sourcing_guide),
                 }
                 _write_data_manifest(job_manager, manifest)
 

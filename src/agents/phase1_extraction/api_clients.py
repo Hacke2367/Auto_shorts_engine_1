@@ -37,12 +37,31 @@ from src.agents.core.models import (
     TemplateDataset,
     TemplateSpec,
     TEMPLATE_META_KEYS,
+    TEMPLATE_PRESENTATION_FIELDS,
 )
 
 
 def _get_retry_policy() -> AsyncRetrying:
-    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
+    """Standard transient-error retry (config-driven, see APP_CONFIG.retry).
+
+    Used by the Tavily search/extract calls, which are reliable.
+    """
     return standard_retry_policy()
+
+
+def _get_gemini_retry_policy() -> AsyncRetrying:
+    """Patient retry for the heavy Phase 1B Gemini extract call.
+
+    The whole topic's extraction hinges on this single call, so it gets the
+    more patient ``extraction_*`` profile (mirrors ideation) to ride out the
+    transient 503 bursts that the default 3-attempt profile could not survive.
+    """
+    rc = APP_CONFIG.retry
+    return standard_retry_policy(
+        min_wait=rc.extraction_min_wait,
+        max_wait=rc.extraction_max_wait,
+        max_attempts=rc.extraction_max_attempts,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +202,14 @@ async def gemini_extract(
 
     meta_keys = TEMPLATE_META_KEYS.get(template_name, ["TITLE", "SUB"])
 
+    # Does this template carry a row-level 'image' field specifically? Only such
+    # templates (currently sort_card) get the slug + sourcing-guide instructions;
+    # other templates may have non-image presentation fields (e.g. vs_card's
+    # emoji/notes/category, excluded from the null-rate gate below) without
+    # triggering image-slug prompt instructions that don't apply to their rows.
+    presentation_fields = TEMPLATE_PRESENTATION_FIELDS.get(template_name, set())
+    has_images = "image" in presentation_fields
+
     # ---------------- TEMPLATE-SPECIFIC EXAMPLES ----------------
     schema_examples: dict[str, str] = {
         "bar_chart": '{"name": "United States", "value": 28.78}',
@@ -190,7 +217,7 @@ async def gemini_extract(
         "scan_race": '{"year": "2024", "entities": {"YouTube": 2.5, "TikTok": 1.7}}',
         "geo_universal": '{"country": "India", "group": "Asia", "value": 8.5}',
         "donut_breakdown": '{"category": "Smartphones", "value": 45.2}',
-        "sort_card": '{"image": "", "category": "S Tier", "reason": "Unmatched performance"}',
+        "sort_card": '{"image": "apple_pay_logo.png", "category": "S Tier", "reason": "Unmatched performance"}',
         "vs_card": '{"metric": "Top Speed", "p1_value": "200 mph", "p2_value": "180 mph", "winner": "p1"}',
     }
     example_row = schema_examples.get(template_name, '{"key": "value"}')
@@ -206,13 +233,39 @@ async def gemini_extract(
         "MODE": "choropleth",
     }
     example_meta = {k: _META_EXAMPLES.get(k, "Short descriptive text.") for k in meta_keys}
-    
+
+    # For image templates the LLM returns a THIRD top-level key alongside
+    # meta/rows; for all others the payload shape is exactly meta + rows.
+    if has_images:
+        _guide_example = (
+            ',\n  "image_sourcing_guide": '
+            '{"apple_pay_logo.png": "The Apple Pay wordmark/logo on a dark background."}'
+        )
+        _keys_clause = "exactly three keys: 'meta', 'rows', and 'image_sourcing_guide'"
+        _return_clause = (
+            'Return purely a JSON object with "meta", "rows", and "image_sourcing_guide" keys.'
+        )
+        _image_clause = (
+            "\nIMAGE ASSET RULE (CRITICAL): For each row's 'image' field, output a short, "
+            "descriptive, lowercase slug FILENAME ending in '.png' that captures the item's "
+            "visual identity (e.g. 'apple_pay_logo.png', 'tap_to_pay_terminal.png'). "
+            "NEVER output a web URL, and NEVER leave it empty. "
+            "Then add the top-level 'image_sourcing_guide' object mapping EACH image filename "
+            "to a one-sentence human-readable visual description so an operator can source the "
+            "real asset. Do NOT add any other new keys to the rows themselves.\n"
+        )
+    else:
+        _guide_example = ""
+        _keys_clause = "exactly two keys: 'meta' and 'rows'"
+        _return_clause = 'Return purely a JSON object with "meta" and "rows" keys.'
+        _image_clause = ""
+
     full_example_payload = f"""{{
   "meta": {json.dumps(example_meta)},
   "rows": [
     {example_row},
     {example_row}
-  ]
+  ]{_guide_example}
 }}"""
 
     # ---------------- 10/10 PROMPT ----------------
@@ -223,21 +276,20 @@ The topic is: "{topic}"
 Try to extract {ideal} items safely without hallucinating. Do NOT exceed {maximum} items.
 
 OUTPUT SCHEMA CONSTRAINTS (CRITICAL)
-You MUST return a single JSON object with exactly two keys: 'meta' and 'rows'. The 'meta' object must contain these exact keys: {meta_keys}. Generate highly accurate, punchy YouTube Shorts titles/subtitles based directly on the topic and extracted data. Keep titles under 4 words. The 'rows' key must contain the array of extracted data objects.
+You MUST return a single JSON object with {_keys_clause}. The 'meta' object must contain these exact keys: {meta_keys}. Generate highly accurate, punchy YouTube Shorts titles/subtitles based directly on the topic and extracted data. Keep titles under 4 words. The 'rows' key must contain the array of extracted data objects.
 Your output MUST strictly follow this exact JSON structure and data types:
 {full_example_payload}
 
 Notice the data types in the example. If a value is a string, keep it a string. If it is a dictionary/object, keep it flat.
 For example, in scan_race, 'entities' MUST be a flat key-value dict, NOT a list of objects.
-For sort_card, if an image URL is missing in the text, return an empty string "".
-
+{_image_clause}
 Read the following sourced Markdown texts and extract the relevant numerical/statistical data:
 """
     for idx, src in enumerate(context, 1):
         prompt += f"\n--- SOURCE {idx} ({src.authority_tier.value}) ---\nURL: {src.url}\n{src.raw_snippet[:5000]}\n"
 
     prompt += f"""
-Return purely a JSON object with "meta" and "rows" keys.
+{_return_clause}
 Each row in the "rows" array MUST match the exact example structure shown above. Do NOT invent new keys.
 DO NOT emit Markdown blocks like ```json ... ```, just emit the raw curly-brace JSON.
 
@@ -252,7 +304,7 @@ Do not hallucinate data. Only extract facts found in the texts. If sources disag
         },
     }
 
-    async for attempt in _get_retry_policy():
+    async for attempt in _get_gemini_retry_policy():
         with attempt:
             t0 = time.perf_counter()
             async with session.post(url, json=payload, headers=_gemini_headers) as resp:
@@ -325,12 +377,22 @@ Do not hallucinate data. Only extract facts found in the texts. If sources disag
                     log.error("Failed to parse extracted JSON: %s\nRaw: %s", err, json_str[:500])
                     raise ValueError("parse_failure: JSON syntax error in Gemini output") from err
 
+                # Defensively coerce the optional sourcing guide. It is decorative
+                # operator metadata, so a malformed value must NEVER fail extraction
+                # (no new failure surface) — anything non-dict degrades to empty.
+                _guide_raw = parsed.get("image_sourcing_guide", {})
+                if isinstance(_guide_raw, dict):
+                    image_sourcing_guide = {str(k): str(v) for k, v in _guide_raw.items()}
+                else:
+                    image_sourcing_guide = {}
+
                 try:
                     # Validate the raw dict using our Pydantic schema
                     dataset = TemplateDataset.model_validate({
                         "template_name": template_name,
                         "meta": parsed.get("meta", {}),
-                        "rows": parsed.get("rows", [])
+                        "rows": parsed.get("rows", []),
+                        "image_sourcing_guide": image_sourcing_guide,
                     })
                 except Exception as err:
                     log.error("Schema validation failed for %s: %s", template_name, err)
