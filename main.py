@@ -474,7 +474,18 @@ def build_bgm_track_ffmpeg(
         p = Path(rel_or_abs)
         if p.is_absolute():
             return p
-        return (lib_root / p).resolve()
+        # 1) per-job library first — existing jobs (audio/bgm/) keep working unchanged
+        job_local = (lib_root / p).resolve()
+        if job_local.exists():
+            return job_local
+        # 2) fall back to the global shared library at <project>/assets/bgm so a single
+        #    track can be reused across jobs without copying it into each job folder
+        global_local = (Path(__file__).resolve().parent / "assets" / "bgm" / p).resolve()
+        if global_local.exists():
+            return global_local
+        # nothing found anywhere: return the job-local path so the existing
+        # "BGM file missing -> skipping" warning fires downstream with a sensible path
+        return job_local
 
     # Build segment start times from timeline
     starts = []
