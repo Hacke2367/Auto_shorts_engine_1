@@ -176,12 +176,23 @@ class TemplateCapacity(BaseModel):
 
     max: int = Field(..., ge=1, description="Absolute maximum items.")
     ideal: int = Field(..., ge=1, description="Recommended item count.")
+    min: int = Field(
+        default=3, ge=1,
+        description="Minimum USABLE item count. Below this the template renders "
+        "broken/sparse (e.g. a 2-row butterfly), so the extraction quality gate "
+        "REJECTS the dataset (quality_failure) instead of shipping garbage "
+        "downstream. Fabrication is blocked separately by the extraction prompt.",
+    )
 
     @model_validator(mode="after")
     def _ideal_lte_max(self) -> "TemplateCapacity":
         if self.ideal > self.max:
             raise ValueError(
                 f"ideal ({self.ideal}) must be ≤ max ({self.max})"
+            )
+        if self.min > self.ideal:
+            raise ValueError(
+                f"min ({self.min}) must be ≤ ideal ({self.ideal})"
             )
         return self
 
@@ -309,13 +320,13 @@ TEMPLATE_ROW_MAP: dict[str, type[BaseModel]] = {
 
 # Default capacity limits per template (from templates_registry.md)
 TEMPLATE_CAPACITIES: dict[str, TemplateCapacity] = {
-    "bar_chart": TemplateCapacity(max=10, ideal=6),
-    "butterfly_chart": TemplateCapacity(max=10, ideal=5),
-    "scan_race": TemplateCapacity(max=10, ideal=6),
-    "geo_universal": TemplateCapacity(max=10, ideal=8),
-    "donut_breakdown": TemplateCapacity(max=8, ideal=5),
-    "sort_card": TemplateCapacity(max=8, ideal=5),
-    "vs_card": TemplateCapacity(max=10, ideal=6),
+    "bar_chart": TemplateCapacity(min=5, max=10, ideal=6),
+    "butterfly_chart": TemplateCapacity(min=5, max=10, ideal=5),
+    "scan_race": TemplateCapacity(min=4, max=10, ideal=6),
+    "geo_universal": TemplateCapacity(min=5, max=10, ideal=8),
+    "donut_breakdown": TemplateCapacity(min=3, max=8, ideal=5),
+    "sort_card": TemplateCapacity(min=4, max=8, ideal=5),
+    "vs_card": TemplateCapacity(min=4, max=10, ideal=6),
 }
 
 
@@ -326,8 +337,9 @@ TEMPLATE_DESCRIPTIONS: dict[str, str] = {
     "bar_chart": "vertical ranked comparison of numeric values; best for 5-8 comparable "
     "items; do NOT use for fewer than 4 items",
     "vs_card": "strict 1-versus-1 between EXACTLY 2 entities across several shared metrics",
-    "sort_card": "countdown / ranked reveal, one card at a time, each with a short reason; "
-    "best for 'Top N' lists with qualitative reasons",
+    "sort_card": "TWO named groups, 'A vs B' — items SPLIT into exactly two bins on a "
+    "binary axis (e.g. 'Mainstream vs Emerging'), each with a short reason; NOT a plain "
+    "ranked Top-N list",
     "donut_breakdown": "parts-of-a-whole percentage split of ONE total; use only when "
     "values sum to ~100%",
     "butterfly_chart": "two GROUPS mirrored left/right across shared rows; best for "
@@ -360,6 +372,113 @@ TEMPLATE_PRESENTATION_FIELDS: dict[str, set[str]] = {
     # flagged null by the gate regardless.
     "vs_card": {"emoji", "notes", "category"},
 }
+
+
+# ===========================================================================
+# RENDERER DATA CONTRACT — single source of truth (extraction <-> renderer)
+# ===========================================================================
+# The pipeline and the renderers historically drifted: extraction emitted
+# plausible-looking field NAMES, but several renderers need specific column
+# NAMES (exact case) and specific VALUE shapes (e.g. an integer tier, not a
+# free-text label). These three structures are the one place both halves agree.
+
+# Canonical CSV header names a renderer parses by EXACT name. Pipeline pydantic
+# fields are lowercase; templates listed here need a specific (capitalised)
+# header. Templates NOT listed keep their lowercase field names (their renderers
+# are case-tolerant: geo title()s, donut is case-insensitive, butterfly/scan_race
+# read positionally).
+TEMPLATE_CSV_HEADERS: dict[str, dict[str, str]] = {
+    "bar_chart": {"name": "Name", "value": "Value"},
+    "sort_card": {"image": "Image", "category": "Category", "reason": "Reason"},
+    "vs_card": {
+        "metric": "Metric", "p1_value": "P1_Value", "p2_value": "P2_Value",
+        "winner": "Winner", "emoji": "Emoji", "notes": "Notes",
+        "weight": "Weight", "category": "Category",
+    },
+}
+
+# Human-readable rules injected into the Phase-1 extraction prompt so the LLM
+# produces RENDERER-COMPATIBLE values, not just the right field names. These
+# encode the semantic constraints a renderer enforces but the bare schema
+# example omits (the exact gap that produced wrong-shaped data).
+TEMPLATE_EXTRACTION_RULES: dict[str, str] = {
+    "sort_card": (
+        "CRITICAL — sort_card is a TWO-GROUP 'A vs B' sorter (a head-to-head split), "
+        "NOT a ranked list. You MUST:\n"
+        "1. Choose ONE meaningful binary axis that splits the items into exactly TWO "
+        "named groups (e.g. 'Already Mainstream' vs 'Still Emerging', or 'Consumer' "
+        "vs 'Enterprise'). Each group MUST contain at least one item (never put every "
+        "item in the same group).\n"
+        "2. Set meta.TITLE to exactly 'GroupA vs GroupB' — the two group names joined "
+        "by the word 'vs' with a single space on each side (e.g. 'Mainstream vs "
+        "Emerging'). These two names become the on-screen bin labels. Do NOT put a "
+        "single descriptive title here, and do NOT use 'vs.' with a period.\n"
+        "3. For each row, set 'category' to the integer 1 (group A) or 2 (group B) — "
+        "NEVER a descriptive label or name (no 'S Tier', no item name).\n"
+        "4. Keep each 'reason' a short punchy phrase (<= 30 characters)."
+    ),
+    "vs_card": (
+        "CRITICAL: the 'winner' field MUST be the integer 0, 1, or 2 ONLY "
+        "(0 = draw/tie, 1 = P1 wins this round, 2 = P2 wins this round). "
+        "NEVER write 'p1' / 'p2' / 'tie' as text — use the number."
+    ),
+    "geo_universal": "Provide AT MOST 10 rows. 'value' must be a plain number.",
+    "donut_breakdown": (
+        "'value' entries are shares of ONE whole and should sum to roughly 100."
+    ),
+    "scan_race": "The time/year value must be a plain number (e.g. 2024), not text.",
+}
+
+
+def validate_template_semantics(
+    template_name: str, rows: Sequence, meta: dict | None = None
+) -> tuple[bool, str]:
+    """Renderer-contract checks BEYOND pydantic types.
+
+    Catches values that are the right type but the wrong shape for the renderer
+    (e.g. sort_card 'category' as a label instead of an integer tier, or a TITLE
+    that does not name the two bins). Returns ``(is_valid, reason)``; the
+    extraction quality gate rejects + retries on failure so wrong-shaped data can
+    never reach the renderer.
+    """
+    import re as _re
+
+    meta = meta or {}
+    if template_name == "sort_card":
+        cats: set[str] = set()
+        for r in rows:
+            v = str(getattr(r, "category", "")).strip()
+            if v not in {"1", "2"}:
+                return False, (
+                    f"sort_card 'category' must be the integer 1 or 2 (two groups); "
+                    f"got {v!r}."
+                )
+            cats.add(v)
+        # A 'vs' sorter is meaningless unless BOTH sides are populated.
+        if cats != {"1", "2"}:
+            return False, (
+                "sort_card needs items on BOTH sides (category 1 AND 2); "
+                f"only got {sorted(cats)}."
+            )
+        # TITLE must name the two bins as 'A vs B' — the renderer splits TITLE on
+        # the exact pattern \s+vs\s+ to label the left/right containers.
+        title = str(meta.get("TITLE", "")).strip()
+        if not _re.search(r"\s+vs\s+", title, flags=_re.IGNORECASE):
+            return False, (
+                "sort_card meta.TITLE must name the two groups as 'GroupA vs GroupB' "
+                f"(the bin labels); got {title!r}."
+            )
+    elif template_name == "vs_card":
+        for r in rows:
+            v = str(getattr(r, "winner", "")).strip().lower()
+            if v not in {"0", "1", "2"}:
+                return False, (
+                    f"vs_card 'winner' must be the integer 0, 1, or 2; got {v!r}."
+                )
+    # NOTE: row-count limits (e.g. geo_universal max 10) are already enforced by
+    # TemplateDataset's capacity validator at model_validate time, so they need
+    # no duplicate check here.
+    return True, "passed"
 
 
 class TemplateDataset(BaseModel):
@@ -653,6 +772,12 @@ class DiscoveryBatch(BaseModel):
         description="Machine-readable failure reason when the batch is empty "
         "due to an upstream failure (e.g. 'ideation_unavailable', "
         "'no_feasible_candidates'), as opposed to simply finding no candidates.",
+    )
+    error_detail: str | None = Field(
+        default=None,
+        description="Human-readable detail of the upstream failure (e.g. the raw "
+        "HTTP error string '429 Too Many Requests' vs '503'), so the CLI can give "
+        "accurate guidance — quota/rate-limit vs transient outage.",
     )
 
 

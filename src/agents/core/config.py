@@ -244,6 +244,11 @@ class AppConfig(BaseModel):
     # extra hypotheses (top_n + buffer) so a gated run still fills the batch.
     # Each extra idea costs ~1 Tavily basic search + 1 scoring call (~$0.001).
     discovery_ideation_buffer: int = Field(default=4, ge=0)
+    # A flat buffer is too small for high-cull niches (finance/wealth ideates many
+    # derived/dataless topics — ~70% get gated). Over-provision to a MULTIPLE of
+    # top_n instead: ideation asks for max(top_n + buffer, ceil(top_n * multiplier)).
+    # 2.5x balances fill-rate against per-idea scoring cost (~$0.001 each).
+    discovery_ideation_multiplier: float = Field(default=2.5, ge=1.0)
 
     # Phase 2 script-doctor — a final whole-script flow-polish LLM pass that makes the segmented
     # monologue sound like one seamless spoken performance. Safe by design: any constraint

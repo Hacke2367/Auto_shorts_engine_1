@@ -39,9 +39,11 @@ from src.agents.core.models import (
     TemplateDataset,
     TemplateSpec,
     TEMPLATE_CAPACITIES,
+    TEMPLATE_CSV_HEADERS,
     TEMPLATE_PRESENTATION_FIELDS,
     TEMPLATE_ROW_MAP,
     VALID_TEMPLATES,
+    validate_template_semantics,
 )
 from src.agents.phase1_extraction.graph import ExtractionState, build_extraction_graph
 
@@ -117,7 +119,13 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
     if dataset.template_name in static_tags:
         combined_meta.update(static_tags[dataset.template_name])
 
-    headers = list(dataset.rows[0].model_dump().keys())
+    # Map pydantic field names -> canonical CSV headers the renderer parses by
+    # exact name (e.g. sort_card image/category/reason -> Image/Category/Reason).
+    # Templates absent from the map keep their lowercase field names unchanged
+    # (their renderers are case-tolerant), so this is a no-op for them.
+    field_names = list(dataset.rows[0].model_dump().keys())
+    header_map = TEMPLATE_CSV_HEADERS.get(dataset.template_name, {})
+    headers = [header_map.get(fn, fn) for fn in field_names]
 
     # Write to temp file then atomically replace
     fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
@@ -134,7 +142,8 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             for row in dataset.rows:
-                writer.writerow(row.model_dump())
+                dump = row.model_dump()
+                writer.writerow({header_map.get(k, k): v for k, v in dump.items()})
         os.replace(tmp_path, str(path))
     except BaseException:
         try:
@@ -166,6 +175,19 @@ def _validate_dataset_quality(
     if cap and len(dataset.rows) > cap.max:
         return False, f"Exceeds max capacity: {len(dataset.rows)} > {cap.max}."
 
+    # Per-template MINIMUM (HARD gate — rejects, does not just warn). Below `min`
+    # the template renders broken/sparse (e.g. a 2-row butterfly) and is unusable
+    # downstream, so accepting it would waste phase 2/3/4 credits on garbage. We
+    # REJECT instead: in auto/discovery mode this triggers the fallback template;
+    # in manual mode the operator is told to pick a richer topic/template.
+    # (Fabrication is blocked separately by the extraction prompt, so rejecting
+    # never pressures the model to invent rows.)
+    if cap and len(dataset.rows) < cap.min:
+        return False, (
+            f"Too few rows for {template_name}: {len(dataset.rows)} < min {cap.min} "
+            f"(ideal {cap.ideal}). Renders unusable — needs a richer topic/source/template."
+        )
+
     # Check null / empty rate (numeric zero is explicitly VALID data).
     # Presentation-only fields (e.g. sort_card 'image' slug) are decorative
     # polish, not data content — a blank image is not a missing fact, so they
@@ -186,6 +208,16 @@ def _validate_dataset_quality(
     null_rate = null_fields / total_fields if total_fields > 0 else 1.0
     if null_rate > MAX_NULL_RATE:
         return False, f"Null rate too high: {null_rate:.1%} > {MAX_NULL_RATE:.0%}."
+
+    # Renderer-contract check: values must match the SHAPE the renderer needs
+    # (e.g. sort_card 'category' = integer tier 1/2, vs_card 'winner' = 0/1/2),
+    # not merely be non-empty. This is the gate that stops wrong-shaped data from
+    # ever reaching the renderer; a failure here triggers re-extraction.
+    sem_ok, sem_reason = validate_template_semantics(
+        template_name, dataset.rows, dataset.meta
+    )
+    if not sem_ok:
+        return False, sem_reason
 
     log.info(
         "Dataset quality OK: %d rows, null_rate=%.1f%%.",

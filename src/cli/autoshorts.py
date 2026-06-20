@@ -422,8 +422,12 @@ def sync_render(args):
     logger = setup_cli_logger(run_dir)
     log_cost(run_dir, "phase4", "video_engine", "start")
     
+    # Use the SAME interpreter that is running this CLI (sys.executable), NOT a
+    # bare "python" — under an activated .venv on Windows, bare "python" can still
+    # resolve to the global interpreter (which lacks manim), silently bypassing the
+    # venv. main.py then inherits that wrong interpreter via its own sys.executable.
     cmd = [
-        "python", "main.py",
+        sys.executable, "main.py",
         "--job", str(run_dir),
         "-q", args.quality
     ]
@@ -433,7 +437,9 @@ def sync_render(args):
     logger.info(f"Invoking Video Engine: {' '.join(cmd)}")
     
     try:
-        proc = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parents[3]))
+        # autoshorts.py lives at src/cli/, so the project root (where main.py is)
+        # is parents[2] — NOT parents[3], which resolves to the drive root (C:\).
+        proc = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parents[2]))
         if proc.returncode != 0:
             raise RuntimeError(f"Engine crashed with code {proc.returncode}")
             

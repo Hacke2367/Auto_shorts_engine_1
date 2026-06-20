@@ -100,7 +100,7 @@ except Exception:
             return rec, hdr
 
 # --- SYNC HELPERS ---
-from src.sync.job import load_job
+from src.sync.job import load_job, resolve_job_csv
 from src.sync.timeline import Timeline, clamp as _tl_clamp
 from src.sfx.engine import SFXEngine
 try:
@@ -782,8 +782,9 @@ class SortCardTribunalFinal(Scene):
         except Exception:
             pass
 
-        # geo_data
-        csv_path = os.path.join(DATA_DIR, "sort_data.csv")
+        # Read THIS job's data CSV (job.json -> data_csv), not a hardcoded global
+        # file. Falls back to job_dir/data/sort_data.csv, then legacy DATA_DIR.
+        csv_path = resolve_job_csv("sort_data.csv", DATA_DIR)
         meta, df = load_csv_with_meta(csv_path)
 
         # ============================================================

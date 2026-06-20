@@ -21,6 +21,12 @@ import aiohttp
 # Ensure src is in python path if ran directly
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+# Windows consoles default stdout/stderr to cp1252, which can't encode the emoji
+# used in CLI status messages (⚠️/✅/❌) — force UTF-8 so prints don't crash with
+# UnicodeEncodeError (e.g. on the ideation-unavailable abort path). Mirrors autoshorts.py.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 from src.agents.core.config import APP_CONFIG
 from src.agents.core.job_manager import JobManager
 from src.agents.core.cost_tracker import get_session_summary
@@ -202,9 +208,26 @@ async def cmd_discover(args: argparse.Namespace) -> None:
         
     if batch.error == "ideation_unavailable":
         _print_header("DISCOVERY ABORTED — IDEATION UNAVAILABLE")
-        print("⚠️  Gemini ideation API was unavailable (likely a transient 503).")
-        print("    The run was stopped BEFORE any search/scoring spend — $0 wasted.")
-        print("    Nothing usable was produced; just re-run in a moment:\n")
+        detail = (batch.error_detail or "")
+        is_rate_limited = "429" in detail or "Too Many Requests" in detail
+        if is_rate_limited:
+            # 429 is a QUOTA / rate-limit block — re-running immediately will just
+            # hit it again. Guide the operator to the actual remedy.
+            print("⚠️  Gemini RATE-LIMITED the ideation call (HTTP 429 Too Many Requests).")
+            print("    The run was stopped BEFORE any search/scoring spend — $0 wasted.")
+            print("    This is a QUOTA limit, NOT a code bug. Re-running right away will 429 again.")
+            print("    Fix one of these, THEN re-run:")
+            print("      • Wait for the quota window to reset (per-minute clears fast; the")
+            print("        free-tier DAILY cap resets at midnight US-Pacific).")
+            print("      • Check usage/limits in Google AI Studio (aistudio.google.com).")
+            print("      • Enable billing for higher limits, or use a different GEMINI_API_KEY.\n")
+        else:
+            # Anything else (e.g. 503 / timeout) is a transient outage — safe to retry now.
+            print("⚠️  Gemini ideation API was unavailable (transient outage / 503 / timeout).")
+            print("    The run was stopped BEFORE any search/scoring spend — $0 wasted.")
+            print("    Nothing usable was produced; just re-run in a moment:\n")
+        if detail:
+            print(f"    (error detail: {detail})\n")
         print(f'      python -m src.cli.phase1 discover --niche "{args.niche}" --top-n {args.top_n}\n')
         return
 

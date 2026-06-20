@@ -38,6 +38,7 @@ from src.agents.core.models import (
     TemplateSpec,
     TEMPLATE_META_KEYS,
     TEMPLATE_PRESENTATION_FIELDS,
+    TEMPLATE_EXTRACTION_RULES,
 )
 
 
@@ -197,6 +198,7 @@ async def gemini_extract(
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
     _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
+    minimum = template_spec.capacity.min
     ideal = template_spec.capacity.ideal
     maximum = template_spec.capacity.max
 
@@ -217,8 +219,8 @@ async def gemini_extract(
         "scan_race": '{"year": "2024", "entities": {"YouTube": 2.5, "TikTok": 1.7}}',
         "geo_universal": '{"country": "India", "group": "Asia", "value": 8.5}',
         "donut_breakdown": '{"category": "Smartphones", "value": 45.2}',
-        "sort_card": '{"image": "apple_pay_logo.png", "category": "S Tier", "reason": "Unmatched performance"}',
-        "vs_card": '{"metric": "Top Speed", "p1_value": "200 mph", "p2_value": "180 mph", "winner": "p1"}',
+        "sort_card": '{"image": "apple_pay_logo.png", "category": 1, "reason": "Top performer"}',
+        "vs_card": '{"metric": "Top Speed", "p1_value": "200 mph", "p2_value": "180 mph", "winner": 1}',
     }
     example_row = schema_examples.get(template_name, '{"key": "value"}')
     _META_EXAMPLES: dict[str, str] = {
@@ -260,6 +262,16 @@ async def gemini_extract(
         _return_clause = 'Return purely a JSON object with "meta" and "rows" keys.'
         _image_clause = ""
 
+    # Template-specific renderer-contract rules — semantic VALUE constraints the
+    # bare schema example cannot convey (e.g. sort_card 'category' must be 1 or 2,
+    # vs_card 'winner' must be 0/1/2). This is the instruction gap that produced
+    # wrong-shaped data; the extraction quality gate also enforces these.
+    _rules_clause = TEMPLATE_EXTRACTION_RULES.get(template_name, "")
+    if _rules_clause:
+        _rules_clause = (
+            f"\nTEMPLATE-SPECIFIC RULES (MUST follow exactly):\n{_rules_clause}\n"
+        )
+
     full_example_payload = f"""{{
   "meta": {json.dumps(example_meta)},
   "rows": [
@@ -273,7 +285,7 @@ async def gemini_extract(
 We are building data for the visual template: {template_name}.
 The topic is: "{topic}"
 
-Try to extract {ideal} items safely without hallucinating. Do NOT exceed {maximum} items.
+ITEM COUNT (IMPORTANT): Extract EVERY valid item the sources support — aim for {ideal}, and AT LEAST {minimum}, up to a hard cap of {maximum}. Do not stop early once you have a few; scan ALL sources for every qualifying item. But NEVER invent, pad, or duplicate rows to reach the target — only include items genuinely backed by the sources. If the sources truly support fewer than {minimum}, extract only what is real (never fabricate to fill the count).
 
 OUTPUT SCHEMA CONSTRAINTS (CRITICAL)
 You MUST return a single JSON object with {_keys_clause}. The 'meta' object must contain these exact keys: {meta_keys}. Generate highly accurate, punchy YouTube Shorts titles/subtitles based directly on the topic and extracted data. Keep titles under 4 words. The 'rows' key must contain the array of extracted data objects.
@@ -282,7 +294,7 @@ Your output MUST strictly follow this exact JSON structure and data types:
 
 Notice the data types in the example. If a value is a string, keep it a string. If it is a dictionary/object, keep it flat.
 For example, in scan_race, 'entities' MUST be a flat key-value dict, NOT a list of objects.
-{_image_clause}
+{_image_clause}{_rules_clause}
 Read the following sourced Markdown texts and extract the relevant numerical/statistical data:
 """
     for idx, src in enumerate(context, 1):
@@ -386,12 +398,31 @@ Do not hallucinate data. Only extract facts found in the texts. If sources disag
                 else:
                     image_sourcing_guide = {}
 
+                # The renderer-contract integer fields ('category' tier, 'winner')
+                # are stored as STRINGS by the row models, but the LLM may emit them
+                # as JSON numbers. Coerce numeric scalars -> str so model_validate
+                # accepts them however they were emitted. VALUE validity (must be
+                # 1/2 or 0/1/2) is enforced later by validate_template_semantics.
+                _rows = parsed.get("rows", [])
+                if isinstance(_rows, list):
+                    for _row in _rows:
+                        if not isinstance(_row, dict):
+                            continue
+                        for _k in ("category", "winner"):
+                            _v = _row.get(_k)
+                            if isinstance(_v, bool):
+                                continue
+                            if isinstance(_v, int):
+                                _row[_k] = str(_v)
+                            elif isinstance(_v, float):
+                                _row[_k] = str(int(_v)) if _v.is_integer() else str(_v)
+
                 try:
                     # Validate the raw dict using our Pydantic schema
                     dataset = TemplateDataset.model_validate({
                         "template_name": template_name,
                         "meta": parsed.get("meta", {}),
-                        "rows": parsed.get("rows", []),
+                        "rows": _rows,
                         "image_sourcing_guide": image_sourcing_guide,
                     })
                 except Exception as err:

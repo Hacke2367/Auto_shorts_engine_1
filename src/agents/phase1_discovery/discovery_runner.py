@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 import tempfile
@@ -62,8 +63,8 @@ Today is {current_date}. Think about what is relevant and interesting RIGHT NOW,
 current period — do NOT anchor to specific past years out of habit.
 
 Every video renders a structured dataset into ONE of several visual formats (rankings,
-head-to-heads, breakdowns, races, mirrored comparisons, maps, countdowns). You are NOT
-limited to rankings.
+head-to-heads, breakdowns, races, mirrored comparisons, maps, two-group A/B splits). You
+are NOT limited to rankings.
 
 {niche_context}
 
@@ -314,9 +315,14 @@ async def run_discovery(
         # (e.g. repeated 503s), abort NOW — before spending any Tavily/scoring
         # budget on the 3-topic hardcoded fallback that would just be discarded
         # on the next re-run anyway.
-        # Over-provision ideas: the feasibility gate below will cull dataless
-        # ones, so ask for top_n + buffer to still fill the requested batch.
-        idea_count = top_n + APP_CONFIG.discovery_ideation_buffer
+        # Over-provision ideas: the feasibility gate below will cull dataless ones.
+        # Take the LARGER of (top_n + flat buffer) and (top_n * multiplier) so small
+        # batches keep the cheap +buffer behaviour while large batches in high-cull
+        # niches over-provision enough to still fill top_n after the gate.
+        idea_count = max(
+            top_n + APP_CONFIG.discovery_ideation_buffer,
+            math.ceil(top_n * APP_CONFIG.discovery_ideation_multiplier),
+        )
         try:
             hypotheses = await _ideate_hypotheses(
                 niche_hint, trend_context, session, log, idea_count=idea_count
@@ -332,6 +338,7 @@ async def run_discovery(
                 returned_candidate_count=0,
                 niche_hint=niche_hint,
                 error="ideation_unavailable",
+                error_detail=str(e),
             )
 
         if not hypotheses:

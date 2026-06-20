@@ -71,7 +71,7 @@ except Exception:
             scene.play(FadeOut(t1), FadeOut(t2), run_time=0.35)
 
 # --- SYNC HELPERS ---
-from src.sync.job import load_job
+from src.sync.job import load_job, resolve_job_csv
 from src.sync.timeline import Timeline, clamp as _tl_clamp
 from src.sfx.engine import SFXEngine
 try:
@@ -150,6 +150,12 @@ def load_vs_csv(csv_path: str) -> Tuple[Dict[str, str], pd.DataFrame]:
     df["Metric"] = df["Metric"].astype(str).fillna("").str.strip().str.upper()
     df["P1_Value"] = df["P1_Value"].astype(str).fillna("").str.strip()
     df["P2_Value"] = df["P2_Value"].astype(str).fillna("").str.strip()
+    # Accept BOTH the contract integers (0/1/2) and any legacy text labels
+    # (p1/p2/tie/draw) so older datasets render correctly without re-extraction.
+    _winner_map = {"p1": 1, "p2": 2, "tie": 0, "draw": 0, "0": 0, "1": 1, "2": 2}
+    df["Winner"] = df["Winner"].apply(
+        lambda x: _winner_map.get(str(x).strip().lower(), x)
+    )
     df["Winner"] = pd.to_numeric(df["Winner"], errors="coerce").fillna(0).astype(int).clip(0, 2)
 
     df["Emoji"] = df["Emoji"].astype(str).fillna("").str.strip()
@@ -791,7 +797,9 @@ class VsCardFinal(Scene):
 
         audio_timings = job_data.get("timeline", {})
 
-        csv_path = os.path.join(DATA_DIR, "vs_data.csv")
+        # Read THIS job's data CSV (job.json -> data_csv), not a hardcoded global
+        # file. Falls back to job_dir/data/vs_data.csv, then legacy DATA_DIR.
+        csv_path = resolve_job_csv("vs_data.csv", DATA_DIR)
         meta, df = load_vs_csv(csv_path)
 
         # Dynamic template segment discovery based on input rows.

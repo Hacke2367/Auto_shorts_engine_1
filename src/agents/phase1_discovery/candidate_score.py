@@ -82,17 +82,29 @@ template whose shape fits the data's NATURE.
 STEP 1 — From the evidence ONLY, state the data's nature (the data_summary).
 STEP 2 — Map that shape to a template:
    ranked numeric list (5-8)          -> bar_chart
-   countdown list with reasons         -> sort_card
+   items split into 2 named groups (A vs B) -> sort_card
    exactly 2 entities, many metrics     -> vs_card
    two GROUPS mirrored on shared rows    -> butterfly_chart
    parts of one whole (percentages)      -> donut_breakdown
    change / race over time or stages      -> scan_race
    values tied to countries               -> geo_universal
-STEP 3 — Check item count vs the template's ideal. Only 2-3 items? NOT bar_chart — use
-   vs_card (if 2) or drop visual_fit hard.
+STEP 3 — Check fit:
+   - Only 2-3 items? NOT bar_chart — use vs_card (if 2) or drop visual_fit hard.
+   - sort_card ONLY if the items genuinely split into TWO named groups on a binary axis.
+     A plain ranked list with NO 2-group split is NOT sort_card — route numeric -> bar_chart,
+     percentages -> donut_breakdown; if it fits none, drop visual_fit hard.
+STEP 4 — Faithfulness check (THE MOST IMPORTANT ROUTING RULE):
+   Use ONLY the structure the evidence LITERALLY presents. Do NOT invent groupings, splits,
+   or pairings that the sources do not already show. A ranked list of individual items
+   (cities, sectors, countries, factors) IS a ranked list -> bar_chart; do NOT bend it into
+   a 2-group template (vs_card / butterfly_chart / sort_card) just because you COULD construct
+   a grouping. The 2-group templates are valid ONLY when the evidence itself already names the
+   two groups. When two templates compete, pick the SIMPLEST shape the evidence directly
+   supports. Reframing a plain list into groups = forced fit -> visual_fit MUST be 1-3.
 
 ## Routing examples (mimic this brevity; note the variety — do NOT default to bar_chart)
 - evidence: revenues of 8 banks            -> "Ranked revenues of 8 banks" -> bar_chart
+- evidence: top 10 cities by rental yield  -> "Ranked list of 10 cities" -> bar_chart (NOT butterfly — do not invent 2 regions)
 - evidence: Visa vs Mastercard, 6 metrics  -> "1v1 of 2 networks across 6 metrics" -> vs_card
 - evidence: one budget split into 5 buckets -> "One budget split into 5 parts" -> donut_breakdown
 - evidence: adoption rate per country       -> "Values tied to ~10 countries" -> geo_universal

@@ -74,7 +74,7 @@ def _build_smart_query(topic: str, template_name: str, attempt: int = 0) -> str:
             "scan_race": f"{topic} historical data year by year timeline",
             "geo_universal": f"{topic} global distribution countries map data",
             "donut_breakdown": f"{topic} market share percentage breakdown",
-            "sort_card": f"{topic} tier list ranking categories",
+            "sort_card": f"{topic} items split into two groups comparison categories",
         }
         return base_queries.get(template_name, f"{topic} latest statistics data facts")
 
