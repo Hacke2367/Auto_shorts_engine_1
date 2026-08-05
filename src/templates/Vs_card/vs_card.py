@@ -75,12 +75,17 @@ from src.sync.job import load_job, resolve_job_csv
 from src.sync.timeline import Timeline, clamp as _tl_clamp
 from src.sfx.engine import SFXEngine
 try:
-    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_vs_card
 except Exception:
     def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
         if seconds > 0:
             scene.wait(seconds)
+    def sync_hold(scene, tl, name: str, t0: float, **kw):
+        target = float(tl.target_elapsed(name)) if hasattr(tl, "target_elapsed") else 0.0
+        wait = target - (float(scene.time) - float(t0))
+        if wait > 0:
+            scene.wait(wait)
     def register_template_accent(scene, fn):
         pass
     def retain_accent_vs_card(scene, focus, seconds, **kw):
@@ -93,7 +98,10 @@ except Exception:
 # ============================================================
 # 2) DATA LOADING (meta first line supported)
 # ============================================================
-_META_RE = re.compile(r"([A-Za-z_]+)\s*=\s*([^,]+)")
+# Keys may contain digits AFTER the first char (P1_NAME, P2_IMG, ...). The old
+# pattern `[A-Za-z_]+` stopped at the digit, so "P1_NAME" matched only "_NAME"
+# and P1/P2 names + images silently fell back to defaults.
+_META_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^,]+)")
 
 
 def load_vs_csv(csv_path: str) -> Tuple[Dict[str, str], pd.DataFrame]:
@@ -158,10 +166,13 @@ def load_vs_csv(csv_path: str) -> Tuple[Dict[str, str], pd.DataFrame]:
     )
     df["Winner"] = pd.to_numeric(df["Winner"], errors="coerce").fillna(0).astype(int).clip(0, 2)
 
-    df["Emoji"] = df["Emoji"].astype(str).fillna("").str.strip()
-    # IMPORTANT: stop "nan" leaking into UI
+    # IMPORTANT: empty CSV cells become the literal string "nan" after astype(str).
+    # Strip that for EVERY optional text column so "nan" never leaks into the UI
+    # (was only done for Notes -> Emoji/Category were showing "nan MARKET CAP" and
+    # "CATEGORY: NAN").
+    df["Emoji"] = df["Emoji"].astype(str).fillna("").replace("nan", "").replace("NAN", "").str.strip()
     df["Notes"] = df["Notes"].astype(str).fillna("").replace("nan", "").replace("NAN", "").str.strip()
-    df["Category"] = df["Category"].astype(str).fillna("").str.strip().str.upper()
+    df["Category"] = df["Category"].astype(str).fillna("").replace("nan", "").replace("NAN", "").str.strip().str.upper()
     df["Weight"] = pd.to_numeric(df["Weight"], errors="coerce").fillna(1.0)
 
     df = df[(df["Metric"] != "") & (df["Metric"].str.upper() != "NAN")].reset_index(drop=True)
@@ -818,6 +829,10 @@ class VsCardFinal(Scene):
             defaults[seg] = 4.2
 
         TL = Timeline.from_dict(audio_timings, defaults=defaults)
+        # Absolute-clock schedule: every segment gets a fixed END time on the
+        # master clock so per-segment animation overruns are absorbed at the next
+        # boundary (via sync_hold) instead of accumulating into audio↔visual drift.
+        TL.schedule(audio_order)
 
         hook_seg = audio_order[0]
         setup_seg = audio_order[1]
@@ -868,7 +883,12 @@ class VsCardFinal(Scene):
         tR = safe_text(right_title.upper(), font=FONT_DISPLAY, font_size=38, color=C_P2, weight=BOLD)
 
         vs_box = Square(side_length=0.74, color=C_GOLD, stroke_width=3).rotate(45 * DEGREES)
-        vs_txt = safe_text("VS", font="Montserrat", font_size=22, color=C_GOLD, weight=BOLD)
+        # The entrance set_opacity(1.0) fills the diamond solid gold, so a gold "VS"
+        # became invisible (gold-on-gold). Make it a deliberate gold gem with a dark
+        # high-contrast "VS" that reads whether the diamond is filled or hollow.
+        vs_box.set_fill(C_GOLD, 1.0)
+        vs_txt = safe_text("VS", font="Montserrat", font_size=24, color="#0A0A0A", weight=BOLD)
+        vs_txt.set_z_index(342)
         vs_grp = VGroup(vs_box, vs_txt)
         vs_grp.set_z_index(341)
 
@@ -1192,13 +1212,12 @@ class VsCardFinal(Scene):
         # ── HOOK budget: intro + title + the full board reveal above just played. Consume
         # the elapsed hook time and hold the REMAINING hook on the COMPLETE board (no long
         # boot-screen hold). Per-segment durations are unchanged → sync stays exact.
-        TL.consume(hook_seg, float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining(hook_seg), focus=header, text="INITIALIZING BOOT SEQUENCE")
-
-        # ── SETUP budget: hold on the fully-built board before the round loop begins.
-        setup_anchor = float(self.time)
-        TL.consume(setup_seg, float(self.time) - setup_anchor)
-        hold_breathing(self, TL.remaining(setup_seg), focus=header, text="SYSTEM STATUS: ONLINE")
+        # Anchor hook + setup ENDS to the absolute master clock. The intro + title
+        # + full board reveal can overrun the hook budget; anchoring here lets the
+        # setup slot absorb that slack so the round loop starts exactly on time
+        # (instead of holding setup's full budget on top of the overrun).
+        sync_hold(self, TL, hook_seg, global_start_t0, focus=header, text="INITIALIZING BOOT SEQUENCE")
+        sync_hold(self, TL, setup_seg, global_start_t0, focus=header, text="SYSTEM STATUS: ONLINE")
 
         # ----------------------------------------------------------------
         # ROUND LOOP
@@ -1367,9 +1386,12 @@ class VsCardFinal(Scene):
                 
                 # Reserve time for reset animation, pad remaining
                 reset_rt = 0.26
-                pad_time = max(0.0, TL.remaining(seg_name) - reset_rt)
-                
-                hold_breathing(self, pad_time, focus=win_obj["group"])
+                # Capped spotlight on the scaled winner; the segment END is anchored
+                # to the master clock below (sync_hold), so we don't pre-spend the
+                # whole remaining budget here (that used to leave the inter-round
+                # terminal_scanning() unbudgeted -> drift).
+                _rem = max(0.0, TL.target_elapsed(seg_name) - (float(self.time) - global_start_t0))
+                hold_breathing(self, clamp(_rem * 0.45, 0.0, 1.2), focus=win_obj["group"])
 
                 # PATCH #4: reset to neutral (still alive, not dull)
                 reset_t0 = float(self.time)
@@ -1384,9 +1406,9 @@ class VsCardFinal(Scene):
                     run_time=reset_rt,
                     rate_func=rf.ease_in_out_sine,
                 )
-                TL.consume(seg_name, float(self.time) - reset_t0)
-
                 terminal_scanning()
+                # Drift-free anchor: end this round exactly on the master clock.
+                sync_hold(self, TL, seg_name, global_start_t0, focus=win_obj["group"])
 
             else:
                 set_terminal_lines(
@@ -1408,9 +1430,8 @@ class VsCardFinal(Scene):
                 TL.consume(seg_name, float(self.time) - metric_t0)
                 
                 reset_rt = 0.18
-                pad_time = max(0.0, TL.remaining(seg_name) - reset_rt)
-                
-                hold_breathing(self, pad_time, focus=ann["group"])
+                _rem = max(0.0, TL.target_elapsed(seg_name) - (float(self.time) - global_start_t0))
+                hold_breathing(self, clamp(_rem * 0.40, 0.0, 1.0), focus=ann["group"])
                 
                 reset_t0 = float(self.time)
                 self.play(
@@ -1425,13 +1446,13 @@ class VsCardFinal(Scene):
                 set_status("draw confirmed | backend: ok | preparing next round…", color=C_SUB)
 
                 terminal_scanning()
-        
-        # Ghost Padding Loop 
+                # Drift-free anchor: end this round exactly on the master clock.
+                sync_hold(self, TL, seg_name, global_start_t0, focus=ann["group"])
+
+        # Ghost Padding Loop
         for ghost_i in range(len(df), len(round_segments)):
             seg_key = round_segments[ghost_i]
-            g_t0 = float(self.time)
-            TL.consume(seg_key, float(self.time) - g_t0)
-            hold_breathing(self, TL.remaining(seg_key))
+            sync_hold(self, TL, seg_key, global_start_t0)
 
         # ----------------------------------------------------------------
         # OUTRO (PATCH #5: loser truly gone + winner scale + no floating VS)
@@ -1481,12 +1502,8 @@ class VsCardFinal(Scene):
             self.play(FadeIn(draw_txt, shift=UP * 0.10), run_time=act_draw, rate_func=rf.ease_out_cubic)
             self.play(Flash(draw_txt, color=C_GOLD, line_length=0.7, num_lines=12), run_time=0.35)
             
-            TL.consume(winner_seg, float(self.time) - winner_t0)
-            hold_breathing(self, TL.remaining(winner_seg), focus=draw_txt, text="COMPILING DIAGNOSTICS")
-            
-            outro_t0 = float(self.time)
-            TL.consume(outro_seg, float(self.time) - outro_t0)
-            hold_breathing(self, TL.remaining(outro_seg), focus=draw_txt, text="SYSTEM SHUTDOWN")
+            sync_hold(self, TL, winner_seg, global_start_t0, focus=draw_txt, text="COMPILING DIAGNOSTICS")
+            sync_hold(self, TL, outro_seg, global_start_t0, focus=draw_txt, text="SYSTEM SHUTDOWN")
             
             sfx.flush()
             return
@@ -1554,13 +1571,10 @@ class VsCardFinal(Scene):
         self.play(Write(power3), run_time=act_pow * 0.45, rate_func=rf.ease_out_cubic)
         self.play(Flash(power3, color=win_color, line_length=0.70, num_lines=14), run_time=0.35)
         
-        TL.consume(winner_seg, float(self.time) - winner_t0)
-        hold_breathing(self, TL.remaining(winner_seg), focus=win["group"], text="LOCKING WINNER DATA")
-        
+        sync_hold(self, TL, winner_seg, global_start_t0, focus=win["group"], text="LOCKING WINNER DATA")
+
         # FINAL OUTRO PAD
-        outro_t0 = float(self.time)
-        TL.consume(outro_seg, float(self.time) - outro_t0)
-        hold_breathing(self, TL.remaining(outro_seg), focus=win["group"], text="SYSTEM SHUTDOWN")
+        sync_hold(self, TL, outro_seg, global_start_t0, focus=win["group"], text="SYSTEM SHUTDOWN")
 
         for seg in round_segments:
             _ = TL.remaining(seg) 

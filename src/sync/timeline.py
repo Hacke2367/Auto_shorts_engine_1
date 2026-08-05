@@ -85,3 +85,27 @@ class Timeline:
         rem = self.remaining(name)
         self.consume(name, rem)
         return rem
+
+    # ------------------------------------------------------------------
+    # Absolute-clock anchoring (drift-free sync)
+    # ------------------------------------------------------------------
+    # The per-segment consume()/remaining() pattern drifts when a template plays
+    # animations that escape its accounting (intros, inter-segment transitions):
+    # those add wall-time that no segment budgets, so the visual falls behind the
+    # audio cumulatively. schedule() + target_elapsed() let a scene anchor each
+    # segment's END to an ABSOLUTE time on the master clock, so any overrun is
+    # absorbed at the next boundary instead of accumulating.
+    def schedule(self, order: list[str]) -> None:
+        """Precompute the absolute end-time (seconds since scene start) of every
+        segment, in play order. Call once after from_dict()."""
+        cum: Dict[str, float] = {}
+        acc = 0.0
+        for n in order:
+            acc += self.seg_total(str(n), 0.0)
+            cum[str(n)] = acc
+        self._cum_end = cum
+
+    def target_elapsed(self, name: str) -> float:
+        """Absolute elapsed time (since scene start) at which `name` should END.
+        Requires schedule() to have been called; 0.0 if unknown."""
+        return float(getattr(self, "_cum_end", {}).get(str(name), 0.0))

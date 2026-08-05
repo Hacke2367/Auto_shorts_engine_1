@@ -207,7 +207,9 @@ def _load_butterfly_df(csv_path: str) -> pd.DataFrame:
     df["P1_Value"] = pd.to_numeric(df["P1_Value"], errors="coerce").fillna(0.0)
     df["P2_Value"] = pd.to_numeric(df["P2_Value"], errors="coerce").fillna(0.0)
 
-    df = df[df["Attribute"].astype(str).str.len() > 0]
+    # Drop blank AND "nan"/"none" attributes. Attribute is uppercased above, so an
+    # empty cell becomes "NAN" (length 3) and would slip through a bare length filter.
+    df = df[(df["Attribute"].str.len() > 0) & (~df["Attribute"].isin(["NAN", "NONE"]))]
     df = df.reset_index(drop=True)
     return df
 

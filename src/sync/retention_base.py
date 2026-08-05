@@ -377,6 +377,37 @@ def hold_breathing(
 
 
 # -----------------------------------------------------------------------
+# PUBLIC: sync_hold  (drift-free absolute-clock segment anchor)
+# -----------------------------------------------------------------------
+
+def sync_hold(
+    scene: Scene,
+    tl,
+    name: str,
+    t0: float,
+    **hold_kwargs,
+) -> None:
+    """Hold (with the usual breathing visuals) until the absolute scene clock
+    reaches segment ``name``'s scheduled end.
+
+    This is the drift-free replacement for ``hold_breathing(scene, tl.remaining(name))``
+    at a segment boundary. Because it targets an ABSOLUTE time (``tl.target_elapsed``
+    measured from ``t0`` = the scene-start timestamp), any animation that overran
+    earlier in the segment is simply absorbed here instead of pushing every later
+    segment late. Requires ``tl.schedule(order)`` to have been called.
+
+    If the segment already overran its slot (no time left), it waits 0 — the next
+    segment's anchor re-syncs, so drift never accumulates.
+    """
+    try:
+        target = float(tl.target_elapsed(name))
+    except Exception:
+        target = 0.0
+    elapsed = float(scene.time) - float(t0)
+    hold_breathing(scene, max(0.0, target - elapsed), **hold_kwargs)
+
+
+# -----------------------------------------------------------------------
 # PUBLIC: banner_scan_hold  (unchanged from original)
 # -----------------------------------------------------------------------
 

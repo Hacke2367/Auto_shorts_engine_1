@@ -59,7 +59,7 @@ from pathlib import Path
 # --- SYNC HELPERS (direct imports, NO try/except) ---
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp as _tl_clamp
-from src.sync.retention import hold_breathing, banner_scan_hold
+from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold
 from src.sfx.engine import SFXEngine
 
 # ============================================================
@@ -1175,7 +1175,9 @@ class DonutBreakdownFinal(Scene):
             defaults[seg] = 2.2
         
         TL = Timeline.from_dict(timeline_dict, defaults=defaults)
-        
+        # Absolute-clock schedule -> drift-free segment anchoring via sync_hold.
+        TL.schedule(_audio_order if _audio_order else (["hook", "setup"] + list(_all_slice_segs) + ["winner", "outro"]))
+
         # Audio starts for hook
         hook_t0 = global_start_t0
 
@@ -1188,8 +1190,7 @@ class DonutBreakdownFinal(Scene):
             if sub_text:
                 self.play(FadeIn(sub, shift=UP * 0.06), run_time=clamp(t_h * 0.25, 0.10, 0.35), rate_func=rf.ease_out_cubic)
             
-            TL.consume("hook", float(self.time) - hook_t0)
-            hold_breathing(self, TL.remaining("hook"), focus=title)
+            sync_hold(self, TL, "hook", global_start_t0, focus=title)
             return
 
         # Percent + ranks
@@ -1465,13 +1466,10 @@ class DonutBreakdownFinal(Scene):
         # ── HOOK budget: the intro + the title/donut reveal above just played. Consume
         # the elapsed hook time and hold the REMAINING hook on the FULL donut (no more
         # ~8s blank boot screen). Per-segment durations are unchanged → sync stays exact.
-        TL.consume("hook", float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining("hook"), focus=master_ring, text="ANALYZING BREAKDOWN")
-
-        # ── SETUP budget: hold on the fully-revealed donut before the slice story begins.
-        setup_anchor = float(self.time)
-        TL.consume("setup", float(self.time) - setup_anchor)
-        hold_breathing(self, TL.remaining("setup"), focus=master_ring, text="CALIBRATING SLICES")
+        # Anchor hook + setup ENDS to the absolute master clock so the reveal time
+        # can't push the slice story out of sync (setup slot absorbs hook overrun).
+        sync_hold(self, TL, "hook", global_start_t0, focus=master_ring, text="ANALYZING BREAKDOWN")
+        sync_hold(self, TL, "setup", global_start_t0, focus=master_ring, text="CALIBRATING SLICES")
 
         # Story loop
         scan_t = ValueTracker(0.0)
@@ -1570,9 +1568,11 @@ class DonutBreakdownFinal(Scene):
                 rate_func=rf.ease_out_cubic,
             )
 
-            # ✅ FIX: Delta time implementation replaces additive math
-            TL.consume(seg_key, float(self.time) - slice_t0)
-            hold_breathing(self, TL.remaining(seg_key), focus=chip)
+            # Capped pop-hold; the slice END is anchored to the master clock after
+            # the exit animation below (sync_hold), so the exit stays budgeted
+            # (previously it ran after the full-budget hold -> drift).
+            _rem = max(0.0, TL.target_elapsed(seg_key) - (float(self.time) - global_start_t0))
+            hold_breathing(self, _tl_clamp(_rem * 0.5, 0.0, 1.2), focus=chip)
 
             # Anchor for exit animations
             exit_t0 = float(self.time)
@@ -1624,12 +1624,14 @@ class DonutBreakdownFinal(Scene):
                 # ✅ FIX: Delta time
                 TL.consume(seg_key, float(self.time) - exit_t0)
 
+            # Drift-free anchor: end this slice exactly on the master clock
+            # (covers both the pop-hold and the exit animation).
+            sync_hold(self, TL, seg_key, global_start_t0, focus=chip)
+
         # Ghost Padding Loop — current audio-sync logic: absorb EVERY audio.order
         # slice_* segment beyond the actual data count (not a hardcoded range(.., 16)).
         for ghost_i in range(n, len(_all_slice_segs)):
-            g_t0 = float(self.time)
-            TL.consume(_all_slice_segs[ghost_i], float(self.time) - g_t0)
-            hold_breathing(self, TL.remaining(_all_slice_segs[ghost_i]))
+            sync_hold(self, TL, _all_slice_segs[ghost_i], global_start_t0)
 
         # Final leader
         win_t0 = float(self.time)
@@ -1646,13 +1648,10 @@ class DonutBreakdownFinal(Scene):
         sfx.mark("winner_sting", offset=0.0, meta={"at": "winner_announce"})
         self.play(Transform(commentary, leader), run_time=clamp(t_win * 0.25, 0.40, 0.90), rate_func=rf.ease_out_cubic)
 
-        TL.consume("winner", float(self.time) - win_t0)
-        hold_breathing(self, TL.remaining("winner"), focus=commentary)
-        
+        sync_hold(self, TL, "winner", global_start_t0, focus=commentary)
+
         # Outro padding
-        outro_t0 = float(self.time)
-        TL.consume("outro", float(self.time) - outro_t0)
-        hold_breathing(self, TL.remaining("outro"))
+        sync_hold(self, TL, "outro", global_start_t0)
         
         # Write marks to disk
         sfx.flush()

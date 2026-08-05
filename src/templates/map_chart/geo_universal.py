@@ -19,12 +19,17 @@ from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp
 from src.sfx.engine import SFXEngine
 try:
-    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_geo
 except Exception:
     def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
         if seconds > 0:
             scene.wait(seconds)
+    def sync_hold(scene, tl, name, t0, **kw):
+        target = float(tl.target_elapsed(name)) if hasattr(tl, "target_elapsed") else 0.0
+        wait = target - (float(scene.time) - float(t0))
+        if wait > 0:
+            scene.wait(wait)
     def register_template_accent(scene, fn):
         pass
     def retain_accent_geo(scene, focus, seconds, **kw):
@@ -173,6 +178,8 @@ class GeoUniversalMap(Scene):
         hook_seg, setup_seg, node_segments, winner_seg, outro_seg = _extract_geo_segments(job, audio_order=audio_order)
         timeline_src = job.get("timeline", {}) if isinstance(job.get("timeline"), dict) else {}
         TL = Timeline.from_dict(timeline_src, defaults=_timeline_defaults(hook_seg, setup_seg, node_segments, winner_seg, outro_seg))
+        # Absolute-clock schedule -> drift-free segment anchoring via sync_hold.
+        TL.schedule(audio_order)
 
         sfx = SFXEngine(self, str(job_dir) if job_dir else str(Path.cwd()))
 
@@ -286,7 +293,11 @@ class GeoUniversalMap(Scene):
             df["Value"] = np.nan
 
         df["Country"] = df["Country"].astype(str).str.strip()
-        df["Group"] = df["Group"].astype(str).str.strip()
+        # Empty Group cells become the literal "nan" via astype(str); coerce them
+        # to "Global" so no "nan" alliance leaks into the map/legend.
+        df["Group"] = df["Group"].astype(str).str.strip().replace(
+            {"nan": "Global", "NAN": "Global", "None": "Global", "": "Global"}
+        )
 
         df = df[df["Country"].isin(COORDINATES.keys())].copy()
         df = df.head(max_items).reset_index(drop=True)
@@ -718,9 +729,8 @@ class GeoUniversalMap(Scene):
             rate_func=rf.there_and_back,
         )
         
-        # ✅ FIX: Delta Time Hook
-        TL.consume(hook_seg, float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining(hook_seg), focus=ticker_bg, text="SYNCING INTRO")
+        # Drift-free anchor: end hook exactly on the master clock.
+        sync_hold(self, TL, hook_seg, global_start_t0, focus=ticker_bg, text="SYNCING INTRO")
 
         # =====================================================
         # ✅ STEP 2: DATA REVEAL
@@ -737,9 +747,8 @@ class GeoUniversalMap(Scene):
             rate_func=rf.ease_out_cubic,
         )
         
-        # ✅ FIX: Delta Time Setup
-        TL.consume(setup_seg, float(self.time) - setup_t0)
-        hold_breathing(self, TL.remaining(setup_seg), focus=world, text="CALIBRATING MAP FEED")
+        # Drift-free anchor: end setup exactly on the master clock.
+        sync_hold(self, TL, setup_seg, global_start_t0, focus=world, text="CALIBRATING MAP FEED")
 
         for i, (dot, ln, card, (cname, gname, col)) in enumerate(zip(all_dots, all_lines, all_cards, meta_items), start=1):
             seg_name = node_segments[i - 1] if i - 1 < len(node_segments) else f"node_{i}"
@@ -799,9 +808,8 @@ class GeoUniversalMap(Scene):
             except Exception:
                 pass
 
-            # ✅ FIX: Delta Time Node
-            TL.consume(seg_name, float(self.time) - node_t0)
-            hold_breathing(self, TL.remaining(seg_name), focus=card, text="PROCESSING NODE DATA")
+            # Drift-free anchor: end this node exactly on the master clock.
+            sync_hold(self, TL, seg_name, global_start_t0, focus=card, text="PROCESSING NODE DATA")
 
         # =====================================================
         # ✅ CRITICAL FIX 2: GHOST PADDING
@@ -809,9 +817,7 @@ class GeoUniversalMap(Scene):
         # Absorb the unused audio segments (e.g., node_4 to node_8) if CSV data is shorter than audio.
         for ghost_i in range(len(all_dots) + 1, len(node_segments) + 1):
             ghost_seg = node_segments[ghost_i - 1]
-            g_t0 = float(self.time)
-            TL.consume(ghost_seg, float(self.time) - g_t0)
-            hold_breathing(self, TL.remaining(ghost_seg), focus=world, text="AWAITING SIGNAL...")
+            sync_hold(self, TL, ghost_seg, global_start_t0, focus=world, text="AWAITING SIGNAL...")
 
         # =====================================================
         # ✅ STEP 3: ALLIANCE TRAFFIC / ENDING + WINNER
@@ -965,9 +971,8 @@ class GeoUniversalMap(Scene):
                     pass
                 self.play(winner.animate.scale(1.00), run_time=0.15)
                 
-        # ✅ FIX: Delta Time Winner
-        TL.consume(winner_seg, float(self.time) - winner_t0)
-        hold_breathing(self, TL.remaining(winner_seg), focus=ticker_bg, text="LOCKING WINNER SIGNAL")
+        # Drift-free anchor: end winner exactly on the master clock.
+        sync_hold(self, TL, winner_seg, global_start_t0, focus=ticker_bg, text="LOCKING WINNER SIGNAL")
 
         # OUTRO
         outro_t0 = float(self.time)
@@ -979,9 +984,8 @@ class GeoUniversalMap(Scene):
             rate_func=rf.there_and_back,
         )
 
-        # ✅ FIX: Delta Time Outro
-        TL.consume(outro_seg, float(self.time) - outro_t0)
-        hold_breathing(self, TL.remaining(outro_seg), focus=ticker_bg, text="FINALIZING MAP OUTPUT")
+        # Drift-free anchor: end outro exactly on the master clock.
+        sync_hold(self, TL, outro_seg, global_start_t0, focus=ticker_bg, text="FINALIZING MAP OUTPUT")
 
         try:
             live_dot.remove_updater(_pulse)

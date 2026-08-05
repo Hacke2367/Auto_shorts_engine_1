@@ -728,12 +728,17 @@ from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp
 from src.sfx.engine import SFXEngine
 try:
-    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_bar_chart
 except Exception:
     def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
         if seconds > 0:
             scene.wait(seconds)
+    def sync_hold(scene, tl, name, t0, **kw):
+        target = float(tl.target_elapsed(name)) if hasattr(tl, "target_elapsed") else 0.0
+        wait = target - (float(scene.time) - float(t0))
+        if wait > 0:
+            scene.wait(wait)
     def banner_scan_hold(scene, banner, seconds: float, color=None):
         if seconds > 0:
             scene.wait(seconds)
@@ -745,7 +750,10 @@ except Exception:
 # ============================================================
 # CSV loader with optional META line
 # ============================================================
-_META_RE = re.compile(r"([A-Za-z_]+)\s*=\s*([^,]+)")
+# Keys may contain digits after the first char; `[A-Za-z_]+` would stop at a
+# digit. Harmless superset for the digit-free keys bar_chart uses today, kept
+# consistent with the vs_card/sort_card fix.
+_META_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^,]+)")
 
 def load_ai_stats_csv(csv_path: str):
     meta = {}
@@ -934,6 +942,8 @@ class BarChartTemplate(Scene):
             if seg not in defaults:
                 defaults[seg] = 2.0
         TL = Timeline.from_dict(timeline_dict, defaults=defaults)
+        # Absolute-clock schedule -> drift-free segment anchoring via sync_hold.
+        TL.schedule(_audio_order if _audio_order else (["hook", "setup"] + list(_item_segs_audio) + ["winner", "outro"]))
 
         # ============================================================
         # 1) INTRO
@@ -1070,8 +1080,8 @@ class BarChartTemplate(Scene):
             FadeIn(subtitle, shift=UP * 0.2, run_time=rt_sub),
         )
         
-        TL.consume("hook", float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining("hook"), focus=underline_core)
+        # Drift-free anchor: end hook exactly on the master clock.
+        sync_hold(self, TL, "hook", global_start_t0, focus=underline_core)
 
         # ============================================================
         # 6) LAYOUT
@@ -1155,8 +1165,8 @@ class BarChartTemplate(Scene):
         sfx.mark("scan_tick", gain_db=-16, meta={"at": "setup_guides"})
         self.play(Create(guide_group, run_time=clamp(setup_action * 0.75, 0.55, 1.05), lag_ratio=0.08))
         
-        TL.consume("setup", float(self.time) - setup_t0)
-        hold_breathing(self, TL.remaining("setup"), focus=rail)
+        # Drift-free anchor: end setup exactly on the master clock.
+        sync_hold(self, TL, "setup", global_start_t0, focus=rail)
 
         # ============================================================
         # 7) BAR ENGINE (item_1 ... item_n)
@@ -1354,8 +1364,8 @@ class BarChartTemplate(Scene):
             if settle_rt > 0.02:
                 _micro_settle(self, [final_bar, val_pill, val_num], settle_rt)
 
-            TL.consume(seg, float(self.time) - item_t0)
-            hold_breathing(self, TL.remaining(seg), focus=final_bar)
+            # Drift-free anchor: end this item exactly on the master clock.
+            sync_hold(self, TL, seg, global_start_t0, focus=final_bar)
 
             bar_groups.append(
                 VGroup(branch, bolt, rank_bg, rank_num, label_group, container, final_bar, sheen, val_pill, val_num)
@@ -1366,9 +1376,7 @@ class BarChartTemplate(Scene):
         _ghost_cap = max(len(_item_segs_audio), num_items)
         for ghost_i in range(num_items, _ghost_cap):
             seg_key = f"item_{ghost_i+1}"
-            g_t0 = float(self.time)
-            TL.consume(seg_key, float(self.time) - g_t0)
-            hold_breathing(self, TL.remaining(seg_key))
+            sync_hold(self, TL, seg_key, global_start_t0)
 
         # ============================================================
         # 8) WINNER REVEAL
@@ -1415,6 +1423,16 @@ class BarChartTemplate(Scene):
             dimmer.set_z_index(180)
             self.add(dimmer)
 
+            # Keep every bar's value number readable at the end. The bars stay
+            # dimmed for the winner spotlight, but the numbers (val_pill=8,
+            # val_num=9) were sinking under the dimmer (z=180) and the 0.20
+            # group-dim — making them invisible. Lift + un-dim just the numbers.
+            for _bg in bar_groups:
+                _bg[8].set_opacity(1.0)
+                _bg[8].set_z_index(190)
+                _bg[9].set_opacity(1.0)
+                _bg[9].set_z_index(191)
+
             t_focus = clamp(winner_total * 0.22, 0.35, 0.60)
             self.play(
                 winner.animate.set_opacity(1.0),
@@ -1439,8 +1457,9 @@ class BarChartTemplate(Scene):
                 run_time=t_flash,
             )
 
-            TL.consume(winner_seg, float(self.time) - winner_t0)
-            banner_scan_hold(self, banner, TL.remaining(winner_seg), color=WHITE)
+            # Drift-free anchor (keep the banner scanline): end winner on the master clock.
+            _rem = max(0.0, TL.target_elapsed(winner_seg) - (float(self.time) - global_start_t0))
+            banner_scan_hold(self, banner, _rem, color=WHITE)
 
         # ============================================================
         # OUTRO
@@ -1469,14 +1488,15 @@ class BarChartTemplate(Scene):
             self.play(AnimationGroup(*pulses, lag_ratio=0.12), run_time=max(0.20, outro_action - min(0.22, outro_action * 0.35)), rate_func=rf.ease_out_cubic)
             self.play(FadeOut(tag_group, shift=UP * 0.10), run_time=0.18, rate_func=rf.ease_in_cubic)
 
-        TL.consume("outro", float(self.time) - outro_t0)
+        # Drift-free anchor: end outro on the master clock (keep banner scanline if present).
+        _rem_o = max(0.0, TL.target_elapsed("outro") - (float(self.time) - global_start_t0))
         try:
             if banner is not None:
-                banner_scan_hold(self, banner, TL.remaining("outro"), color=WHITE)
+                banner_scan_hold(self, banner, _rem_o, color=WHITE)
             else:
-                hold_breathing(self, TL.remaining("outro"), focus=underline_core)
+                hold_breathing(self, _rem_o, focus=underline_core)
         except Exception:
-            hold_breathing(self, TL.remaining("outro"), focus=underline_core)
+            hold_breathing(self, _rem_o, focus=underline_core)
 
         # ✅ MOST IMPORTANT: write marks JSON so main.py can mix SFX
         sfx.flush()

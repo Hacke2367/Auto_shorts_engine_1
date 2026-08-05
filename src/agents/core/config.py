@@ -220,6 +220,20 @@ class TTSConfig(BaseModel):
     output_format: str = Field(default="mp3_44100_128", description="ElevenLabs output_format string.")
     concurrency_limit: int = Field(default=3, ge=1, description="Bounded concurrency for synthesis.")
 
+    # --- Voice delivery (ElevenLabs voice_settings) ---------------------------
+    # Previously NOTHING was sent, so every render fell back to whatever the voice
+    # had saved in the ElevenLabs library — uncontrolled prosody/pacing. These are
+    # tuned for natural, punchy Hinglish narration; override per-run if needed.
+    stability: float = Field(default=0.45, ge=0.0, le=1.0,
+                             description="Lower=more expressive, higher=more monotone. ~0.45 = natural.")
+    similarity_boost: float = Field(default=0.75, ge=0.0, le=1.0,
+                                    description="How closely to match the original voice identity.")
+    style: float = Field(default=0.0, ge=0.0, le=1.0,
+                         description="Style exaggeration. Keep low for multilingual_v2 (high adds artifacts/long pauses).")
+    speaker_boost: bool = Field(default=True, description="ElevenLabs use_speaker_boost (clarity).")
+    speed: float = Field(default=1.0, ge=0.7, le=1.2,
+                         description="Playback speed sent to ElevenLabs (1.0 = native; >1 = punchier).")
+
 
 class AppConfig(BaseModel):
     """Top-level operational config hub."""

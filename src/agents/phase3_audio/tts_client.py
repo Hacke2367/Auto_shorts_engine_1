@@ -100,6 +100,8 @@ async def synthesize(
         voice_settings["style"] = tts_settings.style
     if tts_settings.speaker_boost is not None:
         voice_settings["use_speaker_boost"] = tts_settings.speaker_boost
+    if tts_settings.speed is not None:
+        voice_settings["speed"] = tts_settings.speed
 
     if voice_settings:
         payload["voice_settings"] = voice_settings

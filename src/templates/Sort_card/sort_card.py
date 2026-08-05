@@ -122,7 +122,9 @@ except Exception:
 # ============================================================
 # HELPERS
 # ============================================================
-_META_RE = re.compile(r"([A-Za-z_]+)\s*=\s*([^,]+)")
+# Keys may contain digits after the first char (e.g. GROUP1_NAME). `[A-Za-z_]+`
+# would stop at the digit; this keeps such keys intact (matches the vs_card fix).
+_META_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^,]+)")
 
 
 def safe_text(
@@ -187,8 +189,13 @@ def load_csv_with_meta(csv_path: str) -> Tuple[Dict[str, str], pd.DataFrame]:
             return 2
 
     df["Category"] = df["Category"].apply(_cat)
-    df["Reason"] = df["Reason"].astype(str).fillna("UNKNOWN")
-    df["Image"] = df["Image"].astype(str).fillna("")
+    # astype(str) turns NaN into the literal "nan" BEFORE fillna runs, so the
+    # fillna default never applied -> empty cells showed "nan" (Reason text) or
+    # tried to load assets/images/nan (Image). Strip "nan" explicitly.
+    df["Reason"] = df["Reason"].astype(str).str.strip().replace(
+        {"nan": "UNKNOWN", "NAN": "UNKNOWN", "": "UNKNOWN"}
+    )
+    df["Image"] = df["Image"].astype(str).str.strip().replace({"nan": "", "NAN": ""})
     return meta, df
 
 
@@ -643,6 +650,71 @@ def build_container(center: np.ndarray, accent: str, label: str) -> Dict[str, Mo
         "tab": tab,
         "lbl": lbl,
     }
+
+
+# ============================================================
+# SMART IMAGE RESOLVER (CSV Image -> assets/images)
+# ============================================================
+def resolve_card_image_path(img_filename: str) -> str:
+    """Smart resolver for assets/images (mirrors the vs_card resolver, minus the
+    positional fallback which makes no sense for an N-card sort):
+      1. exact match
+      2. same basename with a different common extension (python.png -> python.jpg)
+      3. case-insensitive exact match
+      4. fuzzy basename "contains" match
+    Returns "" when nothing matches so the card falls back to its letter glyph
+    (instead of trying to load a missing/wrong-extension file).
+    """
+    if not img_filename:
+        return ""
+    images_dir = os.path.join(ASSETS_DIR, "images")
+    if not os.path.isdir(images_dir):
+        return ""
+
+    def exists(p: str) -> bool:
+        try:
+            return bool(p) and os.path.exists(p)
+        except Exception:
+            return False
+
+    # 1) exact
+    p = os.path.join(images_dir, img_filename)
+    if exists(p):
+        return p
+
+    base, _ext = os.path.splitext(img_filename)
+
+    # 2) same basename + common extensions
+    if base:
+        for e in (".png", ".jpg", ".jpeg", ".webp"):
+            p2 = os.path.join(images_dir, base + e)
+            if exists(p2):
+                return p2
+
+    # 3) case-insensitive exact match
+    low = img_filename.lower()
+    try:
+        for fn in os.listdir(images_dir):
+            if fn.lower() == low:
+                p3 = os.path.join(images_dir, fn)
+                if exists(p3):
+                    return p3
+    except Exception:
+        pass
+
+    # 4) fuzzy contains match (basename)
+    lowb = base.lower().strip() if base else ""
+    if lowb:
+        try:
+            for fn in os.listdir(images_dir):
+                if lowb in fn.lower():
+                    p4 = os.path.join(images_dir, fn)
+                    if exists(p4):
+                        return p4
+        except Exception:
+            pass
+
+    return ""
 
 
 # ============================================================
@@ -1135,7 +1207,7 @@ class SortCardTribunalFinal(Scene):
             accent = Theme.NEON_BLUE if is_left else Theme.NEON_PINK
             bin_ref = left_bin if is_left else right_bin
 
-            img_path = os.path.join(ASSETS_DIR, "images", img_name)
+            img_path = resolve_card_image_path(img_name)
             fallback_label = img_name.split(".")[0] if img_name else "X"
 
             # Create card

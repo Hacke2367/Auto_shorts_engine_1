@@ -287,13 +287,23 @@ async def async_phase3(args):
     v_id = "OFFLINE" if args.offline else args.voice_id
     m_id = "OFFLINE" if args.offline else args.model_id
         
-    # Extensible TTS Settings
+    # Extensible TTS Settings.
+    # Voice delivery params come from config.py (APP_CONFIG.tts) — previously they
+    # were omitted entirely, so ElevenLabs used the voice's saved defaults and the
+    # delivery was uncontrolled (flat/slow with long pauses). Offline mode leaves
+    # them None so the synthetic tone wrapper is unaffected.
+    _tts = APP_CONFIG.tts
     tts_settings = AudioSynthesisSettings(
         provider="elevenlabs",
         voice_id=v_id,
         model_id=m_id,
         output_format=args.output_format,
-        concurrency_limit=args.concurrency
+        concurrency_limit=args.concurrency,
+        stability=None if args.offline else _tts.stability,
+        similarity_boost=None if args.offline else _tts.similarity_boost,
+        style=None if args.offline else _tts.style,
+        speaker_boost=None if args.offline else _tts.speaker_boost,
+        speed=None if args.offline else _tts.speed,
     )
     
     try:
