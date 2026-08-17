@@ -1,32 +1,30 @@
 """
 AutoShorts Phase 2 Scripting — LLM Writer
 ==========================================
-Coordinates the construction of system & user prompts, interacts with
-the Gemini API to fetch the script monologue, and implements the
-structural/length retry rules.
+Coordinates the construction of system & user prompts, calls the LLM to fetch
+the script monologue, and implements the structural/length retry rules.
+
+Output is XML, not JSON — deliberately. Structured Outputs could guarantee the
+exact tags in the exact order, but models write measurably differently inside
+JSON string values (flatter register, escaped quotes, less rhythm), and the
+voice IS the product.
 """
 
 import asyncio
 import json
 import logging
 import re
-import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 import aiohttp
-from tenacity import (
-    AsyncRetrying,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
+from tenacity import AsyncRetrying
 
-from src.agents.core.config import settings, APP_CONFIG, PhaseModel
+from src.agents.core.config import APP_CONFIG, PhaseModel
+from src.agents.core.llm_client import call_llm
+from src.agents.core.llm_errors import LLMError
 from src.agents.core.retry import standard_retry_policy, rate_limit_retry_policy
 from src.agents.core.job_manager import PROJECT_ROOT
-from src.agents.core.logger import log_api_call
-from src.agents.core.cost_tracker import track_gemini_call, track_rate_limit_hit
 from src.agents.core.models import TemplateDataset
 from src.agents.phase2_scripting.contracts import (
     ParsedSegment,
@@ -67,18 +65,13 @@ def _approx_words(chars: int) -> int:
     return max(1, round(chars / _CHARS_PER_WORD))
 
 
-class GeminiRateLimitError(Exception):
-    """Raised when Gemini returns HTTP 429 Too Many Requests."""
-    pass
-
-
 def _get_retry_policy() -> AsyncRetrying:
     """Patient transient-error retry for the Phase 2 monologue calls.
 
-    Phase 2 fires several sequential Gemini calls (draft + rewrites + doctor); a
+    Phase 2 fires several sequential LLM calls (draft + rewrites + doctor); a
     transient 503 burst on any one used to kill the whole phase under the default
     3-attempt profile. Use the patient ``scripting_*`` profile (mirrors Phase 1
-    extraction) so short Gemini blips are ridden out instead of failing the run.
+    extraction) so short provider blips are ridden out instead of failing the run.
     """
     rc = APP_CONFIG.retry
     return standard_retry_policy(
@@ -90,7 +83,7 @@ def _get_retry_policy() -> AsyncRetrying:
 
 def _get_429_retry_policy() -> AsyncRetrying:
     """Strict 429-aware retry (config-driven, see APP_CONFIG.retry)."""
-    return rate_limit_retry_policy(exceptions=(GeminiRateLimitError,))
+    return rate_limit_retry_policy()
 
 
 def _load_text(path: Path) -> str:
@@ -263,76 +256,41 @@ Output format example:
 """
 
 
-async def _call_gemini(
+async def _call_llm(
     system_prompt: str,
     user_prompt: str,
     session: aiohttp.ClientSession,
     log: logging.Logger,
     phase_model: PhaseModel,
     cost_phase: str,
+    cache_key: str | None = None,
 ) -> str:
-    key = settings.gemini_api_key.get_secret_value()
-    cfg = phase_model
-    model_name = cfg.model
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model_name}:generateContent"
-    )
-    _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+    """Phase 2's LLM entry point.
 
-    gen_config: dict = {"temperature": cfg.temperature}
-    if cfg.max_output_tokens is not None:
-        gen_config["maxOutputTokens"] = cfg.max_output_tokens
-    if cfg.thinking_budget is not None:
-        # Cap (or disable, budget=0 on Flash) the reasoning tokens billed at the output rate.
-        gen_config["thinkingConfig"] = {"thinkingBudget": cfg.thinking_budget}
-
-    payload = {
-        "system_instruction": {"parts": [{"text": system_prompt}]},
-        "contents": [{"parts": [{"text": user_prompt}]}],
-        "generationConfig": gen_config,
-    }
-
-    async for rate_attempt in _get_429_retry_policy():
-        with rate_attempt:
-            async for attempt in _get_retry_policy():
-                with attempt:
-                    t0 = time.perf_counter()
-                    async with session.post(url, json=payload, headers=_gemini_headers) as resp:
-                        elapsed = (time.perf_counter() - t0) * 1000
-                        log_api_call(
-                            log,
-                            service="gemini.monologue",
-                            status_code=resp.status,
-                            retry_count=attempt.retry_state.attempt_number - 1,
-                            duration_ms=elapsed,
-                        )
-
-                        if resp.status == 429:
-                            log.warning("Gemini 429 rate limit hit. Backing off.")
-                            track_rate_limit_hit()
-                            raise GeminiRateLimitError("429 rate limit hit")
-
-                        resp.raise_for_status()
-                        data = await resp.json()
-
-                        usage = data.get("usageMetadata", {})
-                        track_gemini_call(
-                            phase=cost_phase,
-                            model=model_name,
-                            prompt_tokens=usage.get("promptTokenCount", 0),
-                            output_tokens=usage.get("candidatesTokenCount", 0),
-                            thinking_tokens=usage.get("thoughtsTokenCount", 0),
-                        )
-
-                        try:
-                            return data["candidates"][0]["content"]["parts"][0]["text"]
-                        except (KeyError, IndexError):
-                            raise ScriptGenerationError(
-                                f"Malformed Gemini response structure: {str(data)[:300]}"
-                            )
-
-    raise ScriptGenerationError("Gemini call failed after retries.")
+    Binds the patient ``scripting_*`` retry profile plus the 429 policy, and
+    funnels every provider-level failure into ``ScriptGenerationError`` — which
+    is the exception the whole repair/regeneration machinery above is written
+    against. Transport errors still propagate untouched to the retry policy.
+    """
+    try:
+        return await call_llm(
+            system_prompt,
+            user_prompt,
+            session,
+            log,
+            phase_model,
+            cost_phase,
+            retry_policy=_get_retry_policy,
+            rate_limit_policy=_get_429_retry_policy,
+            service_tag="llm.monologue",
+            # The ~3.5K-token persona system prompt is byte-identical across the
+            # draft, every rewrite round and the doctor (~5 calls/run), so the
+            # cache prefix is reused at ~10% of the input rate. The key only
+            # improves routing consistency; caching itself is automatic.
+            cache_key=cache_key,
+        )
+    except LLMError as exc:
+        raise ScriptGenerationError(f"{cost_phase} call failed: {exc}") from exc
 
 
 def _get_failing_segments(
@@ -378,9 +336,10 @@ async def _run_rewrite_loop(
         )
 
         user_prompt_rewrite = _build_rewrite_prompt(current_failing, dataset, plan)
-        raw_output = await _call_gemini(
+        raw_output = await _call_llm(
             system_prompt, user_prompt_rewrite, session, log,
             APP_CONFIG.llm.scripting_rewrite, "scripting_rewrite",
+            cache_key=f"as-p2-{plan.persona_id}",
         )
 
         # Extract only the rewritten tags
@@ -521,9 +480,10 @@ async def _run_script_doctor(
     user_prompt = _build_doctor_prompt(ordered, plan, dataset)
 
     try:
-        raw_output = await _call_gemini(
+        raw_output = await _call_llm(
             system_prompt, user_prompt, session, log,
             APP_CONFIG.llm.scripting_doctor, "scripting_doctor",
+            cache_key=f"as-p2-{plan.persona_id}",
         )
     except ScriptGenerationError as e:
         log.warning("Script-doctor call failed (%s). Keeping pre-doctor script.", e)
@@ -593,9 +553,10 @@ async def write_script(
             "--- Full Monologue Generation (Attempt %d/%d) ---",
             attempt + 1, max_full_retries + 1,
         )
-        raw_output = await _call_gemini(
+        raw_output = await _call_llm(
             system_prompt, user_prompt_full, session, log,
             APP_CONFIG.llm.scripting_draft, "scripting_draft",
+            cache_key=f"as-p2-{plan.persona_id}",
         )
         history_parts.append(f"\n\n--- Full Gen Attempt {attempt + 1} ---\n{raw_output}")
 

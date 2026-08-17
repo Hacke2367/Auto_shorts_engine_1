@@ -16,7 +16,7 @@ Rules:
 
 AutoShorts is an end-to-end pipeline that turns a topic into a finished short-form data video. Two distinct halves share the `jobs/<job_id>/` directory as their handoff bus:
 
-1. **Data pipeline** (`src/agents/`, `src/cli/`) — Phases 1–3 + Handoff. Discovers topics, extracts data, writes a script, synthesizes audio, then produces `job.json` in the schema the renderer expects. LLM-driven (Gemini + Tavily).
+1. **Data pipeline** (`src/agents/`, `src/cli/`) — Phases 1–3 + Handoff. Discovers topics, extracts data, writes a script, synthesizes audio, then produces `job.json` in the schema the renderer expects. LLM-driven (OpenAI + Tavily).
 2. **Video renderer** (`main.py`, `src/templates/`, `src/captions/`, `src/sync/`, `src/sfx/`) — Phase 4. Reads `job.json` + audio + script, renders a Manim scene from a template, mixes audio + SFX, optionally burns captions.
 
 The two halves can run independently. `main.py` only needs a fully-formed `jobs/<id>/` directory; how that directory got there (manual or pipeline) does not matter.
@@ -25,8 +25,9 @@ The two halves can run independently. `main.py` only needs a fully-formed `jobs/
 
 - Python 3.11+ with `.venv`. Install: `pip install -r requirements.txt`.
 - FFmpeg must be on PATH (`ffmpeg -version`).
-- `.env` at repo root holds **secrets only**: `TAVILY_API_KEY`, `GEMINI_API_KEY` (required), `ELEVENLABS_API_KEY` (optional). `src/agents/core/config.py` raises ValidationError on import if a required key is missing.
+- `.env` at repo root holds **secrets only**: `TAVILY_API_KEY` + `OPENAI_API_KEY` (required), `GEMINI_API_KEY` (optional — the secondary provider, only needed for `--llm-provider gemini` A/B runs), `ELEVENLABS_API_KEY` (optional). See `.env.example`. LLM keys are validated at CALL time by the adapter that needs them, not at import.
 - **All operational settings live in `config.py`, NOT `.env`.** Per-phase model routing, temperatures, RPM, HTTP timeout, retry/backoff, TTS defaults, and authority domains are managed in `APP_CONFIG` (`src/agents/core/config.py`). To change the model for a phase, edit `LLMConfig` there. The legacy env vars `GEMINI_MODEL` / `GEMINI_RPM_LIMIT` / `GEMINI_TEMPERATURE` / `API_TIMEOUT_SECONDS` are **ignored** — do not put them in `.env`.
+- **All six LLM routes run OpenAI `gpt-5.6-luna`.** On OpenAI the quality dial is `reasoning_effort`, NOT the model tier — luna's output rate buys ~8x more reasoning than gemini-2.5-pro at the same spend. To raise quality on a route, walk `effort high → xhigh` before reaching for `gpt-5.6-terra`. `temperature` is **rejected with HTTP 400** by gpt-5.x, so the adapter drops it; `verbosity` is the output-length dial. Gemini remains a per-route secondary option (`PhaseModel.provider`) plus a whole-run `--llm-provider gemini` override for A/B.
 - Windows shell here is PowerShell; the Bash tool is available but most examples below use forward slashes which work in both.
 
 ## Common Commands
@@ -43,7 +44,7 @@ The two halves can run independently. `main.py` only needs a fully-formed `jobs/
 The master CLI is `src/cli/autoshorts.py`. Bucket = templated job folder under `jobs/<bucket>/<run_id>/`.
 
 - New empty job bucket: `python -m src.cli.autoshorts new --template <template>`
-- Phase 1 Discovery (find topic candidates via Gemini ideation + Tavily search): `python -m src.cli.autoshorts phase1-discover --template <template>`
+- Phase 1 Discovery (find topic candidates via LLM ideation + Tavily search): `python -m src.cli.autoshorts phase1-discover --template <template>`
 - Phase 1 Extraction (extract structured data for an approved candidate): `python -m src.cli.autoshorts phase1-extract ...`
 - Phase 2 Scripting → Phase 3 Audio → Handoff → Phase 4 Render: `python -m src.cli.autoshorts run --job <run_dir> --template <template> --persona <persona>`
 - Granular Phase 1 control: `python -m src.cli.phase1 ...` (discovery, scoring, archive management).
@@ -89,10 +90,12 @@ Drift between these four lists is the most common source of render failures. `to
 
 Phases produce + consume artifacts under a single run directory; each phase is idempotent via `JobManager`'s `.pipeline_state.json` step flags.
 
-- `core/` — shared infra. `config.py` (pydantic-settings, fails fast on missing API keys), `job_manager.py` (creates dir tree, atomic state writes via temp-file → `os.replace`, tolerates corruption), `models.py` (`VALID_TEMPLATES`, `TEMPLATE_FALLBACKS`, `QueuedTopic`, `TopicCandidate`, `DiscoveryBatch`), `cost_tracker.py` (JSONL cost events per run), `rate_limiter.py`, `logger.py`.
-- `phase1_discovery/` — `discovery_runner.py` runs the Idea-First flow: Gemini ideation → archive filter → Tavily evidence (`scourer.py`) → Gemini scoring (`candidate_score.py`) → ranked `candidates.json`. `archive_manager.py` prevents re-pitching already-produced or rejected topics.
-- `phase1_extraction/` — `runner.py` orchestrates extraction; `graph.py` is a LangGraph state machine; `api_clients.py` wraps Tavily + Gemini calls. Output: `data/<template>_dataset.json` + `data/data_manifest.json`.
-- `phase2_scripting/` — `runner.py` builds prompt → `llm_writer.py` calls Gemini → `xml_parser.py` extracts segments → `timing.py` estimates per-segment duration → writes `script/script.json`. `contracts.py` defines the schema.
+- `core/` — shared infra. `config.py` (pydantic-settings; only `TAVILY_API_KEY` is required at import), `llm_client.py` (**the single LLM entry point** — `call_llm` / `call_llm_raw` behind an OpenAI and a Gemini adapter, selected per route by `PhaseModel.provider`), `llm_errors.py` (leaf exception taxonomy; `LLMBadRequestError` is never retried), `llm_schemas.py` (strict Structured Outputs schemas for the 3 Phase-1 JSON routes), `job_manager.py` (creates dir tree, atomic state writes via temp-file → `os.replace`, tolerates corruption), `models.py` (`VALID_TEMPLATES`, `TEMPLATE_FALLBACKS`, `QueuedTopic`, `TopicCandidate`, `DiscoveryBatch`), `cost_tracker.py` (provider-neutral cost accounting + JSONL per run), `rate_limiter.py`, `logger.py`.
+  - Cost contract: `output_tokens` passed to `track_llm_call` is **already-billed output**. Gemini reports thoughts separately (caller sums them); OpenAI folds reasoning into `output_tokens` (caller passes it through). `reasoning_tokens` is reporting-only and never re-added.
+  - The three phase caches (`_build_inputs_hash`, `candidates.json`, `<template>_dataset.json`) key on file existence, so an A/B run needs a **fresh job dir** — they warn on a route mismatch but still reuse.
+- `phase1_discovery/` — `discovery_runner.py` runs the Idea-First flow: LLM ideation → archive filter → Tavily evidence (`scourer.py`) → LLM scoring (`candidate_score.py`) → ranked `candidates.json`. `archive_manager.py` prevents re-pitching already-produced or rejected topics.
+- `phase1_extraction/` — `runner.py` orchestrates extraction; `graph.py` is a LangGraph state machine; `api_clients.py` wraps Tavily search/extract; the LLM call goes through `core/llm_client.py`. Output: `data/<template>_dataset.json` + `data/data_manifest.json`.
+- `phase2_scripting/` — `runner.py` builds prompt → `llm_writer.py` calls the LLM → `xml_parser.py` extracts segments → `timing.py` estimates per-segment duration → writes `script/script.json`. `contracts.py` defines the schema.
 - `phase3_audio/` — `runner.py` orchestrates TTS via `tts_client.py`, then `duration.py` measures real audio, `trimming.py` applies silence trim, `packager.py` lays out `audio/` files. `offline_e2e.py` allows running without TTS API.
 - `final_handoff/handoff.py` — converts the pipeline's internal `script.json` + `audio/` into the exact `job.json` shape `main.py` expects (tag-to-engine-name mapping in `tag_to_engine_name`).
 
@@ -118,5 +121,7 @@ LangGraph is used in `phase1_extraction/graph.py` to model the extract-validate-
 
 - "Audio truncated" or "long final pad" → check `timeline` durations match real audio (`tools/audio_durations.py`). `butterfly_chart` pads extra `itemN` segments; `bar_chart` does NOT — items beyond declared bars get truncated by `-shortest` at mux time.
 - "Caption misalignment" → segment names must match across `script.json`, `audio.segments`, `audio.order`, and `timeline`.
-- "ValidationError on import" → `.env` is missing `TAVILY_API_KEY` or `GEMINI_API_KEY`.
+- "ValidationError on import" → `.env` is missing `TAVILY_API_KEY` (the only import-time requirement).
+- "OPENAI_API_KEY is not set" at call time → add it to `.env`, or point the route at a provider you have a key for.
+- Cost looks wrong / zero → run `python scripts/llm_smoke.py` and check the raw `usage` block against `_openai_usage` in `core/llm_client.py`.
 - "Phase rerun does nothing" → `.pipeline_state.json` has the step marked complete; delete the relevant key or use the CLI's force flag.

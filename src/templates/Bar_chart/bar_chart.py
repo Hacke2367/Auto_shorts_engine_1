@@ -963,7 +963,7 @@ class BarChartTemplate(Scene):
             IntroManager.play_intro(
                 self,
                 brand_title="BIGDATA LEAK",
-                brand_sub="> system breach detected",
+                brand_sub="SYSTEM BREACH DETECTED",
                 feed_text="FEED_BAR // MARKET",
                 footer_text="CONFIDENTIAL // LEAKED_SOURCE",
             )

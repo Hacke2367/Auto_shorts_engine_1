@@ -30,7 +30,13 @@ from tenacity import (
 from src.agents.core.config import settings, APP_CONFIG
 from src.agents.core.retry import standard_retry_policy
 from src.agents.core.logger import log_api_call
-from src.agents.core.cost_tracker import track_gemini_call, track_rate_limit_hit
+from src.agents.core.llm_client import call_llm
+from src.agents.core.llm_errors import (
+    LLMIncompleteError,
+    LLMMalformedResponseError,
+    LLMRefusalError,
+)
+from src.agents.core.llm_schemas import extraction_schema, normalize_structured_payload
 from src.agents.core.models import (
     AuthorityTier,
     SourceAudit,
@@ -40,6 +46,15 @@ from src.agents.core.models import (
     TEMPLATE_PRESENTATION_FIELDS,
     TEMPLATE_EXTRACTION_RULES,
 )
+
+
+# Per-source slice handed to the extraction LLM. Pages put their navigation,
+# table of contents and intro first and their data tables further down, so a
+# small cap fed the model only the boilerplate — on a Rome-vs-Han run it kept
+# 72 numbers and discarded 1,506, leaving a short YouTube blurb as the only
+# fully-intact source. Sized so a handful of long articles still fit well
+# inside the extraction model's context.
+_MAX_SOURCE_CHARS = 25_000
 
 
 def _get_retry_policy() -> AsyncRetrying:
@@ -183,7 +198,7 @@ async def tavily_extract(
 # ---------------------------------------------------------------------------
 
 
-async def gemini_extract(
+async def extract_dataset(
     topic: str,
     context: list[SourceAudit],
     template_name: str,
@@ -191,12 +206,8 @@ async def gemini_extract(
     session: aiohttp.ClientSession,
     log: logging.Logger,
 ) -> TemplateDataset:
-    """Use Gemini to map unstructured text into strictly typed JSON rows."""
-    key = settings.gemini_api_key.get_secret_value()
+    """Use an LLM to map unstructured source text into strictly typed JSON rows."""
     cfg = APP_CONFIG.llm.extraction
-    model_name = cfg.model
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
-    _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
     minimum = template_spec.capacity.min
     ideal = template_spec.capacity.ideal
@@ -298,7 +309,7 @@ For example, in scan_race, 'entities' MUST be a flat key-value dict, NOT a list 
 Read the following sourced Markdown texts and extract the relevant numerical/statistical data:
 """
     for idx, src in enumerate(context, 1):
-        prompt += f"\n--- SOURCE {idx} ({src.authority_tier.value}) ---\nURL: {src.url}\n{src.raw_snippet[:5000]}\n"
+        prompt += f"\n--- SOURCE {idx} ({src.authority_tier.value}) ---\nURL: {src.url}\n{src.raw_snippet[:_MAX_SOURCE_CHARS]}\n"
 
     prompt += f"""
 {_return_clause}
@@ -308,132 +319,120 @@ DO NOT emit Markdown blocks like ```json ... ```, just emit the raw curly-brace 
 Do not hallucinate data. Only extract facts found in the texts. If sources disagree, prefer Primary sources.
 """
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "temperature": cfg.temperature,
-        },
-    }
+    try:
+        raw_text = await call_llm(
+            None,  # the whole schema + sources live in the user prompt
+            prompt,
+            session,
+            log,
+            cfg,
+            "extraction",
+            expect_json=True,
+            json_schema=extraction_schema(template_name, has_images)
+            if cfg.provider == "openai" else None,
+            retry_policy=_get_gemini_retry_policy,
+            service_tag="llm.extract",
+        )
+    except LLMIncompleteError as err:
+        # A REAL truncation signal. Previously the only clue was the brace scanner
+        # below finding an imbalance — an accidental proxy, since finishReason was
+        # never read. graph.py routes on the "parse_failure:" prefix.
+        raise ValueError(f"parse_failure: model output was truncated — {err}") from err
+    except (LLMRefusalError, LLMMalformedResponseError) as err:
+        raise ValueError(f"parse_failure: no usable model output — {err}") from err
 
-    async for attempt in _get_gemini_retry_policy():
-        with attempt:
-            t0 = time.perf_counter()
-            async with session.post(url, json=payload, headers=_gemini_headers) as resp:
-                elapsed = (time.perf_counter() - t0) * 1000
-                log_api_call(
-                    log,
-                    service="gemini.extract",
-                    status_code=resp.status,
-                    retry_count=attempt.retry_state.attempt_number - 1,
-                    duration_ms=elapsed,
-                )
-                if resp.status == 429:
-                    track_rate_limit_hit()
-                resp.raise_for_status()
-                data = await resp.json()
+    # Robust JSON object extraction.
+    #
+    # With strict Structured Outputs this is already guaranteed-valid JSON and the
+    # scanner below is a no-op. It stays because the Gemini adapter only has
+    # best-effort JSON mode, and because a tolerant parser costs nothing on the
+    # happy path.
+    start_idx = raw_text.find("{")
+    if start_idx == -1:
+        raise ValueError(f"No JSON object found in response: {raw_text[:200]}")
 
-                usage = data.get("usageMetadata", {})
-                track_gemini_call(
-                    phase="extraction",
-                    model=model_name,
-                    prompt_tokens=usage.get("promptTokenCount", 0),
-                    output_tokens=usage.get("candidatesTokenCount", 0),
-                )
+    json_str = raw_text.strip()
+    brace_count = 0
+    in_string = False
+    escape = False
 
-                try:
-                    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                except (KeyError, IndexError) as err:
-                    raise ValueError(f"Malformed Gemini API response format: {data}") from err
+    for i in range(start_idx, len(raw_text)):
+        char = raw_text[i]
+        if escape:
+            escape = False
+            continue
+        if char == '\\':
+            escape = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
 
-                # Robust JSON object extraction
-                start_idx = raw_text.find("{")
-                if start_idx == -1:
-                    raise ValueError(f"No JSON object found in response: {raw_text[:200]}")
+        if not in_string:
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    json_str = raw_text[start_idx:i + 1]
+                    break
 
-                json_str = raw_text.strip()
-                brace_count = 0
-                in_string = False
-                escape = False
+    if brace_count != 0:
+        raise ValueError(
+            f"parse_failure: Unbalanced JSON braces in model response "
+            f"(open={brace_count}). First 200 chars: {raw_text[:200]!r}"
+        )
 
-                for i in range(start_idx, len(raw_text)):
-                    char = raw_text[i]
-                    if escape:
-                        escape = False
-                        continue
-                    if char == '\\':
-                        escape = True
-                        continue
-                    if char == '"':
-                        in_string = not in_string
-                        continue
+    try:
+        parsed = json.loads(json_str)
+    except json.JSONDecodeError as err:
+        log.error("Failed to parse extracted JSON: %s\nRaw: %s", err, json_str[:500])
+        raise ValueError("parse_failure: JSON syntax error in model output") from err
 
-                    if not in_string:
-                        if char == '{':
-                            brace_count += 1
-                        elif char == '}':
-                            brace_count -= 1
-                            if brace_count == 0:
-                                json_str = raw_text[start_idx:i + 1]
-                                break
+    # Strict-schema pair arrays (scan_race entities, image guide) -> the dicts the
+    # pydantic models expect. No-op on payloads that already use dicts.
+    parsed = normalize_structured_payload(parsed, template_name)
 
-                if brace_count != 0:
-                    raise ValueError(
-                        f"parse_failure: Unbalanced JSON braces in Gemini response "
-                        f"(open={brace_count}). First 200 chars: {raw_text[:200]!r}"
-                    )
+    # Defensively coerce the optional sourcing guide. It is decorative operator
+    # metadata, so a malformed value must NEVER fail extraction (no new failure
+    # surface) — anything non-dict degrades to empty.
+    _guide_raw = parsed.get("image_sourcing_guide", {})
+    if isinstance(_guide_raw, dict):
+        image_sourcing_guide = {str(k): str(v) for k, v in _guide_raw.items()}
+    else:
+        image_sourcing_guide = {}
 
-                try:
-                    parsed = json.loads(json_str)
-                except json.JSONDecodeError as err:
-                    log.error("Failed to parse extracted JSON: %s\nRaw: %s", err, json_str[:500])
-                    raise ValueError("parse_failure: JSON syntax error in Gemini output") from err
+    # The renderer-contract integer fields ('category' tier, 'winner') are stored as
+    # STRINGS by the row models, but a model may emit them as JSON numbers. Coerce
+    # numeric scalars -> str so model_validate accepts them however they were
+    # emitted. On OpenAI the schema pins these to string enums, so this is a
+    # Gemini-path safety net. VALUE validity (1/2, 0/1/2) is enforced later by
+    # validate_template_semantics.
+    _rows = parsed.get("rows", [])
+    if isinstance(_rows, list):
+        for _row in _rows:
+            if not isinstance(_row, dict):
+                continue
+            for _k in ("category", "winner"):
+                _v = _row.get(_k)
+                if isinstance(_v, bool):
+                    continue
+                if isinstance(_v, int):
+                    _row[_k] = str(_v)
+                elif isinstance(_v, float):
+                    _row[_k] = str(int(_v)) if _v.is_integer() else str(_v)
 
-                # Defensively coerce the optional sourcing guide. It is decorative
-                # operator metadata, so a malformed value must NEVER fail extraction
-                # (no new failure surface) — anything non-dict degrades to empty.
-                _guide_raw = parsed.get("image_sourcing_guide", {})
-                if isinstance(_guide_raw, dict):
-                    image_sourcing_guide = {str(k): str(v) for k, v in _guide_raw.items()}
-                else:
-                    image_sourcing_guide = {}
+    try:
+        # Validate the raw dict using our Pydantic schema
+        dataset = TemplateDataset.model_validate({
+            "template_name": template_name,
+            "meta": parsed.get("meta", {}),
+            "rows": _rows,
+            "image_sourcing_guide": image_sourcing_guide,
+        })
+    except Exception as err:
+        log.error("Schema validation failed for %s: %s", template_name, err)
+        raise ValueError(f"schema_failure: Extracted data violates {template_name} schema") from err
 
-                # The renderer-contract integer fields ('category' tier, 'winner')
-                # are stored as STRINGS by the row models, but the LLM may emit them
-                # as JSON numbers. Coerce numeric scalars -> str so model_validate
-                # accepts them however they were emitted. VALUE validity (must be
-                # 1/2 or 0/1/2) is enforced later by validate_template_semantics.
-                _rows = parsed.get("rows", [])
-                if isinstance(_rows, list):
-                    for _row in _rows:
-                        if not isinstance(_row, dict):
-                            continue
-                        for _k in ("category", "winner"):
-                            _v = _row.get(_k)
-                            if isinstance(_v, bool):
-                                continue
-                            if isinstance(_v, int):
-                                _row[_k] = str(_v)
-                            elif isinstance(_v, float):
-                                _row[_k] = str(int(_v)) if _v.is_integer() else str(_v)
-
-                try:
-                    # Validate the raw dict using our Pydantic schema
-                    dataset = TemplateDataset.model_validate({
-                        "template_name": template_name,
-                        "meta": parsed.get("meta", {}),
-                        "rows": _rows,
-                        "image_sourcing_guide": image_sourcing_guide,
-                    })
-                except Exception as err:
-                    log.error("Schema validation failed for %s: %s", template_name, err)
-                    raise ValueError(f"schema_failure: Extracted data violates {template_name} schema") from err
-
-                log.info(
-                    "Gemini successfully extracted %d %s rows.",
-                    len(dataset.rows),
-                    template_name,
-                )
-                return dataset
-
-    raise RuntimeError("Exhausted retries connecting to Gemini.")
+    log.info("Extracted %d %s rows.", len(dataset.rows), template_name)
+    return dataset

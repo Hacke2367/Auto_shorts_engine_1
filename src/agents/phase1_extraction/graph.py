@@ -21,7 +21,7 @@ from langgraph.graph import END, START, StateGraph
 
 from src.agents.core.models import SourceAudit, TemplateDataset, TemplateSpec
 from src.agents.phase1_extraction.api_clients import (
-    gemini_extract,
+    extract_dataset,
     tavily_extract,
     tavily_search,
 )
@@ -44,6 +44,12 @@ class ExtractionState(TypedDict):
     # Runtime resources
     session: aiohttp.ClientSession
     log: logging.Logger
+
+    # Evidence carried over from Phase 1A discovery. These are the URLs the
+    # feasibility gate already proved contain extractable data, so attempt 0
+    # uses them directly instead of re-searching from scratch. Empty list =
+    # legacy behaviour (search every attempt).
+    seed_urls: NotRequired[list[str]]
 
     # Evolving data
     attempt_number: NotRequired[int]
@@ -102,6 +108,21 @@ async def node_search(state: ExtractionState) -> ExtractionState:
     template_name = state["template_name"]
 
     attempts = state.get("query_attempts", 0)
+
+    # Attempt 0 prefers the discovery evidence over a fresh search. Phase 1A
+    # already proved data exists on these exact URLs; re-searching threw that
+    # proof away and let a generic query land on pages with no extractable
+    # numbers. Retries still fall through to the pivot queries below.
+    seed_urls = state.get("seed_urls") or []
+    if attempts == 0 and seed_urls:
+        log.info(
+            "Extraction Search seeded from discovery for '%s' — using %d candidate URL(s), skipping search.",
+            topic, len(seed_urls),
+        )
+        state["search_urls"] = list(seed_urls)
+        state["query_attempts"] = attempts + 1
+        return state
+
     query = _build_smart_query(topic, template_name, attempts)
 
     log.info("Extraction Search executing for '%s' (Attempt %d) | Query: %s", topic, attempts + 1, query)
@@ -185,7 +206,7 @@ async def node_extract(state: ExtractionState) -> ExtractionState:
 
     log.info("Extraction Extract executing using %d audits (%d chars)", len(context), total_len)
     try:
-        dataset = await gemini_extract(
+        dataset = await extract_dataset(
             topic=state["topic"],
             context=context,
             template_name=state["template_name"],

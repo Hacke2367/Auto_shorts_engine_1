@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import yaml
 
+from src.agents.core.cost_tracker import set_active_job_dir
 from src.agents.core.job_manager import JobManager
 
 def resolve_bucket(template_name: str) -> str:
@@ -94,5 +95,10 @@ def setup_cli_logger(run_dir: Path) -> logging.Logger:
     file_h = logging.FileHandler(log_file, encoding="utf-8")
     file_h.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s [%(module)s] %(message)s"))
     logger.addHandler(file_h)
-    
+
+    # Point cost accounting at this run so every LLM call lands in
+    # <run_dir>/logs/cost.jsonl. Every subcommand resolves run_dir and then
+    # calls this, so hooking it here covers all of them at once.
+    set_active_job_dir(run_dir)
+
     return logger

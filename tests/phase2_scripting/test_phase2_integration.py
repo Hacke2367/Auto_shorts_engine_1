@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 async def run_integration_test():
     logger.info("--- Testing Real Gemini LLM Integration ---")
     
-    if "GEMINI_API_KEY" not in os.environ and "GEMINI_MODEL" not in os.environ:
+    if "OPENAI_API_KEY" not in os.environ and "GEMINI_MODEL" not in os.environ:
         # Fallback to internal settings resolution if environments aren't cleanly loaded in bash scope
         pass 
         

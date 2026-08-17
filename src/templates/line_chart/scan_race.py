@@ -382,10 +382,14 @@ class CinematicLineRace(Scene):
         cover.set_z_index(999)
         self.add(cover)
 
-        breach = Text("> SYSTEM BREACH DETECTED", font="Montserrat", weight=BOLD, font_size=26, color=Design.PINK)
+        # Brand lockup must match IntroManager (src/utils.py) exactly — this template
+        # hand-rolls its intro so the hook animation can be scaled by hook_scale, but
+        # the type treatment stays identical to every other template.
+        breach = Text("> SYSTEM BREACH DETECTED", font="Consolas", font_size=22, color=Design.PINK)
         breach.move_to([0, -0.15, 0]).set_z_index(1000)
 
-        brand = Text("BIGDATA LEAK", font="Montserrat", weight=BOLD, font_size=48, color=Design.CYAN)
+        brand = Text("BIGDATA LEAK", font=FONT_DISPLAY, weight=BOLD, font_size=54)
+        brand.set_color_by_gradient(Design.CYAN, Design.TEXT_MAIN)
         brand.move_to([0, 0.10, 0]).set_z_index(1000)
 
         sfx.mark("intro_glitch", gain_db=-9, meta={"at": "breach"})

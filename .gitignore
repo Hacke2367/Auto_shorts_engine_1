@@ -124,3 +124,6 @@ coverage.xml
 # ─── Jupyter (future-proofing) ──────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
+
+# Validation replay reports (contain model outputs, not source)
+validation/

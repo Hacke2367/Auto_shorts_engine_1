@@ -13,6 +13,7 @@ try:
     from src.config import *  # expects: Theme, BACKGROUND_COLOR, etc.
 except Exception:
     BACKGROUND_COLOR = "#050505"
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -488,7 +489,7 @@ class IntroManager:
         sub.move_to(ORIGIN)
 
         # TITLE (alone)
-        title = Text(brand_title, font="Montserrat", weight=BOLD, font_size=54)
+        title = Text(brand_title, font=FONT_DISPLAY, weight=BOLD, font_size=54)
         title.set_color_by_gradient(Brand.CYAN, Brand.TEXT_MAIN)
         title.set_z_index(501)
         title.move_to(ORIGIN)

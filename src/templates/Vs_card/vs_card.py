@@ -59,13 +59,14 @@ except Exception:
         @staticmethod
         def play_intro(
             scene,
-            brand_title="VS TRIBUNAL",
-            brand_sub="HEAD-TO-HEAD PROTOCOL",
+            brand_title="BIGDATA LEAK",
+            brand_sub="SYSTEM BREACH DETECTED",
             feed_text="FEED_VS // TRIBUNAL",
             footer_text="CONFIDENTIAL // VERIFIED",
         ):
-            t1 = Text(brand_title, font="Montserrat", weight=BOLD, font_size=48, color=WHITE).move_to(UP * 0.25)
-            t2 = Text(brand_sub, font="Consolas", font_size=20, color=GREY_B).next_to(t1, DOWN, buff=0.25)
+            t1 = Text(brand_title, font=FONT_DISPLAY, weight=BOLD, font_size=54).move_to(UP * 0.25)
+            t1.set_color_by_gradient(Theme.NEON_BLUE, Theme.TEXT_MAIN)
+            t2 = Text(f"> {brand_sub}", font="Consolas", font_size=22, color=Theme.NEON_PINK).next_to(t1, DOWN, buff=0.25)
             scene.play(FadeIn(t2, shift=UP * 0.08), run_time=0.25)
             scene.play(FadeIn(t1, shift=UP * 0.10), run_time=0.35)
             scene.play(FadeOut(t1), FadeOut(t2), run_time=0.35)
@@ -763,8 +764,8 @@ class VsCardFinal(Scene):
         try:
             IntroManager.play_intro(
                 self,
-                brand_title="VS TRIBUNAL",
-                brand_sub="HEAD-TO-HEAD PROTOCOL",
+                brand_title="BIGDATA LEAK",
+                brand_sub="SYSTEM BREACH DETECTED",
                 feed_text="FEED_VS // TRIBUNAL",
                 footer_text="CONFIDENTIAL // VERIFIED",
             )
