@@ -78,8 +78,9 @@ except Exception:
             hdr = Text(feed_text, font="Consolas", font_size=14, color=Theme.TEXT_SUB).to_corner(UR).shift(
                 DOWN * 0.2 + LEFT * 0.2
             )
-            t1 = Text(brand_title, font="Montserrat", font_size=42, weight=BOLD, color=Theme.TEXT_MAIN).move_to(UP * 0.6)
-            t2 = Text(brand_sub, font="Montserrat", font_size=18, color=Theme.TEXT_SUB).next_to(t1, DOWN, buff=0.2)
+            t1 = Text(brand_title, font=FONT_DISPLAY, font_size=54, weight=BOLD).move_to(UP * 0.6)
+            t1.set_color_by_gradient(Theme.NEON_BLUE, Theme.TEXT_MAIN)
+            t2 = Text(f"> {brand_sub}", font="Consolas", font_size=22, color=Theme.NEON_PINK).next_to(t1, DOWN, buff=0.2)
             foot = Text(footer_text, font="Consolas", font_size=12, color=Theme.TEXT_SUB).to_edge(DOWN, buff=0.35)
             scene.play(
                 FadeIn(rec),

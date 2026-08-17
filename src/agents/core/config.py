@@ -19,6 +19,7 @@ Rule of thumb:
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,9 +46,19 @@ class SystemSettings(BaseSettings):
         description="API key for Tavily search & extraction.",
         validation_alias="TAVILY_API_KEY",
     )
-    gemini_api_key: SecretStr = Field(
-        ...,
-        description="API key for Google Gemini.",
+    # LLM provider keys are OPTIONAL at import time and validated at CALL time by
+    # the adapter that needs them (see core/llm_client.py). Making either one
+    # required here meant that merely importing this module — which almost every
+    # module does transitively — crashed for anyone without that provider's key,
+    # including the offline test suite.
+    openai_api_key: SecretStr | None = Field(
+        default=None,
+        description="API key for OpenAI (the default provider).",
+        validation_alias="OPENAI_API_KEY",
+    )
+    gemini_api_key: SecretStr | None = Field(
+        default=None,
+        description="API key for Google Gemini (secondary provider, kept for rollback/A-B).",
         validation_alias="GEMINI_API_KEY",
     )
     elevenlabs_api_key: SecretStr | None = Field(
@@ -79,16 +90,47 @@ settings: SystemSettings = get_settings()
 class PhaseModel(BaseModel):
     """LLM routing + generation params for ONE pipeline task.
 
-    Change ``model`` to route this phase to a different LLM. Each phase is
-    independent, so Phase 1 (extraction) and Phase 2 (scripting) can run on
-    completely different models.
+    Change ``model`` (and ``provider``) to route this phase to a different LLM.
+    Each phase is independent, so Phase 1 and Phase 2 can run on completely
+    different models — or even different providers, which is how an A/B is run.
     """
 
-    model: str = Field(description="Gemini model id used for this phase.")
-    temperature: float = Field(ge=0.0, le=2.0, description="Sampling temperature for this phase.")
-    max_output_tokens: int | None = Field(
-        default=None, ge=1, description="Optional output token cap (None = provider default)."
+    provider: Literal["openai", "gemini"] = Field(
+        default="openai",
+        description="Which backend serves this route. OpenAI is the default everywhere; "
+                    "Gemini is kept as a secondary option so a single route can be pinned "
+                    "back for A/B comparison or rollback.",
     )
+    model: str = Field(description="Provider-specific model id used for this phase.")
+    temperature: float | None = Field(
+        default=None, ge=0.0, le=2.0,
+        description="Sampling temperature. GPT-5.x reasoning models REJECT this parameter "
+                    "outright (HTTP 400), so the OpenAI adapter drops it for those models; "
+                    "it is kept here because the Gemini adapter still uses it.",
+    )
+    max_output_tokens: int | None = Field(
+        default=None, ge=1,
+        description="Optional output token cap (None = provider default). On OpenAI this caps "
+                    "reasoning AND visible output together — set too low and the model burns "
+                    "the budget thinking and returns NOTHING while still billing you. Leave "
+                    "None unless you have measured the route.",
+    )
+
+    # ---- OpenAI-only dials ----
+    reasoning_effort: str | None = Field(
+        default=None,
+        description="OpenAI reasoning.effort: none|minimal|low|medium|high|xhigh|max. "
+                    "This is THE quality/cost dial — reasoning tokens bill at the OUTPUT rate "
+                    "and the gpt-5.6 default is 'medium', so leaving it unset is a cost risk. "
+                    "Unlike Gemini's thinking_budget this is NOT a hard token cap.",
+    )
+    verbosity: str | None = Field(
+        default=None,
+        description="OpenAI text.verbosity: low|medium|high. Output-length dial — a better fit "
+                    "than temperature ever was for 'cut N words' style rewrite work.",
+    )
+
+    # ---- Gemini-only dial (secondary provider) ----
     thinking_budget: int | None = Field(
         default=None, ge=0,
         description="Gemini 2.5 thinkingConfig.thinkingBudget. 0 disables thinking (Flash only); "
@@ -101,52 +143,65 @@ class LLMConfig(BaseModel):
     """Per-phase LLM routing + shared LLM operational settings.
 
     ────────────────────────────────────────────────────────────────────────
-    EDIT THE `model` VALUES BELOW TO ROUTE EACH PHASE TO A DIFFERENT LLM.
+    EDIT THE VALUES BELOW TO ROUTE EACH PHASE TO A DIFFERENT LLM.
     ────────────────────────────────────────────────────────────────────────
-    Defaults: Phase 1 (discovery/extraction) runs the fast/cheap `flash`;
-    Phase 2 scripting runs the stronger `pro` for higher-quality voiceover.
+    Every route runs OpenAI ``gpt-5.6-luna``. On OpenAI the quality dial is
+    ``reasoning_effort``, NOT the model tier — luna's output rate ($1.20/1M) buys
+    roughly 8x more reasoning than gemini-2.5-pro's ($10.00/1M) at the same
+    spend, so the pipeline buys quality with effort instead of with a bigger,
+    pricier model.
+
+    If a route needs more quality, walk the ladder in this order:
+        effort high  ->  effort xhigh  ->  model "gpt-5.6-terra"
+    Each step is one line. Escalate only against a measured A/B — terra is 10x
+    luna's output price and a single terra doctor call costs more than an entire
+    luna Phase 2 run.
+
+    To A/B against the old provider, set ``provider="gemini"`` on ONE route (plus
+    its ``model``/``temperature``/``thinking_budget``) and leave the rest alone.
     """
 
     # ---- Phase 1: Discovery ----
+    # Idea variety comes from the prompt's Story Lenses + live trend seed + the
+    # 2.5x over-provision, not from sampling temperature (which gpt-5.x rejects).
     discovery_ideation: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.6,
+        model="gpt-5.6-luna", reasoning_effort="low", verbosity="medium",
     )
+    # ~20 calls per run — the most volume-sensitive route, so effort stays low.
     discovery_scoring: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.1,
+        model="gpt-5.6-luna", reasoning_effort="low", verbosity="low",
     )
     # ---- Phase 1: Extraction ----
+    # One call per run and the whole video's factual accuracy rides on it, so this
+    # is the one Phase 1 route worth paying medium effort for.
     extraction: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.1,
+        model="gpt-5.6-luna", reasoning_effort="medium", verbosity="low",
     )
-    # ---- Phase 2: Scripting — COST-ROUTED across sub-tasks ----
-    # Cheap Flash does the heavy lifting (creative draft + mechanical length-rewrites); expensive
-    # Pro runs ONCE for the final flow polish (script-doctor). This keeps Pro as the final creative
-    # pass while cutting cost ~85%. THE one quality/cost dial: if a persona's draft feels flat,
-    # flip `scripting_draft.model` to "gemini-2.5-pro".
-    #
-    # thinking_budget is the STRUCTURE dial (not the same as the model dial): Flash with thinking
-    # OFF (=0) fumbles long, strict-structure jobs — e.g. a 7-card sort_card needs 11 exact tags in
-    # exact order within per-segment char budgets, and zero-thinking Flash drops tags / overshoots
-    # length. Giving the draft a planning budget lets Flash lay out all tags first (keeps it cheap
-    # Flash, NOT Pro); the rewrite gets a smaller budget so it can actually land each char window.
+    # ---- Phase 2: Scripting ----
+    # The old Gemini routing used thinking_budget as a STRUCTURE dial: a 7-card
+    # sort_card needs 11 exact tags in exact order within per-segment char budgets,
+    # and zero-thinking Flash dropped tags. reasoning_effort is that dial's analogue
+    # (qualitative, not a token cap), which is why the draft gets medium.
     scripting_draft: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.4, thinking_budget=1024,
+        model="gpt-5.6-luna", reasoning_effort="medium", verbosity="medium",
     )
+    # Mechanical "cut N words" edit — verbosity is a better fit here than the old
+    # temperature=0.2 ever was.
     scripting_rewrite: PhaseModel = PhaseModel(
-        model="gemini-2.5-flash", temperature=0.2, thinking_budget=512,
+        model="gpt-5.6-luna", reasoning_effort="low", verbosity="low",
     )
+    # The doctor ELEVATES an already-valid script (flow, repetition, dangling ends).
+    # That is a reasoning job, not a sampling job — hence high effort rather than a
+    # bigger model.
     scripting_doctor: PhaseModel = PhaseModel(
-        model="gemini-2.5-pro", temperature=0.3, thinking_budget=512,
-    )
-    # Back-compat alias (was the single Phase-2 route). Not used by the writer anymore.
-    scripting: PhaseModel = PhaseModel(
-        model="gemini-2.5-pro", temperature=0.3,
+        model="gpt-5.6-luna", reasoning_effort="high", verbosity="medium",
     )
 
     # ---- Shared LLM operational settings ----
     rpm_limit: int = Field(
         default=60, ge=1,
-        description="Requests-per-minute ceiling for batched Gemini calls (Phase 1 scoring).",
+        description="Requests-per-minute ceiling for batched LLM calls (Phase 1 scoring). "
+                    "Conservative: OpenAI Tier 1 already allows 500 RPM.",
     )
 
 
@@ -242,9 +297,16 @@ class AppConfig(BaseModel):
     retry: RetryConfig = Field(default_factory=RetryConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
 
-    # Shared per-request HTTP timeout (seconds) for ALL external calls
-    # (Gemini, Tavily, ElevenLabs). Excludes retry backoff.
+    # Shared per-request HTTP timeout (seconds) for external calls
+    # (Tavily, ElevenLabs). Excludes retry backoff.
     api_timeout_seconds: float = Field(default=60.0, gt=0)
+
+    # LLM calls get their OWN, longer timeout, applied per-request inside
+    # core/llm_client.py. A reasoning model at medium effort on a 5K-token prompt
+    # routinely exceeds 60s; when the client gives up the server still finishes and
+    # still bills the input + reasoning, then tenacity retries — turning one slow
+    # call into six paid-for-and-discarded ones. Tavily/ElevenLabs stay at 60s.
+    llm_timeout_seconds: float = Field(default=180.0, gt=0)
 
     # ---- Phase 1 discovery: data-feasibility gate + ideation over-provisioning ----
     # A topic without provable published data is worthless downstream (extraction
@@ -285,3 +347,52 @@ class AppConfig(BaseModel):
 
 # The single source of truth for all operational settings.
 APP_CONFIG = AppConfig()
+
+
+# ===========================================================================
+# A/B + rollback: the Gemini arm
+# ===========================================================================
+# The pipeline's routing EXACTLY as it stood before the OpenAI migration. This is
+# the comparison arm for `--llm-provider gemini` — flipping to it reproduces the
+# old behaviour end to end, including the thinking budgets that were load-bearing
+# for Phase 2's tag structure.
+#
+# Delete this table (and the Gemini adapter) once OpenAI output has been signed
+# off on sort_card and vs_card.
+GEMINI_ROUTES: dict[str, PhaseModel] = {
+    "discovery_ideation": PhaseModel(
+        provider="gemini", model="gemini-2.5-flash", temperature=0.6),
+    "discovery_scoring": PhaseModel(
+        provider="gemini", model="gemini-2.5-flash", temperature=0.1),
+    "extraction": PhaseModel(
+        provider="gemini", model="gemini-2.5-flash", temperature=0.1),
+    "scripting_draft": PhaseModel(
+        provider="gemini", model="gemini-2.5-flash", temperature=0.4, thinking_budget=1024),
+    "scripting_rewrite": PhaseModel(
+        provider="gemini", model="gemini-2.5-flash", temperature=0.2, thinking_budget=512),
+    "scripting_doctor": PhaseModel(
+        provider="gemini", model="gemini-2.5-pro", temperature=0.3, thinking_budget=512),
+}
+
+
+def apply_provider_override(provider: str | None) -> None:
+    """Point EVERY LLM route at ``provider`` for the rest of this process.
+
+    Run-scoped only — it mutates the in-memory ``APP_CONFIG`` and writes nothing.
+    Intended for A/B runs (``--llm-provider gemini``); the durable routing stays
+    in :class:`LLMConfig` above, per the "operational settings live in config.py"
+    rule.
+
+    Passing ``None`` (the default when the flag is absent) is a no-op.
+    """
+    if provider is None:
+        return
+    if provider == "gemini":
+        for route, phase_model in GEMINI_ROUTES.items():
+            setattr(APP_CONFIG.llm, route, phase_model.model_copy(deep=True))
+    elif provider == "openai":
+        for route, phase_model in LLMConfig().__dict__.items():
+            if isinstance(phase_model, PhaseModel):
+                setattr(APP_CONFIG.llm, route, phase_model.model_copy(deep=True))
+    else:
+        raise ValueError(f"Unknown LLM provider override: {provider!r}")

@@ -27,9 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
-from src.agents.core.config import APP_CONFIG
+from src.agents.core.config import APP_CONFIG, apply_provider_override
 from src.agents.core.job_manager import JobManager
-from src.agents.core.cost_tracker import get_session_summary
+from src.agents.core.cost_tracker import get_session_summary, set_active_job_dir
 from src.agents.phase1_discovery.archive_manager import ArchiveManager
 from src.agents.phase1_discovery.discovery_runner import run_discovery
 from src.agents.phase1_extraction.runner import run_extraction
@@ -191,7 +191,8 @@ async def cmd_discover(args: argparse.Namespace) -> None:
     _print_header("PHASE 1: DISCOVER")
     jm = JobManager(template_name="auto")
     jm.initialize()
-    
+    set_active_job_dir(jm.job_dir)
+
     print(f"Job ID:  {jm.job_id}")
     print(f"Job Dir: {jm.job_dir}")
     print("Running discovery engines... This may take a minute.\n")
@@ -210,20 +211,25 @@ async def cmd_discover(args: argparse.Namespace) -> None:
         _print_header("DISCOVERY ABORTED — IDEATION UNAVAILABLE")
         detail = (batch.error_detail or "")
         is_rate_limited = "429" in detail or "Too Many Requests" in detail
+        provider = APP_CONFIG.llm.discovery_ideation.provider
         if is_rate_limited:
             # 429 is a QUOTA / rate-limit block — re-running immediately will just
             # hit it again. Guide the operator to the actual remedy.
-            print("⚠️  Gemini RATE-LIMITED the ideation call (HTTP 429 Too Many Requests).")
+            print(f"⚠️  {provider} RATE-LIMITED the ideation call (HTTP 429 Too Many Requests).")
             print("    The run was stopped BEFORE any search/scoring spend — $0 wasted.")
             print("    This is a QUOTA limit, NOT a code bug. Re-running right away will 429 again.")
             print("    Fix one of these, THEN re-run:")
-            print("      • Wait for the quota window to reset (per-minute clears fast; the")
-            print("        free-tier DAILY cap resets at midnight US-Pacific).")
-            print("      • Check usage/limits in Google AI Studio (aistudio.google.com).")
-            print("      • Enable billing for higher limits, or use a different GEMINI_API_KEY.\n")
+            print("      • Wait for the quota window to reset (per-minute clears fast).")
+            if provider == "openai":
+                print("      • Check usage/limits at platform.openai.com/settings/organization/limits.")
+                print("      • Add credit or move up a usage tier for higher RPM/TPM.\n")
+            else:
+                print("      • The free-tier DAILY cap resets at midnight US-Pacific.")
+                print("      • Check usage/limits in Google AI Studio (aistudio.google.com).")
+                print("      • Enable billing for higher limits, or use a different GEMINI_API_KEY.\n")
         else:
             # Anything else (e.g. 503 / timeout) is a transient outage — safe to retry now.
-            print("⚠️  Gemini ideation API was unavailable (transient outage / 503 / timeout).")
+            print(f"⚠️  {provider} ideation API was unavailable (transient outage / 503 / timeout).")
             print("    The run was stopped BEFORE any search/scoring spend — $0 wasted.")
             print("    Nothing usable was produced; just re-run in a moment:\n")
         if detail:
@@ -259,7 +265,8 @@ async def cmd_auto(args: argparse.Namespace) -> None:
     _print_header("PHASE 1: AUTO-MODE (E2E)")
     jm = JobManager(template_name="auto")
     jm.initialize()
-    
+    set_active_job_dir(jm.job_dir)
+
     print(f"Job ID:  {jm.job_id}")
     print("Running discovery engines... (fetching from web + AI scoring)\n")
     
@@ -383,9 +390,15 @@ async def cmd_approve(args: argparse.Namespace) -> None:
     # Lock the real template into auto-mode JobManager so runner.py sees it
     jm.set_template(template)
     
+    seed_urls = selected.get("candidate_sources") or []
+    if seed_urls:
+        print(f"Seeding extraction with {len(seed_urls)} discovery source(s).")
+
     print("Running extraction...")
     try:
-        await run_extraction(job_manager=jm, topic=selected["topic"])
+        await run_extraction(
+            job_manager=jm, topic=selected["topic"], seed_urls=seed_urls
+        )
     except Exception as e:
         # Graceful hard-fail. The operator explicitly chose this topic, so we
         # surface the failure and SUGGEST alternatives — we never silently
@@ -451,7 +464,8 @@ async def cmd_extract(args: argparse.Namespace) -> None:
         
     jm = JobManager(template_name=args.template)
     jm.initialize()
-    
+    set_active_job_dir(jm.job_dir)
+
     print(f"Job ID:   {jm.job_id}")
     print(f"Topic:    {args.topic}")
     print(f"Template: {args.template}")
@@ -531,6 +545,11 @@ async def cmd_queue_show(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="AutoShorts Phase 1 Operator CLI")
+    parser.add_argument(
+        "--llm-provider", choices=["openai", "gemini"],
+        help="Run-scoped override: point EVERY LLM route at this provider. For A/B "
+             "runs only — the durable routing lives in LLMConfig (core/config.py).",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     
     # discover
@@ -573,7 +592,8 @@ def main() -> None:
     subparsers.add_parser("queue-show", help="Show saved topic queue")
 
     args = parser.parse_args()
-    
+    apply_provider_override(getattr(args, "llm_provider", None))
+
     # Route to handlers
     handlers = {
         "discover": cmd_discover,

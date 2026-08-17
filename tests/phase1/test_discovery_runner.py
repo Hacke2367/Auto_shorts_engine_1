@@ -22,6 +22,11 @@ class FakeArchive:
         return topic.strip().lower().replace(" ", "-")
 
 
+async def fake_ideate_hypotheses(niche_hint, trend_context, session, log, idea_count=10):
+    """Stand in for the LLM ideation call — no provider, no key, no network."""
+    return [f"Hypothesis {i} about {niche_hint}" for i in range(idea_count)]
+
+
 async def fake_fetch_raw_candidates(session=None, log=None, niche_hint=None, hypotheses=None):
     return [
         {
@@ -80,13 +85,20 @@ def test_run_discovery_writes_candidates_json():
         outdir = Path(tmpdir)
 
         # monkeypatch module-level dependencies
+        #
+        # _ideate_hypotheses MUST be faked too. It is the first thing run_discovery
+        # does, and with session=None the real one raises AttributeError, which
+        # run_discovery correctly converts into IdeationUnavailableError and aborts
+        # with zero candidates — so the rest of the flow was never exercised.
         original_archive = discovery_runner.ArchiveManager
         original_fetch = discovery_runner.fetch_raw_candidates
         original_score = discovery_runner.score_candidates_batch
+        original_ideate = discovery_runner._ideate_hypotheses
 
         discovery_runner.ArchiveManager = FakeArchive
         discovery_runner.fetch_raw_candidates = fake_fetch_raw_candidates
         discovery_runner.score_candidates_batch = fake_score_candidates_batch
+        discovery_runner._ideate_hypotheses = fake_ideate_hypotheses
 
         try:
             batch = __import__("asyncio").run(
@@ -106,6 +118,7 @@ def test_run_discovery_writes_candidates_json():
             discovery_runner.ArchiveManager = original_archive
             discovery_runner.fetch_raw_candidates = original_fetch
             discovery_runner.score_candidates_batch = original_score
+            discovery_runner._ideate_hypotheses = original_ideate
 
 
 def test_run_discovery_uses_cache_on_second_run():

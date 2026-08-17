@@ -12,10 +12,10 @@ from src.agents.phase2_scripting.llm_writer import (
     _build_user_prompt,
     _load_text,
     VISUAL_RULES_PATH,
-    _call_gemini,
     parse_monologue
 )
-from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.config import APP_CONFIG
+from src.agents.core.llm_client import call_llm_raw
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -32,27 +32,30 @@ async def main():
         system_prompt = _build_system_prompt(plan.persona_id)
         user_prompt_full = _build_user_prompt(dataset, plan)
 
-        # Demo uses the draft model (Flash) — same route the writer's first pass uses.
-        model_name = APP_CONFIG.llm.scripting_draft.model
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={settings.gemini_api_key.get_secret_value()}"
-        payload = {
-            "system_instruction": {"parts": [{"text": system_prompt}]},
-            "contents": [{"parts": [{"text": user_prompt_full}]}],
-            "generationConfig": {"temperature": APP_CONFIG.llm.scripting_draft.temperature},
-        }
+        # Demo uses the draft route — the same one the writer's first pass uses.
+        #
+        # This used to build the URL by hand with the API key in the QUERY STRING,
+        # which leaks the key into every traceback and error log this script writes.
+        # Going through the shared client keeps the key in an Authorization header
+        # and means the demo exercises the real code path.
+        draft_model = APP_CONFIG.llm.scripting_draft
 
-        timeout = aiohttp.ClientTimeout(total=45)
+        timeout = aiohttp.ClientTimeout(total=APP_CONFIG.llm_timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             log = logging.getLogger("demo")
-            out.append("\nCalling Gemini directly bypassing all Tenacity retries to force 1 execution...\n")
-            
-            async with session.post(url, json=payload) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-                raw_output = data["candidates"][0]["content"]["parts"][0]["text"]
-            
+            out.append(
+                f"\nSingle-shot call via {draft_model.provider}:{draft_model.model} "
+                "(no rewrite loop, no doctor).\n"
+            )
+
+            result = await call_llm_raw(
+                system_prompt, user_prompt_full, session, log,
+                draft_model, "demo_draft",
+            )
+            raw_output = result.text
+
             out.append("="*50)
-            out.append("RAW GEMINI OUTPUT (XML Monologue)")
+            out.append(f"RAW MODEL OUTPUT (XML Monologue) — usage: {result.usage}")
             out.append("="*50)
             out.append(raw_output.strip())
             

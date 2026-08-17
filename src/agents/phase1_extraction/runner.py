@@ -230,6 +230,7 @@ async def run_extraction(
     job_manager: JobManager,
     topic: str,
     output_dir: Path | None = None,
+    seed_urls: list[str] | None = None,
 ) -> TemplateDataset:
     """Execute the Phase 1B extraction workflow.
 
@@ -239,6 +240,9 @@ async def run_extraction(
         job_manager: Bound instance managing this specific job.
         topic: Approved topic to extract data for.
         output_dir: Optional override for output directory. Defaults to job_manager.data_dir.
+        seed_urls: Optional discovery evidence URLs (``candidate_sources``). When
+            supplied, the first extraction attempt scrapes these instead of running
+            a fresh search. Omitting them keeps the legacy search-every-attempt path.
 
     Returns:
         The validated extracted dataset.
@@ -280,9 +284,23 @@ async def run_extraction(
 
         json_path = target_dir / f"{actual_template}_dataset.json"
 
+        # This cache is keyed on the FILE EXISTING, not on which model produced it.
+        # After a provider/model change the old dataset is reused silently — use a
+        # fresh job dir (or delete the file) to force a genuine re-extraction.
         if json_path.exists():
             try:
                 raw = json.loads(json_path.read_text(encoding="utf-8"))
+                cached_route = (raw.get("_llm_route") if isinstance(raw, dict) else None)
+                current_route = (
+                    f"{APP_CONFIG.llm.extraction.provider}:"
+                    f"{APP_CONFIG.llm.extraction.model}"
+                )
+                if cached_route and cached_route != current_route:
+                    log.warning(
+                        "Cached dataset came from a DIFFERENT LLM route (%s), current is "
+                        "%s. Reusing it — delete %s to re-extract.",
+                        cached_route, current_route, json_path.name,
+                    )
                 return TemplateDataset.model_validate(raw)
             except Exception:
                 log.warning("Failed to parse cached dataset. Falling back to rerun extraction.")
@@ -336,6 +354,7 @@ async def run_extraction(
                     "session": session,
                     "log": log,
                     "attempt_number": idx,
+                    "seed_urls": list(seed_urls or []),
                 }
 
                 # -- 3. Execute LangGraph for this Attempt --

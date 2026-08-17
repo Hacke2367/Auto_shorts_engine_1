@@ -114,19 +114,30 @@ def test_geo_max_10_rows_enforced_by_model():
 # 2. Quality gate wiring
 # ---------------------------------------------------------------------------
 def test_quality_gate_rejects_wrong_shape():
+    # sort_card's capacity minimum is 4. Using fewer rows made the gate reject on
+    # ROW COUNT, which broke the `good` case outright and — worse — made the `bad`
+    # assertion vacuous, since it too was rejected for the count rather than for
+    # the category shape it is actually meant to catch.
     good = _ds("sort_card", [
         {"image": "a.png", "category": "1", "reason": "fast"},
         {"image": "b.png", "category": "2", "reason": "slow"},
+        {"image": "c.png", "category": "1", "reason": "cheap"},
+        {"image": "d.png", "category": "2", "reason": "niche"},
     ], meta={"TITLE": "Mainstream vs Emerging"})
-    ok, _ = _validate_dataset_quality(good, "sort_card", _LOG)
-    assert ok, "schema-correct sort_card should pass the quality gate"
+    ok, reason = _validate_dataset_quality(good, "sort_card", _LOG)
+    assert ok, f"schema-correct sort_card should pass the quality gate ({reason})"
 
     bad = _ds("sort_card", [
         {"image": "a.png", "category": "Instant Settlement", "reason": "x"},
         {"image": "b.png", "category": "Digital Currency", "reason": "y"},
-    ])
+        {"image": "c.png", "category": "Secure Identity", "reason": "z"},
+        {"image": "d.png", "category": "AI Automation", "reason": "w"},
+    ], meta={"TITLE": "Mainstream vs Emerging"})
     ok, reason = _validate_dataset_quality(bad, "sort_card", _LOG)
     assert not ok, f"wrong-shaped sort_card must be rejected; got ok ({reason})"
+    assert "category" in reason, (
+        f"must be rejected for the category shape, not something incidental: {reason}"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -42,7 +42,7 @@ from src.agents.phase2_scripting.contracts import ScriptParsingError
 from src.agents.phase2_scripting.llm_writer import (
     _build_system_prompt,
     _build_user_prompt,
-    _call_gemini,
+    _call_llm,
     _get_failing_segments,
     _run_script_doctor,
     _ends_dangling,
@@ -103,9 +103,15 @@ async def main() -> None:
     ap = argparse.ArgumentParser(description="Phase 2 prompt sandbox (single-shot, no loop/doctor).")
     ap.add_argument("--template", default="bar_chart")
     ap.add_argument("--persona", default="hyper_analyst")
-    ap.add_argument("--model", default="gemini-2.5-flash")
-    ap.add_argument("--thinking-budget", type=int, default=0)
-    ap.add_argument("--temperature", type=float, default=0.4)
+    ap.add_argument("--provider", default="openai", choices=["openai", "gemini"])
+    ap.add_argument("--model", default="gpt-5.6-luna")
+    ap.add_argument("--reasoning-effort", default="medium",
+                    help="OpenAI only: none|minimal|low|medium|high|xhigh|max")
+    ap.add_argument("--verbosity", default="medium", help="OpenAI only: low|medium|high")
+    ap.add_argument("--thinking-budget", type=int, default=None,
+                    help="Gemini only: thinkingConfig.thinkingBudget.")
+    ap.add_argument("--temperature", type=float, default=None,
+                    help="Gemini only — gpt-5.x rejects this parameter.")
     ap.add_argument("--rows", type=int, default=6)
     ap.add_argument("--data", help="Path to a TemplateDataset JSON (custom topic/data).")
     ap.add_argument("--with-doctor", action="store_true",
@@ -122,20 +128,27 @@ async def main() -> None:
     print("=" * 60)
     print(" PHASE 2 PROMPT SANDBOX")
     print("=" * 60)
-    print(f"  template={template}  persona={args.persona}  model={args.model}")
-    print(f"  thinking_budget={args.thinking_budget}  temp={args.temperature}  "
-          f"rows={len(dataset.rows)}  segments={len(plan.segments)}")
+    print(f"  provider={args.provider}  model={args.model}")
+    print(f"  template={template}  persona={args.persona}")
+    print(f"  effort={args.reasoning_effort}  verbosity={args.verbosity}  "
+          f"thinking_budget={args.thinking_budget}  temp={args.temperature}")
+    print(f"  rows={len(dataset.rows)}  segments={len(plan.segments)}")
     print(f"  system prompt: {len(system_prompt):,} chars (~{_est_tokens(system_prompt):,} tok)")
     print(f"  user prompt  : {len(user_prompt):,} chars (~{_est_tokens(user_prompt):,} tok)")
     print()
 
     draft_model = PhaseModel(
-        model=args.model, temperature=args.temperature, thinking_budget=args.thinking_budget,
+        provider=args.provider,
+        model=args.model,
+        temperature=args.temperature,
+        thinking_budget=args.thinking_budget,
+        reasoning_effort=args.reasoning_effort if args.provider == "openai" else None,
+        verbosity=args.verbosity if args.provider == "openai" else None,
     )
 
-    timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
+    timeout = aiohttp.ClientTimeout(total=APP_CONFIG.llm_timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        raw = await _call_gemini(system_prompt, user_prompt, session, log, draft_model, "sandbox_draft")
+        raw = await _call_llm(system_prompt, user_prompt, session, log, draft_model, "sandbox_draft")
 
         print("--- RAW MODEL OUTPUT (verbatim — watch for fences / 'Here is' yapping) ---")
         print(raw.strip())

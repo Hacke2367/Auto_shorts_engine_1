@@ -27,7 +27,7 @@ from src.agents.phase2_scripting.runner import run_scripting
 from src.agents.phase3_audio.runner import run_phase3
 from src.agents.phase3_audio.contracts import AudioSynthesisSettings
 from src.agents.final_handoff.handoff import run_handoff
-from src.agents.core.config import APP_CONFIG
+from src.agents.core.config import APP_CONFIG, apply_provider_override
 
 
 def get_bucket_name(template_name: str) -> str:
@@ -127,7 +127,10 @@ def cmd_phase1_approve(args):
             
         approved_out = {
             "topic": topics[args.index].get("topic"),
-            "template_name": args.template
+            "template_name": args.template,
+            # Carried forward so extraction can scrape the evidence discovery
+            # already validated instead of re-searching from scratch.
+            "candidate_sources": topics[args.index].get("candidate_sources") or [],
         }
         
         approved_file = run_dir / "discovery" / "approved.json"
@@ -159,6 +162,7 @@ async def async_phase1_extract(args):
         jm.initialize()
 
         topic = getattr(args, "topic", None)
+        seed_urls = []
         if not topic:
             # Fallback to checking for approved.json
             approved_file = run_dir / "discovery" / "approved.json"
@@ -167,6 +171,7 @@ async def async_phase1_extract(args):
                 with open(approved_file, "r", encoding="utf-8") as f:
                     appr = json.load(f)
                     topic = appr.get("topic")
+                    seed_urls = appr.get("candidate_sources") or []
 
         if not topic:
             logger.error("❌ No --topic provided and no discovery/approved.json found.")
@@ -185,7 +190,9 @@ async def async_phase1_extract(args):
         jm.set_template(args.template)
 
         logger.info(f"Extracting topic: {topic}")
-        await run_extraction(jm, topic=topic)
+        if seed_urls:
+            logger.info(f"Seeding extraction with {len(seed_urls)} discovery source(s).")
+        await run_extraction(jm, topic=topic, seed_urls=seed_urls)
         
         # Locate extraction directories
         attempt_dirs = sorted(jm.attempts_dir.glob(f"*_{args.template}"))
@@ -501,6 +508,13 @@ def cmd_run(args):
 
 def main():
     parser = argparse.ArgumentParser(description="AutoShorts Master Pipeline CLI")
+    parser.add_argument(
+        "--llm-provider", choices=["openai", "gemini"],
+        help="Run-scoped override: point EVERY LLM route at this provider. For A/B "
+             "runs only — the durable routing lives in LLMConfig (core/config.py). "
+             "Pair with a FRESH job dir, or the phase caches will serve the other "
+             "provider's output.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # NEW
@@ -588,6 +602,7 @@ def main():
     p_run.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
+    apply_provider_override(getattr(args, "llm_provider", None))
     args.func(args)
 
 

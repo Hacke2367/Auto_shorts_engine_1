@@ -177,9 +177,27 @@ def _build_inputs_hash(
         _hash_file(sys_dir / f"{persona_id}_system.md"),
         str(APP_CONFIG.script_doctor_enabled),
         ENGINE_VERSION,
+        # WHO wrote the script is an input, not an implementation detail. Without
+        # this, changing provider/model/effort reuses the previous model's cached
+        # script.json and the change looks like it did nothing.
+        _llm_route_fingerprint(),
     ]
     payload = "|".join(parts)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _llm_route_fingerprint() -> str:
+    """Identity of every LLM route that contributes to a script."""
+    llm = APP_CONFIG.llm
+    return ";".join(
+        f"{name}={r.provider}:{r.model}:{r.reasoning_effort}:{r.verbosity}:"
+        f"{r.temperature}:{r.thinking_budget}"
+        for name, r in (
+            ("draft", llm.scripting_draft),
+            ("rewrite", llm.scripting_rewrite),
+            ("doctor", llm.scripting_doctor),
+        )
+    )
 
 
 def _load_dataset(dataset_path: Path, template_name: str) -> TemplateDataset:

@@ -11,7 +11,7 @@ It has two independent halves that share `jobs/<job_id>/` as their handoff bus:
 
 ## Tech Stack
 - **Python 3.11+** · Manim (scene rendering) · FFmpeg (audio/video mixing)
-- **LLM**: Gemini (ideation, scripting) · **Search**: Tavily (topic evidence)
+- **LLM**: OpenAI `gpt-5.6-luna` on all routes (Gemini kept as a secondary A/B option) · **Search**: Tavily (topic evidence)
 - **Audio TTS**: ElevenLabs (Phase 3) · **Schema**: Pydantic v2 · **State machine**: LangGraph
 - **Testing**: pytest + offline fakes (no API keys needed for most tests)
 

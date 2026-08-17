@@ -33,6 +33,13 @@ import aiohttp
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.llm_client import call_llm
+from src.agents.core.llm_errors import (
+    LLMIncompleteError,
+    LLMMalformedResponseError,
+    LLMRefusalError,
+)
+from src.agents.core.llm_schemas import IDEATION_SCHEMA
 from src.agents.core.retry import standard_retry_policy
 from src.agents.core.logger import timed_operation, log_api_call
 from src.agents.core.models import (
@@ -116,6 +123,18 @@ a sleeper) — do NOT copy them, and do NOT treat their phrasing or any year as 
 Output EXACTLY AND ONLY the JSON list (a flat array of strings).
 """
 
+def _discovery_route_fingerprint() -> str:
+    """Identity of the LLM routes that produced a discovery batch."""
+    llm = APP_CONFIG.llm
+    return ";".join(
+        f"{name}={r.provider}:{r.model}:{r.reasoning_effort}"
+        for name, r in (
+            ("ideation", llm.discovery_ideation),
+            ("scoring", llm.discovery_scoring),
+        )
+    )
+
+
 def _extract_json_array(raw_text: str) -> list[str]:
     """Best-effort extraction of a flat JSON array of strings from LLM output.
 
@@ -141,6 +160,11 @@ def _extract_json_array(raw_text: str) -> list[str]:
             parsed = json.loads(text)
         except (json.JSONDecodeError, TypeError):
             continue
+        # Strict Structured Outputs requires an object root, so the OpenAI route
+        # returns {"topics": [...]} while Gemini's JSON mode returns a bare array.
+        # Accept both so one parser serves both providers.
+        if isinstance(parsed, dict):
+            parsed = parsed.get("topics")
         if isinstance(parsed, list):
             out = [str(x).strip() for x in parsed if isinstance(x, str) and x.strip()]
             if out:
@@ -194,14 +218,7 @@ async def _ideate_hypotheses(
     ``idea_count`` over-provisions ideas so the downstream data-feasibility gate
     can cull dataless ones and still fill the requested batch.
     """
-    key = settings.gemini_api_key.get_secret_value()
     cfg = APP_CONFIG.llm.discovery_ideation
-    model_name = cfg.model
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model_name}:generateContent"
-    )
-    _headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
     niche_context = f"Please focus exclusively on this niche/theme: '{niche_hint}'" if niche_hint else "Focus on broad general internet trends, business, tech, and pop culture."
 
@@ -217,56 +234,41 @@ async def _ideate_hypotheses(
         niche_context=niche_context,
         trend_context=trend_block,
     )
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "temperature": cfg.temperature,
-            "maxOutputTokens": cfg.max_output_tokens,
-        },
-    }
-
     rc = APP_CONFIG.retry
-    # -- HTTP call only (with patient retry). ONLY true network/5xx failures
-    #    abort the run; JSON parsing is deliberately OUTSIDE this block so a
-    #    malformed-but-successful reply never masquerades as an outage. --
-    data: dict | None = None
-    try:
-        async for attempt in standard_retry_policy(
+
+    def _ideation_retry() -> AsyncRetrying:
+        return standard_retry_policy(
             min_wait=rc.ideation_min_wait,
             max_wait=rc.ideation_max_wait,
             max_attempts=rc.ideation_max_attempts,
-        ):
-            with attempt:
-                t0 = time.perf_counter()
-                async with session.post(url, json=payload, headers=_headers) as resp:
-                    elapsed = (time.perf_counter() - t0) * 1000
-                    log_api_call(
-                        log,
-                        service="gemini.ideate",
-                        status_code=resp.status,
-                        retry_count=attempt.retry_state.attempt_number - 1,
-                        duration_ms=elapsed,
-                    )
-                    resp.raise_for_status()
-                    data = await resp.json()
+        )
+
+    # The two failure modes here are deliberately NOT the same thing:
+    #   * the call never succeeded (repeated 503s, timeouts, bad key) -> abort the
+    #     whole run before spending any Tavily/scoring budget;
+    #   * the model replied but we can't use the reply -> return [] and let the
+    #     caller's default-topic fallback take over.
+    # Catching the "replied but unusable" family FIRST is what keeps a bad parse
+    # from masquerading as an outage.
+    try:
+        raw_text = await call_llm(
+            None,
+            prompt,
+            session,
+            log,
+            cfg,
+            "ideation",
+            expect_json=True,
+            json_schema=IDEATION_SCHEMA if cfg.provider == "openai" else None,
+            retry_policy=_ideation_retry,
+            service_tag="llm.ideate",
+        )
+    except (LLMRefusalError, LLMIncompleteError, LLMMalformedResponseError) as e:
+        log.warning("Ideation response carried no usable text payload: %s", e)
+        return []
     except Exception as e:
-        # The call itself never succeeded (e.g. repeated 503s / timeouts).
-        # Signal this distinctly so the caller can abort before spending any
-        # downstream Tavily/scoring budget on hardcoded fallback topics.
         log.warning("Ideation call failed outright after retries: %s", e)
         raise IdeationUnavailableError(str(e)) from e
-
-    # -- Parse the SUCCESSFUL response robustly. A parse failure here is NOT an
-    #    outage — the model replied, we just couldn't read it — so we return []
-    #    and let the caller's default-topic fallback take over (never abort). --
-    if data is None:  # defensive; the loop either assigns data or raises above
-        return []
-    try:
-        raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError, TypeError) as e:
-        log.warning("Ideation response carried no text payload: %s", e)
-        return []
 
     ideas = _extract_json_array(raw_text)
     if not ideas:
@@ -286,11 +288,24 @@ async def run_discovery(
     candidates_path = output_dir / "candidates.json"
 
     # -- 1. Idempotency Check --
+    # NOTE: this cache is keyed on the FILE EXISTING, nothing else — not on the
+    # model, provider, or niche. Re-running after a routing change reuses the old
+    # provider's candidates and the change appears to have done nothing. The
+    # warning below makes that visible; use a fresh job dir to force a real re-run.
     if candidates_path.exists():
         log.info("candidates.json already exists at %s. Loading cached batch.", candidates_path)
         try:
             raw = json.loads(candidates_path.read_text(encoding="utf-8"))
             batch = DiscoveryBatch.model_validate(raw)
+            cached_route = raw.get("llm_route") if isinstance(raw, dict) else None
+            current_route = _discovery_route_fingerprint()
+            if cached_route and cached_route != current_route:
+                log.warning(
+                    "Cached candidates were produced by a DIFFERENT LLM route (%s), "
+                    "current is %s. Reusing them anyway — use a fresh job dir to "
+                    "re-run discovery on the current route.",
+                    cached_route, current_route,
+                )
             log.info(
                 "Loaded cached discovery batch: %d candidates.",
                 len(batch.candidates),
@@ -540,8 +555,12 @@ async def run_discovery(
             gated_candidate_count=len(gated_out),
         )
 
-        # Atomic write of candidates.json
-        _batch_content = batch.model_dump_json(indent=2)
+        # Atomic write of candidates.json. The route fingerprint rides alongside
+        # the batch so a later run can tell whose candidates these were.
+        # (DiscoveryBatch ignores unknown keys on load, so this stays compatible.)
+        _batch_payload = batch.model_dump(mode="json")
+        _batch_payload["llm_route"] = _discovery_route_fingerprint()
+        _batch_content = json.dumps(_batch_payload, indent=2, ensure_ascii=False)
         _batch_fd, _batch_tmp = tempfile.mkstemp(dir=str(output_dir), suffix=".tmp")
         try:
             with os.fdopen(_batch_fd, "w", encoding="utf-8") as _f:

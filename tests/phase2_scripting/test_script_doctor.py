@@ -1,6 +1,6 @@
 """Offline coverage for the Phase 2 script-doctor flow pass.
 
-Mocks `_call_gemini` so `write_script` runs end-to-end (including the doctor) with no API key.
+Mocks `_call_llm` so `write_script` runs end-to-end (including the doctor) with no API key.
 Covers three branches: doctor applies a valid polish, doctor falls back on a bad polish, and the
 doctor is skipped when disabled.
 """
@@ -28,7 +28,7 @@ def _run(plan, dataset, fake_call, doctor_enabled):
     orig = llm_writer.APP_CONFIG.script_doctor_enabled
     llm_writer.APP_CONFIG.script_doctor_enabled = doctor_enabled
     try:
-        with patch.object(llm_writer, "_call_gemini", fake_call):
+        with patch.object(llm_writer, "_call_llm", fake_call):
             return asyncio.run(llm_writer.write_script(plan, dataset, session=None, log=logger))
     finally:
         llm_writer.APP_CONFIG.script_doctor_enabled = orig
@@ -37,7 +37,7 @@ def _run(plan, dataset, fake_call, doctor_enabled):
 def test_doctor_applies_when_polish_is_valid():
     plan, dataset = _make_plan_and_dataset()
 
-    async def fake_call(system_prompt, user_prompt, session, log, phase_model=None, cost_phase=""):
+    async def fake_call(system_prompt, user_prompt, session, log, phase_model=None, cost_phase="", **kwargs):
         # Both main generation and the doctor get a valid, in-budget monologue.
         return build_fake_monologue(plan, plan.persona_id)
 
@@ -52,7 +52,7 @@ def test_doctor_applies_when_polish_is_valid():
 def test_doctor_falls_back_on_bad_polish():
     plan, dataset = _make_plan_and_dataset()
 
-    async def fake_call(system_prompt, user_prompt, session, log, phase_model=None, cost_phase=""):
+    async def fake_call(system_prompt, user_prompt, session, log, phase_model=None, cost_phase="", **kwargs):
         # Doctor pass returns a structurally broken monologue -> must be discarded.
         if "PERFORMANCE DOCTOR" in user_prompt:
             return "<MONOLOGUE><HOOK>broken</HOOK></MONOLOGUE>"
@@ -70,7 +70,7 @@ def test_doctor_falls_back_on_bad_polish():
 def test_doctor_skipped_when_disabled():
     plan, dataset = _make_plan_and_dataset()
 
-    async def fake_call(system_prompt, user_prompt, session, log, phase_model=None, cost_phase=""):
+    async def fake_call(system_prompt, user_prompt, session, log, phase_model=None, cost_phase="", **kwargs):
         assert "PERFORMANCE DOCTOR" not in user_prompt, "doctor must not run when disabled"
         return build_fake_monologue(plan, plan.persona_id)
 
