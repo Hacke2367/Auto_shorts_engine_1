@@ -52,7 +52,7 @@ def log_cost(run_dir: Path, phase: str, step: str, status: str, notes: str = "")
 def cmd_new(args):
     """Create a new job run folder for a given template."""
     bucket = get_bucket_name(args.template)
-    run_dir = create_run_dir(bucket)
+    run_dir = create_run_dir(bucket, template_name=args.template)
     print(f"✅ Created new job bucket: {run_dir.resolve()}")
     print(f"To run phase 2, ensure dataset is located at '{run_dir.resolve()}/data/{args.template}_dataset.json'")
     print(f"and '{run_dir.resolve()}/data/data_manifest.json' exists (or just run phase1-extract).")
@@ -157,8 +157,7 @@ async def async_phase1_extract(args):
     try:
         jm = JobManager(template_name="auto")
         jm.initialize()
-        jm.set_template(args.template)
-        
+
         topic = getattr(args, "topic", None)
         if not topic:
             # Fallback to checking for approved.json
@@ -168,11 +167,23 @@ async def async_phase1_extract(args):
                 with open(approved_file, "r", encoding="utf-8") as f:
                     appr = json.load(f)
                     topic = appr.get("topic")
-            
+
         if not topic:
             logger.error("❌ No --topic provided and no discovery/approved.json found.")
             raise ValueError("No --topic provided and no discovery/approved.json found.")
-            
+
+        # run_extraction()'s auto-mode branch reads the target template from
+        # phase1_discovery step metadata (selected_template), NOT from
+        # set_template() alone — set_template() only updates state["template"],
+        # a different field. Mirrors the working pattern in src/cli/phase1.py's
+        # cmd_auto/cmd_approve (mark_step_completed BEFORE set_template).
+        jm.mark_step_completed("phase1_discovery", {
+            "selected_topic": topic,
+            "selected_template": args.template,
+            "fallback_template": None,
+        })
+        jm.set_template(args.template)
+
         logger.info(f"Extracting topic: {topic}")
         await run_extraction(jm, topic=topic)
         
