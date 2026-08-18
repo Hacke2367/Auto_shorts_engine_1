@@ -721,8 +721,13 @@ def resolve_card_image_path(img_filename: str) -> str:
 # ============================================================
 # CARD
 # ============================================================
+CARD_W, CARD_H = 1.85, 1.25
+# Image is fitted INSIDE this box, leaving the plate visible as a border.
+CARD_IMG_MAX_W, CARD_IMG_MAX_H = 1.18, 1.05
+
+
 def build_card(img_path: str, accent: str, fallback_label: str) -> Group:
-    plate = RoundedRectangle(width=1.85, height=1.25, corner_radius=0.18)
+    plate = RoundedRectangle(width=CARD_W, height=CARD_H, corner_radius=0.18)
     plate.set_fill("#070A0C", 0.92)
     plate.set_stroke(accent, 2.6, 0.82)
 
@@ -731,7 +736,13 @@ def build_card(img_path: str, accent: str, fallback_label: str) -> Group:
 
     if img_path and os.path.exists(img_path):
         im = ImageMobject(img_path)
-        im.scale_to_fit_width(1.18)
+        # Fit INSIDE the box on BOTH axes, preserving aspect ratio. Scaling on
+        # width alone let any portrait source (a movie poster at 2:3 renders
+        # 1.77 tall against a 1.25 plate) spill out the top and bottom of the
+        # card. Width first, then clamp height if the result is still too tall.
+        im.scale_to_fit_width(CARD_IMG_MAX_W)
+        if im.height > CARD_IMG_MAX_H:
+            im.scale_to_fit_height(CARD_IMG_MAX_H)
     else:
         im = safe_text((fallback_label[:1] or "?").upper(), font_size=64, color=WHITE, weight=BOLD)
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import math
 import os
 import tempfile
 from pathlib import Path
@@ -102,14 +103,31 @@ def _build_template_spec(template_name: str) -> TemplateSpec:
     )
 
 
+def _axis_ceiling(peak: float) -> str:
+    """Pick a clean axis maximum just above `peak` (~8% headroom, rounded up).
+
+    Returned as a string because it goes straight into the CSV meta header.
+    Keeps integers integral (11, 14, 850) so the on-screen axis stays readable.
+    """
+    if peak <= 0:
+        return "100"
+    target = peak * 1.08
+    # Round up on a 2-significant-figure grid (step = one tenth of the leading
+    # magnitude). Coarser steps overshoot badly on small peaks — a peak of 10
+    # on a half-decade grid lands at 15, leaving the top bar at only 67%.
+    exp = math.floor(math.log10(target))
+    step = 10.0 ** (exp - 1)
+    ceil = math.ceil(target / step) * step
+    return str(int(ceil)) if float(ceil).is_integer() else f"{ceil:.2f}"
+
+
 def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> None:
     """Export the TemplateDataset to CSV for the Manim engine (atomic write)."""
     if not dataset.rows:
         return
 
     static_tags = {
-        "bar_chart": {"MAX": "100", "SORT": "DESC", "TOP_N": "10"},
-        "scan_race": {"FEED": "FEED_RACE // LIVE", "FOOTER": "CONFIDENTIAL // VERIFIED", "TOPK": "5", "MAX_SERIES": "10"},
+        "scan_race": {"FEED": "FEED_RACE // LIVE", "FOOTER": "CONFIDENTIAL // VERIFIED"},
         "donut_breakdown": {"TOP": "8", "PANEL_TOP": "6", "OTHERS_MIN_PCT": "2", "MODE": "DONUT"},
         "sort_card": {"FEED": "FEED_SORT // TRIBUNAL"},
         "vs_card": {"P1_IMG": "player1.png", "P2_IMG": "player2.png"},
@@ -119,6 +137,29 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
     if dataset.template_name in static_tags:
         combined_meta.update(static_tags[dataset.template_name])
 
+    # Data-derived meta tags. These were previously STATIC, which silently broke
+    # charts: bar_chart's renderer computes bar width as value/MAX and clamps to
+    # the track (bar_chart.py), so a hardcoded MAX=100 made every bar a sliver
+    # when values were small (goals: max 10 -> 10% width) and made every bar
+    # clip to FULL width when values exceeded 100 (net worth: 142..817 -> all 10
+    # bars identical). MAX must track the real data, so derive it here.
+    if dataset.template_name == "bar_chart":
+        values = [float(r.model_dump().get("value", 0.0) or 0.0) for r in dataset.rows]
+        peak = max(values) if values else 0.0
+        combined_meta.update({
+            # ~8% headroom so the top bar reads as near-full without touching the
+            # clamp, then round up to something human for the axis label.
+            "MAX": str(_axis_ceiling(peak)),
+            "SORT": "DESC",
+            "TOP_N": str(len(dataset.rows)),
+        })
+    elif dataset.template_name == "scan_race":
+        series_count = len(dataset.rows[0].model_dump().get("entities", {}) or {})
+        combined_meta.update({
+            "TOPK": str(max(1, series_count)),
+            "MAX_SERIES": str(max(1, series_count)),
+        })
+
     # Map pydantic field names -> canonical CSV headers the renderer parses by
     # exact name (e.g. sort_card image/category/reason -> Image/Category/Reason).
     # Templates absent from the map keep their lowercase field names unchanged
@@ -126,6 +167,20 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
     field_names = list(dataset.rows[0].model_dump().keys())
     header_map = TEMPLATE_CSV_HEADERS.get(dataset.template_name, {})
     headers = [header_map.get(fn, fn) for fn in field_names]
+
+    # scan_race carries a nested {entity: value} dict per row. csv.DictWriter
+    # would str() that dict into a single cell, and the renderer's loader
+    # (_load_race_df) runs pd.to_numeric over every column after the first —
+    # turning the stringified dict into NaN -> 0.0 and rendering a FLAT chart.
+    # The renderer wants a WIDE table: year + one numeric column per entity.
+    scan_race_series: list[str] = []
+    if dataset.template_name == "scan_race":
+        seen: dict[str, None] = {}
+        for r in dataset.rows:
+            for ent in (r.model_dump().get("entities", {}) or {}):
+                seen.setdefault(ent, None)
+        scan_race_series = list(seen)
+        headers = ["year"] + scan_race_series
 
     # Write to temp file then atomically replace
     fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
@@ -143,7 +198,15 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
             writer.writeheader()
             for row in dataset.rows:
                 dump = row.model_dump()
-                writer.writerow({header_map.get(k, k): v for k, v in dump.items()})
+                if scan_race_series:
+                    ents = dump.get("entities", {}) or {}
+                    # Absent entity in a given year -> 0.0, matching the loader's
+                    # own fillna(0.0) so the series stays numeric and continuous.
+                    out = {"year": dump.get("year")}
+                    out.update({e: ents.get(e, 0.0) for e in scan_race_series})
+                    writer.writerow(out)
+                else:
+                    writer.writerow({header_map.get(k, k): v for k, v in dump.items()})
         os.replace(tmp_path, str(path))
     except BaseException:
         try:
