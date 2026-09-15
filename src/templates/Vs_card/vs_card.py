@@ -323,9 +323,12 @@ def build_background(W: float, H: float, c_left: str, c_right: str, c_mid: str) 
     """
     g = Group()
 
-    left_glow = Circle(radius=max(W, H) * 0.70).set_fill(c_left, 0.095).set_stroke(width=0).move_to([-1.85, 0.75, 0])
-    right_glow = Circle(radius=max(W, H) * 0.70).set_fill(c_right, 0.085).set_stroke(width=0).move_to([+1.85, 0.65, 0])
-    mid_glow = Circle(radius=max(W, H) * 0.62).set_fill(c_mid, 0.040).set_stroke(width=0).move_to([0.0, -0.25, 0])
+    # Blooms are frame-sized, so the cyan + pink + purple fills stack over the whole
+    # screen. At 0.095 / 0.085 / 0.040 they tinted it navy-purple, off the teal-black
+    # ground every other template uses; halved, they keep the side colour cue.
+    left_glow = Circle(radius=max(W, H) * 0.70).set_fill(c_left, 0.045).set_stroke(width=0).move_to([-1.85, 0.75, 0])
+    right_glow = Circle(radius=max(W, H) * 0.70).set_fill(c_right, 0.040).set_stroke(width=0).move_to([+1.85, 0.65, 0])
+    mid_glow = Circle(radius=max(W, H) * 0.62).set_fill(c_mid, 0.015).set_stroke(width=0).move_to([0.0, -0.25, 0])
     g.add(left_glow, right_glow, mid_glow)
 
     rings = VGroup()
@@ -543,7 +546,7 @@ def build_value_box(center: np.ndarray, accent: str) -> Dict[str, Mobject]:
     box.move_to(center)
 
     glow = box.copy().set_fill(opacity=0).set_stroke(accent, 22, 0.20)
-    txt = safe_text("-", font_size=30, color=WHITE, weight=BOLD).move_to(center)
+    txt = safe_text("?", font_size=30, color=WHITE, weight=BOLD).move_to(center)
     txt.set_opacity(1.0)
 
     grp = VGroup(glow, box, txt)
@@ -559,16 +562,18 @@ def build_announcement_box(center: np.ndarray, width: float, c_left: str, c_righ
 
     glow = outer.copy().set_fill(opacity=0).set_stroke(color=[c_left, c_right], width=26, opacity=0.22)
 
+    # Pre-round state is on screen through hook + setup, so it must read as real
+    # copy, not debug defaults ("ROUND 1/1 | CATEGORY: —", "METRIC", "Weight: 1.0").
     top_line = safe_text(
-        "ROUND 1/1   |   CATEGORY: —",
+        "HEAD TO HEAD",
         font="Consolas",
         font_size=14,
         color=getattr(Theme, "TEXT_SUB", "#B8B8B8"),
         weight=BOLD,
     )
-    main_line = safe_text("🔥 METRIC", font="Montserrat", font_size=36, color=WHITE, weight=BOLD)
+    main_line = safe_text("GET READY", font="Montserrat", font_size=36, color=WHITE, weight=BOLD)
     sub_line = safe_text(
-        "Weight: 1.0",
+        " ",
         font="Consolas",
         font_size=14,
         color=getattr(Theme, "TEXT_SUB", "#B8B8B8"),
@@ -702,11 +707,18 @@ def build_notes_console(center: np.ndarray, w: float, c_accent: str, c_sub: str,
     caret.next_to(line, RIGHT, buff=0.10)
 
     t = ValueTracker(0.0)
+    chip_fill = 0.94
 
     def caret_blink(mob, dt):
         t.increment_value(dt)
         v = float(t.get_value())
-        mob.set_opacity(0.25 + 0.75 * (0.5 + 0.5 * math.sin(v * 6.0)))
+        # Follow the status line: it is Transform-ed to new text of a different width,
+        # and a caret left at its old x sits on top of the new letters.
+        mob.next_to(line, RIGHT, buff=0.10)
+        # Blink only as visible as the console itself. Setting an absolute opacity here
+        # overrode every FadeOut of the console and left the caret as a stray square.
+        visible = max(0.0, min(1.0, float(chip.get_fill_opacity()) / chip_fill))
+        mob.set_opacity(visible * (0.25 + 0.75 * (0.5 + 0.5 * math.sin(v * 6.0))))
 
     caret.add_updater(caret_blink)
 
@@ -1245,6 +1257,9 @@ class VsCardFinal(Scene):
                 new1.scale_to_fit_width(terminal["plate"].width - 0.55)
             new2 = safe_text(l2, font="Consolas", font_size=14, color=C_SUB, weight=BOLD)
             new3 = safe_text(l3, font="Consolas", font_size=14, color=C_SUB, weight=BOLD)
+            for ln in (new2, new3):
+                if ln.width > (terminal["plate"].width - 0.55):
+                    ln.scale_to_fit_width(terminal["plate"].width - 0.55)
 
             new1.move_to(terminal["line1"].get_center()).align_to(terminal["plate"].get_left() + RIGHT * pad_x, LEFT)
             new2.move_to(terminal["line2"].get_center()).align_to(terminal["plate"].get_left() + RIGHT * pad_x, LEFT)
@@ -1287,9 +1302,12 @@ class VsCardFinal(Scene):
             category = str(row.get("Category", "")).strip().upper()
             weight = float(row.get("Weight", 1.0))
 
-            top_line = f"ROUND {i+1}/{n_rounds}   |   CATEGORY: {category or '—'}"
-            main_line = f"{(emoji + ' ') if emoji else ''}{ellipsize(metric, 24)}"
-            sub_line = f"Weight: {weight:.1f}"
+            top_line = f"ROUND {i+1}/{n_rounds}" + (f"   |   {category}" if category else "")
+            # Full metric name — the width check below scales it down to fit the box
+            # (ellipsizing at 24 chars cut "2026 FULL-YEAR PERFORMANCE" to "PERFORMA…").
+            main_line = f"{(emoji + ' ') if emoji else ''}{ellipsize(metric, 44)}"
+            # Weight only earns a line when it actually changes the scoring.
+            sub_line = f"WEIGHT x{weight:g}" if abs(weight - 1.0) > 1e-9 else " "
 
             new_top = safe_text(top_line, font="Consolas", font_size=14, color=C_SUB, weight=BOLD).move_to(ann["top"].get_center())
             new_main = safe_text(main_line, font="Montserrat", font_size=36, color=WHITE, weight=BOLD).move_to(ann["main"].get_center())
@@ -1340,7 +1358,7 @@ class VsCardFinal(Scene):
                 set_terminal_lines(
                     "RESULT: POINT AWARDED",
                     f"+{fmt_pts(add_pts)}  ->  {win_name.upper()}",
-                    f"metric: {ellipsize(metric, 22)}",
+                    f"metric: {ellipsize(metric, 34)}",
                     C_WIN,
                 )
 
@@ -1415,7 +1433,7 @@ class VsCardFinal(Scene):
                 set_terminal_lines(
                     "RESULT: DRAW",
                     "no points awarded",
-                    f"metric: {ellipsize(metric, 22)}",
+                    f"metric: {ellipsize(metric, 34)}",
                     C_GOLD,
                 )
 
@@ -1496,7 +1514,13 @@ class VsCardFinal(Scene):
             conn_alpha.set_value(0.0)
             spine.set_opacity(0.0)
 
-            draw_txt = safe_text("IT'S A DRAW!", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
+            draw_head = safe_text("IT'S A DRAW!", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
+            draw_score = safe_text(f"{fmt_pts(p1_pts)}  —  {fmt_pts(p2_pts)}", font="Consolas", font_size=30, color=C_GOLD, weight=BOLD)
+            draw_txt = VGroup(draw_head, draw_score).arrange(DOWN, buff=0.18)
+            # Sit above the two cards. Centred, it was written across both photos and
+            # white text on a gold nugget / bitcoin coin was unreadable.
+            cards_top = max(p1["group"].get_top()[1], p2["group"].get_top()[1])
+            draw_txt.move_to([0.0, cards_top + 0.35 + draw_txt.height / 2, 0])
             draw_txt.set_z_index(380)
             act_draw = clamp(TL.seg_total(winner_seg) * 0.40, 0.45, 0.85)
             sfx.mark("ui_pop", gain_db=-8, meta={"segment": winner_seg})

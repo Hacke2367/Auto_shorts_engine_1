@@ -30,8 +30,14 @@ try:
         get_cinematic_overlay,
         get_rotating_watermark,
         add_cinematic_background,
+        IntroManager,
     )
 except Exception:
+    class IntroManager:  # type: ignore
+        @staticmethod
+        def play_intro(*args, **kwargs):
+            return None
+
     DATA_DIR = "./geo_data"
     BACKGROUND_COLOR = "#050505"
     FONT_DISPLAY = "Montserrat"
@@ -144,12 +150,13 @@ RACE_COLORS = [
 @dataclass(frozen=True)
 class RaceMeta:
     title: str = "GDP GROWTH RACE"
-    subtitle: str = "Live trajectory + ranking HUD"
+    subtitle: str = ""  # empty -> no subtitle line (never ship template/dev text)
     feed_text: str = "FEED_RACE // LIVE"
     footer_text: str = "CONFIDENTIAL // VERIFIED"
     topk: int = 5
     max_series: int = 10  # clean by default (user preference)
     unit_suffix: str = "T"
+    kicker: str = ""  # optional small line above the title (#KICKER=...)
 
 
 def _parse_meta_lines(path: str) -> Dict[str, str]:
@@ -193,6 +200,7 @@ def _resolve_race_meta(meta: Dict[str, str]) -> RaceMeta:
     topk = max(1, _int("TOPK", RaceMeta.topk))
     max_series = max(1, _int("MAX_SERIES", RaceMeta.max_series))
     unit_suffix = meta.get("UNIT", RaceMeta.unit_suffix)
+    kicker = meta.get("KICKER", RaceMeta.kicker)
     return RaceMeta(
         title=title,
         subtitle=subtitle,
@@ -201,6 +209,7 @@ def _resolve_race_meta(meta: Dict[str, str]) -> RaceMeta:
         topk=topk,
         max_series=max_series,
         unit_suffix=unit_suffix,
+        kicker=kicker,
     )
 
 
@@ -378,41 +387,19 @@ class CinematicLineRace(Scene):
         hook_scale = tclamp(hook_action_target / 2.55, 0.55, 1.45)
         hook_t0 = float(self.time)
 
-        cover = Rectangle(width=60, height=60).set_fill(color=BLACK, opacity=1).set_stroke(width=0)
-        cover.set_z_index(999)
-        self.add(cover)
-
-        # Brand lockup must match IntroManager (src/utils.py) exactly — this template
-        # hand-rolls its intro so the hook animation can be scaled by hook_scale, but
-        # the type treatment stays identical to every other template.
-        breach = Text("> SYSTEM BREACH DETECTED", font="Consolas", font_size=22, color=Design.PINK)
-        breach.move_to([0, -0.15, 0]).set_z_index(1000)
-
-        brand = Text("BIGDATA LEAK", font=FONT_DISPLAY, weight=BOLD, font_size=54)
-        brand.set_color_by_gradient(Design.CYAN, Design.TEXT_MAIN)
-        brand.move_to([0, 0.10, 0]).set_z_index(1000)
-
-        sfx.mark("intro_glitch", gain_db=-9, meta={"at": "breach"})
-        self.play(FadeIn(breach, shift=UP * 0.08), run_time=0.18 * hook_scale)
-        self.play(Flash(breach, color=WHITE, line_length=0.35, num_lines=10), run_time=0.18 * hook_scale)
-        self.play(FadeOut(breach, shift=UP * 0.08), run_time=0.16 * hook_scale)
-
-        sfx.mark("intro_rise", gain_db=-8, meta={"at": "brand_in"})
-        self.play(Write(brand), run_time=0.35 * hook_scale)
-        self.play(Flash(brand, color=WHITE, line_length=0.55, num_lines=12), run_time=0.20 * hook_scale)
-        self.play(FadeOut(brand, shift=UP * 0.06), run_time=0.18 * hook_scale)
-
-        top, right, bottom, left = get_branding_border_lines(stroke_w=6, opacity=1.0)
-        overlay = get_cinematic_overlay(self, feed_text=meta.feed_text, footer_text=meta.footer_text)
-        watermark = get_rotating_watermark()
-        self.add(top, right, bottom, left, overlay, watermark)
-
-        sfx.mark("whoosh_soft", gain_db=-10, meta={"at": "frame_in"})
-        self.play(
-            FadeOut(cover),
-            Create(top), Create(right), Create(bottom), Create(left),
-            run_time=0.75 * hook_scale,
-            rate_func=rf.ease_out_cubic
+        # Standard brand intro, identical to the other six templates. The hand-rolled
+        # copy that lived here had drifted (letters written on, white flashes, offset
+        # positions, different border reveal). IntroManager reports its SFX through
+        # scene.sfx_mark, so route that to this scene's engine.
+        self.sfx_mark = lambda key, gain_db=0.0, offset=0.0, meta=None: sfx.mark(
+            key, offset=offset, gain_db=gain_db, meta=meta
+        )
+        IntroManager.play_intro(
+            self,
+            brand_title="BIGDATA LEAK",
+            brand_sub="SYSTEM BREACH DETECTED",
+            feed_text=meta.feed_text,
+            footer_text=meta.footer_text,
         )
 
         # ==========================================
@@ -522,7 +509,9 @@ class CinematicLineRace(Scene):
         # ==========================================
         header_y = sf["top"] - 0.75
 
-        kicker = Text("LIVE ECONOMIC TRACKER", font="Montserrat", weight=BOLD, font_size=13, color=Design.GOLD)
+        # Kicker comes from the CSV (#KICKER=...). It used to be hardcoded to
+        # "LIVE ECONOMIC TRACKER", which is wrong for any non-economy race.
+        kicker = Text(meta.kicker or " ", font="Montserrat", weight=BOLD, font_size=16, color=Design.GOLD)
         kicker.set_opacity(0.82).set_z_index(60)
         kicker.move_to([sf["cx"], header_y + 0.44, 0])
 
@@ -542,7 +531,7 @@ class CinematicLineRace(Scene):
 
         scan_dot.add_updater(_scan)
 
-        subtitle = Text(meta.subtitle, font="Montserrat", font_size=18, color=Design.TEXT_SUB)
+        subtitle = Text(meta.subtitle or " ", font="Montserrat", font_size=18, color=Design.TEXT_SUB)
         subtitle.next_to(underline, DOWN, buff=0.20).set_z_index(60)
         subtitle_shadow = subtitle.copy().set_color(BLACK).set_opacity(0.24).shift(DOWN * 0.04 + RIGHT * 0.03).set_z_index(59)
         self.add(title_shadow, subtitle_shadow)
@@ -597,7 +586,9 @@ class CinematicLineRace(Scene):
 
         dock_title = Text("LIVE RANKING", font="Montserrat", weight=BOLD, font_size=16, color=Design.GOLD)
         dock_title.set_z_index(42)
-        dock_title.next_to(live_dot, RIGHT, buff=0.10).align_to(strip, LEFT)
+        # next_to only: aligning the title to the strip's left edge put it on top of the
+        # blinking live dot ("LIVE" read with a green blob over the L).
+        dock_title.next_to(live_dot, RIGHT, buff=0.10)
 
         sfx.mark("ui_pop", gain_db=-12, meta={"at": "dock_in"})
         self.play(
@@ -633,7 +624,21 @@ class CinematicLineRace(Scene):
 
         color_map = {c: RACE_COLORS[i % len(RACE_COLORS)] for i, c in enumerate(labels)}
 
-        def make_slot_card(y):
+        # The dock is on screen for the whole setup segment before the race starts, so
+        # seed each slot with the real first-year ranking instead of "1 COUNTRY 0.0T".
+        first_ranking = sorted(labels, key=lambda c: float(series[c][0]), reverse=True)[:TOPK]
+
+        def _fit_slot_name(nm, badge, vt):
+            """Left-align a ranking name just right of its rank badge and shrink it to
+            the gap before the value. Centering it at a fixed x let long names
+            ("UNITED STATES", "UNITED KINGDOM") slide under the badge."""
+            left = badge.get_right()[0] + 0.12
+            max_w = (vt.get_left()[0] - 0.15) - left
+            if nm.width > max_w > 0.2:
+                nm.scale_to_fit_width(max_w)
+            nm.move_to([left + nm.width / 2, badge.get_center()[1], 0])
+
+        def make_slot_card(y, i):
             card_w = dock_w - 0.55
             card_h = 0.62
             x0 = rail_x + 0.18
@@ -661,13 +666,19 @@ class CinematicLineRace(Scene):
             badge.set_stroke(color=Design.CYAN, width=2, opacity=0.7)
             badge.move_to(body.get_left() + RIGHT * 0.38).set_z_index(46)
 
-            rank_txt = Text("1", font="Montserrat", weight=BOLD, font_size=16, color=WHITE).move_to(badge).set_z_index(47)
+            c0 = first_ranking[i] if i < len(first_ranking) else ""
+            rank_txt = Text(str(i + 1), font="Montserrat", weight=BOLD, font_size=16, color=WHITE).move_to(badge).set_z_index(47)
 
-            name_txt = Text("COUNTRY", font="Montserrat", weight=BOLD, font_size=13, color=WHITE).set_z_index(47)
-            name_txt.move_to(body.get_left() + RIGHT * 0.95)
-
-            val_txt = Text(f"0.0{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=13, color=Design.CYAN).set_z_index(47)
+            val_str = f"{float(series[c0][0]):.1f}{meta.unit_suffix}" if c0 else " "
+            val_txt = Text(val_str, font="Montserrat", weight=BOLD, font_size=13, color=Design.CYAN).set_z_index(47)
             val_txt.move_to(body.get_right() + LEFT * 0.40)
+
+            name_txt = Text(str(c0).upper() or " ", font="Montserrat", weight=BOLD, font_size=13, color=WHITE).set_z_index(47)
+            _fit_slot_name(name_txt, badge, val_txt)
+
+            if c0:
+                accent.set_fill(color_map[c0], opacity=0.9)
+                badge.set_stroke(color_map[c0], width=2, opacity=0.85)
 
             return {
                 "group": VGroup(branch, bolt, glow, body, accent, badge, rank_txt, name_txt, val_txt),
@@ -683,7 +694,7 @@ class CinematicLineRace(Scene):
                 "y": y,
             }
 
-        slot_cards = [make_slot_card(y) for y in slot_ys]
+        slot_cards = [make_slot_card(y, i) for i, y in enumerate(slot_ys)]
         sfx.mark("ui_tick", gain_db=-13, meta={"at": "slots_in"})
         self.play(
             LaggedStart(
@@ -872,14 +883,22 @@ class CinematicLineRace(Scene):
 
                 chips.append([c, p, col, box, txt, cx, cy])
 
-            # vertical repel
+            # Vertical repel top-down, then lift the whole stack if it ran past the plot
+            # floor. Clamping each chip on its own stacked the lowest ones back on top
+            # of each other (4.5T / 4.1T / 4.1T at the end of the race).
             chips.sort(key=lambda k: k[6], reverse=True)
-            min_gap = 0.38
+            min_gap = max(0.42, max((ch[3].height for ch in chips), default=0.0) + 0.04)
             for i in range(1, len(chips)):
                 prev = chips[i - 1]
                 cur = chips[i]
                 if prev[6] - cur[6] < min_gap:
                     cur[6] = prev[6] - min_gap
+            if chips:
+                floor_y = clampy_to_plot(-1e9, chips[-1][3].height)
+                lift = floor_y - chips[-1][6]
+                if lift > 0:
+                    for ch in chips:
+                        ch[6] += lift
             for ch in chips:
                 ch[6] = clampy_to_plot(ch[6], ch[3].height)
 
@@ -942,14 +961,11 @@ class CinematicLineRace(Scene):
                 )
 
                 nm = Text(str(c).upper(), font="Montserrat", weight=BOLD, font_size=13, color=WHITE)
-                nm.move_to(body.get_left() + RIGHT * 0.95)
 
                 vt = Text(f"{v:.1f}{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=13, color=Design.CYAN)
                 vt.move_to(body.get_right() + LEFT * 0.40)
 
-                max_w = (vt.get_left()[0] - nm.get_left()[0]) - 0.15
-                if nm.width > max_w and max_w > 0.45:
-                    nm.scale_to_fit_width(max_w)
+                _fit_slot_name(nm, badge, vt)
 
                 card["name_txt"].become(nm)
                 card["val_txt"].become(vt)
@@ -1008,25 +1024,32 @@ class CinematicLineRace(Scene):
             final_scores = sorted([(c, float(series[c][-1])) for c in labels], key=lambda x: x[1], reverse=True)
             winner_name = final_scores[0][0] if final_scores else "N/A"
 
-            winner_banner = RoundedRectangle(width=3.9, height=0.62, corner_radius=0.16).set_z_index(75)
-            winner_banner.set_fill(color="#000000", opacity=0.58)
-            winner_banner.set_stroke(color=Design.GOLD, width=2.0, opacity=0.90)
-            winner_banner.move_to([sf["cx"], sf["bottom"] + 0.85, 0])
+            winner_val = final_scores[0][1] if final_scores else 0.0
 
-            winner_text = Text(
-                f"LEADER LOCKED: {str(winner_name).upper()}",
-                font="Montserrat",
-                weight=BOLD,
-                font_size=18,
-                color=WHITE,
-            ).set_z_index(76)
+            w_head = Text("WINNER", font="Montserrat", weight=BOLD, font_size=16, color=Design.GOLD)
+            w_name = Text(str(winner_name).upper(), font="Montserrat", weight=BOLD, font_size=26, color=WHITE)
+            w_val = Text(f"{winner_val:.1f}{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=22, color=Design.CYAN)
+            winner_text = VGroup(w_head, w_name, w_val).arrange(DOWN, buff=0.08).set_z_index(76)
+
+            # Park the result in the empty space right of the ranking dock and keep it
+            # up through finish + outro. At the bottom it sat on the x-axis years, and it
+            # faded out after 0.9s, leaving ~9s of static chart with no result on screen.
+            room_left = panel.get_right()[0] + 0.20
+            room_w = sf["right"] - room_left
+            if winner_text.width > room_w - 0.50:
+                winner_text.scale_to_fit_width(room_w - 0.50)
+            winner_banner = RoundedRectangle(
+                width=winner_text.width + 0.45, height=winner_text.height + 0.36, corner_radius=0.18
+            ).set_z_index(75)
+            winner_banner.set_fill(color="#000000", opacity=0.72)
+            winner_banner.set_stroke(color=Design.GOLD, width=2.0, opacity=0.90)
+            winner_banner.move_to([room_left + room_w / 2, panel.get_center()[1], 0])
             winner_text.move_to(winner_banner)
 
             sfx.mark("winner_rise", gain_db=-10, meta={"segment": finish_seg})
             self.play(FadeIn(winner_banner, shift=UP * 0.08), FadeIn(winner_text, shift=UP * 0.08), run_time=0.40)
             sfx.mark("impact_soft", gain_db=-13, meta={"segment": finish_seg, "at": "lock_flash"})
             self.play(Flash(slot_cards[0]["body"].get_right(), color=WHITE, line_length=0.45, num_lines=9), run_time=0.22)
-            self.play(FadeOut(winner_text, shift=UP * 0.05), FadeOut(winner_banner, shift=UP * 0.05), run_time=0.24)
             TL.consume(finish_seg, float(self.time) - finish_t0)
             _pad_segment(finish_seg, focus=slot_cards[0]["body"], text="LOCKING FINAL RANKS")
 

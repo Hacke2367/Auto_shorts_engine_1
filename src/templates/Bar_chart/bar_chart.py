@@ -725,7 +725,7 @@ except Exception:
 
 # --- SYNC HELPERS ---
 from src.sync.job import load_job
-from src.sync.timeline import Timeline, clamp
+from src.sync.timeline import Timeline, clamp, numbered_segments
 from src.sfx.engine import SFXEngine
 try:
     from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
@@ -916,6 +916,11 @@ class BarChartTemplate(Scene):
 
         values = [float(v) for v in values]
         max_val = float(max_val)
+        # Round the axis up to a clean scale for its 4 tick steps: MAX=890 printed
+        # 0 / 222 / 445 / 668 / 890. Steps snap to 1, 2, 2.5 or 5 x 10^k.
+        _raw_step = max(max_val, max(values) if values else 0.0, 1e-9) / 4.0
+        _mag = 10.0 ** np.floor(np.log10(_raw_step))
+        max_val = 4.0 * next(m * _mag for m in (1.0, 2.0, 2.5, 5.0, 10.0) if m * _mag >= _raw_step - 1e-9)
 
         sort_mode = (meta.get("SORT", "DESC") or "DESC").strip().upper()
         if sort_mode != "NONE":
@@ -930,13 +935,17 @@ class BarChartTemplate(Scene):
         # Falls back to num_items only if audio.order is absent (old jobs without audio block).
         _audio_cfg = job.get("audio") if isinstance(job, dict) else {}
         _audio_order = _audio_cfg.get("order", []) if isinstance(_audio_cfg, dict) else []
-        _item_segs_audio = [s for s in _audio_order if isinstance(s, str) and s.startswith("item_")]
+        _item_segs_audio = numbered_segments(_audio_order, "item")
+
+        def _item_seg(i: int) -> str:
+            """audio.order name of the i-th bar (1-based) — item_1 or item1."""
+            return _item_segs_audio[i - 1] if i - 1 < len(_item_segs_audio) else f"item_{i}"
 
         # Hook default raised to 4.5s — IntroManager takes ~1.9s, leaving ~2.6s for
         # hook animations + retention breathing room. Real jobs use job.json timeline.
         defaults = {"hook": 4.5, "setup": 1.3, "winner": 3.2, "outro": 1.2}
         for i in range(1, num_items + 1):
-            defaults[f"item_{i}"] = 2.0
+            defaults[_item_seg(i)] = 2.0
         # Ensure all audio-order item segments have a default (covers extra ghost slots)
         for seg in _item_segs_audio:
             if seg not in defaults:
@@ -965,7 +974,7 @@ class BarChartTemplate(Scene):
                 brand_title="BIGDATA LEAK",
                 brand_sub="SYSTEM BREACH DETECTED",
                 feed_text="FEED_BAR // MARKET",
-                footer_text="CONFIDENTIAL // LEAKED_SOURCE",
+                footer_text="CONFIDENTIAL // VERIFIED",  # same footer as the other six templates
             )
         except Exception as e:
             print(f"Intro Error: {e}")
@@ -1174,7 +1183,7 @@ class BarChartTemplate(Scene):
         bar_groups = []
 
         for i, (name, value) in enumerate(zip(names, values)):
-            seg = f"item_{i+1}"
+            seg = _item_seg(i + 1)
             item_t0 = float(self.time)
             item_total = TL.seg_total(seg, 2.0)
 
@@ -1272,7 +1281,12 @@ class BarChartTemplate(Scene):
             sheen.set_stroke(width=0).set_fill(color=WHITE, opacity=0.18)
             sheen.align_to(final_bar, UP).align_to(final_bar, LEFT).set_opacity(0)
 
-            val_num = DecimalNumber(0, num_decimal_places=0, font_size=24, color=Theme.NEON_BLUE)
+            # Plain Montserrat text rebuilt as the count ticks. DecimalNumber goes through
+            # LaTeX: an off-brand serif face that also rendered thin and faint.
+            def _value_text(v: float) -> Text:
+                return Text(f"{int(round(v)):,}", font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
+
+            val_num = _value_text(0)
             val_num.set_z_index(60)
             self.add(val_num)
 
@@ -1286,7 +1300,8 @@ class BarChartTemplate(Scene):
 
             def update_single_bar(_):
                 t = tracker.get_value()
-                val_num.set_value(t * float(value))
+                val_num.become(_value_text(t * float(value)))
+                val_num.set_z_index(60)
 
                 x = VALUE_ANCHOR_X - (val_num.width / 2)
                 x = clamp_x(x, val_num.width, 0.70)
@@ -1375,7 +1390,7 @@ class BarChartTemplate(Scene):
         # Cap derived from audio.order so jobs with >15 items are handled correctly.
         _ghost_cap = max(len(_item_segs_audio), num_items)
         for ghost_i in range(num_items, _ghost_cap):
-            seg_key = f"item_{ghost_i+1}"
+            seg_key = _item_seg(ghost_i + 1)
             sync_hold(self, TL, seg_key, global_start_t0)
 
         # ============================================================
@@ -1394,7 +1409,8 @@ class BarChartTemplate(Scene):
             others = [g for j, g in enumerate(bar_groups) if j != winner_index]
 
             t_dim = clamp(winner_total * 0.12, 0.25, 0.45)
-            self.play(*[g.animate.set_opacity(0.20) for g in others], run_time=t_dim)
+            # 0.38, not 0.20: the spotlight should still leave the other names readable.
+            self.play(*[g.animate.set_opacity(0.38) for g in others], run_time=t_dim)
 
             winner_bar = winner[6]
             winner_val = winner[9]
@@ -1415,7 +1431,10 @@ class BarChartTemplate(Scene):
 
             t1 = Text("TOP LEADER", font="Montserrat", weight=BOLD, font_size=22, color=Theme.TEXT_SUB)
             t2 = Text(win_name, font="Montserrat", weight=BOLD, font_size=46, color=Theme.TEXT_MAIN)
-            t3 = Text(f"SCORE: {int(round(win_val))}", font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
+            # The value on its own — "SCORE:" mislabelled every metric this template draws
+            # (net worth, revenue, population...).
+            _unit = str(meta.get("UNIT", "") or "").strip()
+            t3 = Text(f"{int(round(win_val)):,} {_unit}".strip(), font="Montserrat", weight=BOLD, font_size=24, color=Theme.NEON_BLUE)
             txt = VGroup(t1, t2, t3).arrange(DOWN, buff=0.12).move_to(banner)
             txt.set_z_index(201)
 
@@ -1476,7 +1495,9 @@ class BarChartTemplate(Scene):
             tag = Text("TOP 3 LOCKED", font="Montserrat", weight=BOLD, font_size=24, color=WHITE)
             tag_bg = RoundedRectangle(corner_radius=0.18, width=tag.width + 0.70, height=0.62)
             tag_bg.set_fill(color=BLACK, opacity=0.55).set_stroke(color=Theme.NEON_BLUE, width=2, opacity=0.35)
-            tag_group = VGroup(tag_bg, tag).move_to([sf["cx"], sf["top"] - 2.15, 0]).set_z_index(210)
+            # Just above the TOP LEADER banner. At top - 2.15 it covered the subtitle.
+            tag_y = (banner.get_top()[1] + 0.50) if banner is not None else (sf["top"] - 2.15)
+            tag_group = VGroup(tag_bg, tag).move_to([sf["cx"], tag_y, 0]).set_z_index(210)
 
             pulses = []
             for j, ii in enumerate(top3):

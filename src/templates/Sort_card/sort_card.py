@@ -102,7 +102,7 @@ except Exception:
 
 # --- SYNC HELPERS ---
 from src.sync.job import load_job, resolve_job_csv
-from src.sync.timeline import Timeline, clamp as _tl_clamp
+from src.sync.timeline import Timeline, clamp as _tl_clamp, numbered_segments
 from src.sfx.engine import SFXEngine
 try:
     from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
@@ -272,16 +272,18 @@ def build_header(meta_title: str, meta_sub: str) -> Dict[str, Mobject]:
         left_txt = parts[0].strip() or "TIER 1"
         right_txt = parts[1].strip() or "TIER 2"
 
-    left = safe_text(left_txt.upper(), font=FONT_DISPLAY, font_size=46, color=blue, weight=BOLD)
-    vs = safe_text("vs", font_size=30, color=GREY_B, weight=BOLD)
-    right = safe_text(right_txt.upper(), font=FONT_DISPLAY, font_size=46, color=pink, weight=BOLD)
+    left = safe_text(left_txt.upper(), font=FONT_DISPLAY, font_size=42, color=blue, weight=BOLD)
+    vs = safe_text("vs", font_size=28, color=GREY_B, weight=BOLD)
+    right = safe_text(right_txt.upper(), font=FONT_DISPLAY, font_size=42, color=pink, weight=BOLD)
     title = VGroup(left, vs, right).arrange(RIGHT, buff=0.22)
 
     try:
         title.set_z_index(500)
     except Exception:
         pass
-    title.to_edge(UP, buff=0.78).shift(DOWN * 0.12)
+    # Clear the REC / timer HUD row: at buff 0.78 the title's top edge sat on it and
+    # the intro slide-in ran straight across "REC" and "00:02".
+    title.to_edge(UP, buff=1.12).shift(DOWN * 0.12)
 
     sub = safe_text(meta_sub, font_size=18, color=Theme.TEXT_SUB, weight=BOLD)
     try:
@@ -748,12 +750,20 @@ def build_card(img_path: str, accent: str, fallback_label: str) -> Group:
 
     im.move_to(plate.get_center())
 
-    grp = Group(shadow, glow, plate, im)
+    # Name the item under its card. A logo alone (a washed-out Python mark, a dim Java
+    # cup) left viewers guessing what was being sorted.
+    name = safe_text((fallback_label or "?").replace("_", " ").upper(), font_size=18, color=WHITE, weight=BOLD)
+    if name.width > CARD_W:
+        name.scale_to_fit_width(CARD_W)
+    name.next_to(plate, DOWN, buff=0.08)
+
+    grp = Group(shadow, glow, plate, im, name)
     try:
         grp.set_z_index(380)
         glow.set_z_index(376)
         plate.set_z_index(377)
         im.set_z_index(378)
+        name.set_z_index(378)
     except Exception:
         pass
     return grp
@@ -895,7 +905,13 @@ class SortCardTribunalFinal(Scene):
         audio_timings = job_data.get("timeline", {})
         
         n_items = max(1, len(df))
-        item_segments = [f"card_{i+1}" for i in range(n_items)]
+        _audio_cfg = job_data.get("audio") if isinstance(job_data, dict) else {}
+        _audio_order = _audio_cfg.get("order", []) if isinstance(_audio_cfg, dict) else []
+        _card_segs_audio = numbered_segments(_audio_order, "card")  # card_1 or card1
+        item_segments = [
+            _card_segs_audio[i] if i < len(_card_segs_audio) else f"card_{i+1}"
+            for i in range(n_items)
+        ]
         
         defaults = {
             "hook": 3.2,
@@ -914,7 +930,9 @@ class SortCardTribunalFinal(Scene):
         outro_seg = "outro"
 
         # Blueprint positions (locked)
-        UI_DY = 0.28
+        # 0.28 -> 0.56: the header now starts lower (clear of the REC/timer row), so the
+        # evidence box + reason pill shift down with it instead of crowding the underline.
+        UI_DY = 0.56
         shift_vec = DOWN * UI_DY
 
         evidence_center = (np.array([0.0, H / 2 - 3.45, 0]) + shift_vec)
@@ -924,7 +942,8 @@ class SortCardTribunalFinal(Scene):
         left_counter_pos = np.array([-W / 2 + 1.55, counters_y, 0])
         right_counter_pos = np.array([W / 2 - 1.55, counters_y, 0])
 
-        bins_y = -H / 2 + 2.05
+        # +0.35: the bins' lower edge ran through the "CONFIDENTIAL // VERIFIED" footer.
+        bins_y = -H / 2 + 2.40
         left_bin_pos = np.array([-2.25, bins_y, 0])
         right_bin_pos = np.array([2.25, bins_y, 0])
 
@@ -1374,6 +1393,11 @@ class SortCardTribunalFinal(Scene):
         winner_t0 = float(self.time)
         
         act_fade = clamp(w_total * 0.30, 0.50, 1.2)
+        # Stop the scanner's breathing/sweep updaters first: they re-set ring, dash and
+        # panel opacities every frame (clipped to >= 0.06), so a plain fade left its
+        # rings and pill outline behind "SORT COMPLETE".
+        for _mob in (scanner["group"], scanner["text_group"], evidence["group"]):
+            _mob.clear_updaters()
         sfx.mark("outro_swipe", gain_db=-10, meta={"segment": winner_seg})
         self.play(
             hud_layer.animate.set_opacity(0.0),
@@ -1383,10 +1407,15 @@ class SortCardTribunalFinal(Scene):
             dot.animate.set_opacity(0.0),
             left_counter["group"].animate.set_opacity(0.0),
             right_counter["group"].animate.set_opacity(0.0),
+            # The scanner pill sits exactly where the end title lands; left visible,
+            # its "AI TRIBUNAL / SCANNING" letters showed through "SORT COMPLETE".
+            scanner["group"].animate.set_opacity(0.0),
+            scanner["text_group"].animate.set_opacity(0.0),
+            evidence["group"].animate.set_opacity(0.0),
             run_time=act_fade,
             rate_func=rf.ease_in_out_sine,
         )
-        
+
         final_txt = safe_text("SORT COMPLETE", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
         final_txt.set_z_index(600)
         

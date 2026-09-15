@@ -16,7 +16,7 @@ from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme, FONT_DISPL
 from src.utils import IntroManager, get_safe_frame, make_floating_particles, add_cinematic_background
 from src.geo_data.map_coords import COORDINATES
 from src.sync.job import load_job
-from src.sync.timeline import Timeline, clamp
+from src.sync.timeline import Timeline, clamp, numbered_segments
 from src.sfx.engine import SFXEngine
 try:
     from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
@@ -151,7 +151,7 @@ def _extract_geo_segments(job: dict, audio_order: list[str] | None = None):
     setup = "setup" if "setup" in clean_order else (clean_order[1] if len(clean_order) > 1 else hook)
     winner = "winner" if "winner" in clean_order else (clean_order[-2] if len(clean_order) >= 2 else hook)
     outro = "outro" if "outro" in clean_order else (clean_order[-1] if clean_order else hook)
-    node_segments = [s for s in clean_order if s.startswith("node_")]
+    node_segments = numbered_segments(clean_order, "node")
     if not node_segments:
         node_segments = [f"node_{i}" for i in range(1, 9)]
     return hook, setup, node_segments, winner, outro
@@ -304,7 +304,9 @@ class GeoUniversalMap(Scene):
 
         unique_groups = list(df["Group"].unique())
         group_color_map = {g: GROUP_FALLBACK[i % len(GROUP_FALLBACK)] for i, g in enumerate(unique_groups)}
-        is_alliance_mode = len(unique_groups) > 1
+        # Only an explicit ALLIANCE job gets alliance traffic. A choropleth of US states
+        # also has many distinct groups (one per state), but they are not alliances.
+        is_alliance_mode = mode == "ALLIANCE" and len(unique_groups) > 1
 
         compare_a, compare_b = _pick_compare_cols(df)
 
@@ -392,16 +394,15 @@ class GeoUniversalMap(Scene):
             _ticker_chip("MAX", str(max_items), Theme.NEON_YELLOW),
         ).arrange(RIGHT, buff=0.18).set_z_index(112)
 
-        if mode == "ALLIANCE":
-            initial_msg = "Boot sequence: links scanning…"
-        elif mode == "COMPARE":
-            initial_msg = "Compare scan: deltas priming…"
-        else:
-            initial_msg = "Metric scan: indexing nodes…"
+        # The feed line is read as copy: it names the metric, never boot-log filler
+        # ("Metric scan: indexing nodes…").
+        initial_msg = metric_name if metric_name.upper() != "METRIC" else (meta.get("SUB") or meta.get("TITLE") or " ")
 
         feed_text = Text(initial_msg, font="Consolas", font_size=14, color=Theme.TEXT_MAIN).set_z_index(112)
 
-        ticker = VGroup(ticker_bg, ticker_accent, feed_label, chips, right_block, feed_text).set_z_index(110)
+        # chips (MODE / METRIC / MAX) are built for layout math but not shown: at phone
+        # size they render as unreadable ~10px debug labels.
+        ticker = VGroup(ticker_bg, ticker_accent, feed_label, right_block, feed_text).set_z_index(110)
         ticker.move_to([sf["cx"], sub.get_bottom()[1] - ticker_h / 2 - 0.18, 0])
 
         feed_label.move_to(ticker_bg.get_left() + RIGHT * (pad_x + feed_label.width / 2)).shift(UP * 0.02)
@@ -504,10 +505,12 @@ class GeoUniversalMap(Scene):
         left_items = [it for it in items if it[4] < 0]
         right_items = [it for it in items if it[4] >= 0]
 
+        # Rebalance from the tail but keep data order: pop()+append reversed the moved
+        # rows, so the right column read 8,7,6,5 against a narration going 5,6,7,8.
         while len(left_items) > slots_per_side and len(right_items) < slots_per_side:
-            right_items.append(left_items.pop())
+            right_items.insert(0, left_items.pop())
         while len(right_items) > slots_per_side and len(left_items) < slots_per_side:
-            left_items.append(right_items.pop())
+            left_items.append(right_items.pop(0))
 
         left_items.sort(key=lambda x: x[3], reverse=True)
         right_items.sort(key=lambda x: x[3], reverse=True)
@@ -520,6 +523,10 @@ class GeoUniversalMap(Scene):
             placed.append((it, "L", np.array([0, left_slots_y[i], 0])))
         for i, it in enumerate(right_items[:slots_per_side]):
             placed.append((it, "R", np.array([0, right_slots_y[i], 0])))
+
+        # Reveal in CSV row order — node1..nodeN narrate the rows in that order, while
+        # the placement above goes column by column.
+        placed.sort(key=lambda p: int(p[0][5].name))
 
         # ===========================
         # CARD FACTORY
@@ -540,11 +547,24 @@ class GeoUniversalMap(Scene):
                 return f"{a}|{b}"
             if iv is None:
                 return "–"
-            return f"{iv}{unit}" if unit else f"{iv}"
+            # Currency symbols lead and big numbers get separators: "$126,500", not "126500$".
+            if unit in ("$", "€", "£", "₹", "¥"):
+                return f"{unit}{iv:,}"
+            return f"{iv:,}{unit}" if unit else f"{iv:,}"
+
+        # One-country datasets (US states, Indian states...) carry the real place name
+        # in Group. Headline that — "USA" on every card was noise, the state was tiny.
+        single_country = df["Country"].nunique() == 1
+
+        def _card_title(country, group):
+            if single_country and str(group).strip() and str(group) != "Global":
+                return str(group), str(country).upper()
+            return str(country).upper(), str(group)
 
         def make_card(country, group, value, col, side, row_obj):
-            name = Text(str(country).upper(), font="Montserrat", weight=BOLD, font_size=18, color=WHITE)
-            grp = Text(str(group), font="Montserrat", font_size=12, color=Theme.TEXT_SUB)
+            title_str, sub_str = _card_title(country, group)
+            name = Text(title_str, font="Montserrat", weight=BOLD, font_size=18, color=WHITE)
+            grp = Text(sub_str, font="Montserrat", font_size=12, color=Theme.TEXT_SUB)
 
             val_str = _format_value(row_obj, value)
 
@@ -706,7 +726,6 @@ class GeoUniversalMap(Scene):
         self.play(live_dot.animate.scale(1.35), run_time=0.12, rate_func=rf.ease_out_cubic)
         self.play(live_dot.animate.scale(1.00), run_time=0.18, rate_func=rf.ease_in_out_sine)
 
-        ticker_set("Boot complete: acquiring world map…", animate=True)
 
         scan = Line(LEFT * 6, RIGHT * 6).set_z_index(60)
         scan.set_stroke(color=Theme.NEON_BLUE, width=4, opacity=0.85)
@@ -739,7 +758,6 @@ class GeoUniversalMap(Scene):
         setup_t0 = float(self.time)
         act_setup = clamp(t_setup * 0.40, 0.80, 1.40)
         
-        ticker_set("Signal sweep: deploying nodes…", animate=True)
 
         self.play(
             LaggedStart(*[FadeIn(d, scale=0.70) for d in all_dots], lag_ratio=0.08),
@@ -854,7 +872,7 @@ class GeoUniversalMap(Scene):
             return max(counts, key=counts.get) if counts else None
 
         if is_alliance_mode:
-            ticker_set("Alliance traffic: routing packets…", animate=True)
+            ticker_set("Comparing groups", animate=True)
 
             connections = VGroup().set_z_index(65)
             travel_paths = []
@@ -922,7 +940,9 @@ class GeoUniversalMap(Scene):
                                 break
 
             if winner_idx is not None and 0 <= winner_idx < len(all_cards):
-                ticker_set("Top signal detected: highlighting node…", animate=True)
+                (w_country, w_group, w_value, _, _, w_row), _, _ = placed[winner_idx]
+                w_title, _ = _card_title(w_country, w_group)
+                ticker_set(f"Top: {w_title}  ·  {_format_value(w_row, w_value)}", animate=True)
                 sfx.mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
 
                 winner = all_cards[winner_idx]
@@ -946,9 +966,14 @@ class GeoUniversalMap(Scene):
                 self.play(winner.animate.scale(1.00), run_time=0.15)
 
         else:
-            ticker_set("Final scan: computing top node…", animate=True)
-
             winner_idx = _winner_compare_index() if mode == "COMPARE" else _winner_metric_index()
+            # Name the winner in the feed instead of "Final scan: computing top node…".
+            # placed is in CSV row order, so it lines up with winner_idx and all_cards.
+            if winner_idx is not None and 0 <= winner_idx < len(placed):
+                (w_country, w_group, w_value, _, _, w_row), _, _ = placed[winner_idx]
+                w_title, _ = _card_title(w_country, w_group)
+                w_label = "Biggest gap" if mode == "COMPARE" else "Highest"
+                ticker_set(f"{w_label}: {w_title}  ·  {_format_value(w_row, w_value)}", animate=True)
             if winner_idx is not None and 0 <= winner_idx < len(all_cards):
                 sfx.mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
                 winner = all_cards[winner_idx]

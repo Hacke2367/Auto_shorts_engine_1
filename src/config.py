@@ -110,6 +110,35 @@ try:
 except Exception:
     pass
 
+# ----------------------------------------
+# 3c. SMALL-TEXT KERNING FIX
+# ----------------------------------------
+# Pango lays glyphs out at the requested size, and at small sizes it rounds each
+# advance to whole units -- captions/HUD/labels came out as "B REAKDOWN",
+# "CON FIDEN TIAL", "t onn es". Laying small Text out at a large size and scaling the
+# result down keeps the spacing true. The public font_size still reads back as the
+# requested size (it is derived from height / initial_height). Patched on the class,
+# so every template's `from manim import *` Text picks it up.
+_TEXT_MIN_LAYOUT_SIZE = 48.0
+try:
+    from manim.mobject.text.text_mobject import Text as _ManimText
+
+    if not getattr(_ManimText, "_autoshorts_kerning_patch", False):
+        _orig_text_init = _ManimText.__init__
+
+        def _text_init_large_layout(self, text, *args, font_size=DEFAULT_FONT_SIZE, **kwargs):
+            requested = float(font_size)
+            if 0.0 < requested < _TEXT_MIN_LAYOUT_SIZE:
+                _orig_text_init(self, text, *args, font_size=_TEXT_MIN_LAYOUT_SIZE, **kwargs)
+                self.scale(requested / _TEXT_MIN_LAYOUT_SIZE)
+            else:
+                _orig_text_init(self, text, *args, font_size=font_size, **kwargs)
+
+        _ManimText.__init__ = _text_init_large_layout
+        _ManimText._autoshorts_kerning_patch = True
+except Exception:
+    pass
+
 # Premium display face for hero/titles (body text stays Montserrat). Resolve to
 # the bundled display font only if it actually registered; otherwise fall back to
 # Montserrat so a missing/failed TTF can NEVER break a render.

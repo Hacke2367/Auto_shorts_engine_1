@@ -212,6 +212,10 @@ def get_cinematic_overlay(scene,
     # intended layering: vignette 240 < scanlines 241 < HUD 250.
     for _hud in (rec_dot, rec_label, timer, feed, footer):
         _hud.set_z_index(250)
+    # The footer sits in the bottom band templates use for scoreboards, bins and
+    # winner cards. Drawn at 250 it printed across them; at 35 content covers it.
+    # Safe for the static-frame cache: the footer has no updater.
+    footer.set_z_index(35)
 
     return overlay
 
@@ -222,18 +226,22 @@ def get_cinematic_overlay(scene,
 def get_rotating_watermark(margin=0.60):
     sf = get_safe_frame(margin)
 
+    # Small and tucked into the corner: at r=0.7 it sat on top of winner cards,
+    # tier bins, scoreboards and chart end-labels in five templates. It keeps its
+    # high z-index because it rotates -- an updater-bearing mobject low in the
+    # z-order would force the Cairo static-frame cache to re-rasterize everything.
     ring = DashedVMobject(
-        Circle(radius=0.7, color=Brand.CYAN, stroke_width=2),
+        Circle(radius=0.42, color=Brand.CYAN, stroke_width=2),
         num_dashes=12
     )
     cross = VGroup(
-        Line(UP * 0.32, DOWN * 0.32),
-        Line(LEFT * 0.32, RIGHT * 0.32),
+        Line(UP * 0.19, DOWN * 0.19),
+        Line(LEFT * 0.19, RIGHT * 0.19),
     ).set_stroke(color=Brand.TEXT_MAIN, width=1.2, opacity=0.6)
 
     wm = VGroup(ring, cross)
-    wm.move_to([sf["right"] - 0.75, sf["bottom"] + 0.65, 0])
-    wm.set_opacity(0.55)
+    wm.move_to([sf["right"] - 0.30, sf["bottom"] + 0.30, 0])
+    wm.set_opacity(0.40)
     wm.set_z_index(255)
 
     wm.add_updater(lambda m, dt: m.rotate(-0.45 * dt))

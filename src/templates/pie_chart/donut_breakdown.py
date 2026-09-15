@@ -58,7 +58,7 @@ from pathlib import Path
 
 # --- SYNC HELPERS (direct imports, NO try/except) ---
 from src.sync.job import load_job
-from src.sync.timeline import Timeline, clamp as _tl_clamp
+from src.sync.timeline import Timeline, clamp as _tl_clamp, numbered_segments
 from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold
 from src.sfx.engine import SFXEngine
 
@@ -795,7 +795,6 @@ def make_commentary(center: np.ndarray, inner_r: float, label: str, name: str, p
         _safe_text(label, font="Consolas", font_size=14, color=getattr(Theme, "TEXT_SUB", "#CCCCCC")),
         _safe_text(name, font="Montserrat", font_size=26, color=getattr(Theme, "TEXT_MAIN", "#FFFFFF"), weight=BOLD),
         _safe_text(pct_text, font="Montserrat", font_size=30, color=col, weight=BOLD),
-        _safe_text("computing…", font="Consolas", font_size=12, color=getattr(Theme, "TEXT_SUB", "#CCCCCC")),
     ).arrange(DOWN, buff=0.06)
     g.set_z_index(210)
     g.scale_to_fit_width(inner_r * 1.62)
@@ -955,6 +954,49 @@ def _make_callout_lines_only(
 # ==========================
 # Chip overlap resolver (SAFE: no .bounding_box attribute usage)
 # ==========================
+def stack_chips_clear_of_donut(
+    chips: List[VGroup],
+    slice_mids: List[float],
+    center: np.ndarray,
+    outer_r: float,
+    sf: Dict[str, float],
+    lane_top: float,
+    rank_of,
+    gap: float = 0.14,
+    clear: float = 0.45,
+) -> None:
+    """Stack callout chips in two centred columns above and below the donut.
+
+    A chip is ~3.6 units wide on a 9-unit frame, so a slot "beside" a ~2-unit donut
+    still lands on the ring: the rank-1 chip sat over the centre label
+    ("UNITED STATES 43%"). Upper-half slices go above, lower-half below, each column
+    ordered by rank (rank 1 nearest the donut) and rebalanced when a side is full.
+    """
+    n = len(chips)
+    if n == 0:
+        return
+    h = max(float(c.height) for c in chips)
+    step = h + gap
+    top_base = float(center[1]) + outer_r + clear
+    bot_base = float(center[1]) - outer_r - clear
+    cap_top = max(0, int(((lane_top - 0.10) - top_base + gap) // step))
+    cap_bot = max(0, int((bot_base - (sf["bottom"] + 0.80) + gap) // step))
+
+    upper = sorted((i for i in range(n) if np.sin(slice_mids[i]) >= 0), key=rank_of)
+    lower = sorted((i for i in range(n) if np.sin(slice_mids[i]) < 0), key=rank_of)
+    while len(upper) > cap_top and len(lower) < cap_bot:
+        lower.append(upper.pop())
+    while len(lower) > cap_bot and len(upper) < cap_top:
+        upper.append(lower.pop())
+    upper.sort(key=rank_of)
+    lower.sort(key=rank_of)
+
+    for k, i in enumerate(upper):
+        chips[i].move_to([float(center[0]), top_base + h / 2 + k * step, 0])
+    for k, i in enumerate(lower):
+        chips[i].move_to([float(center[0]), bot_base - h / 2 - k * step, 0])
+
+
 def resolve_chip_overlaps(
     chips: List[VGroup],
     sf: Dict[str, float],
@@ -1157,7 +1199,7 @@ class DonutBreakdownFinal(Scene):
         self.add(shadow_ring, track, outer_rim, inner_rim, core)
 
         # Commentary (boot)
-        commentary = make_commentary(center, inner_r, "SCAN", "MARKET", "…", getattr(Theme, "NEON_BLUE", "#2DD4FF"))
+        commentary = make_commentary(center, inner_r, "SHARE", "TOTAL", "100%", getattr(Theme, "NEON_BLUE", "#2DD4FF"))
         self.add(commentary)
 
         # Segment plumbing — current audio-sync logic: derive slice_* from audio.order
@@ -1166,7 +1208,7 @@ class DonutBreakdownFinal(Scene):
         slice_segs = [f"slice_{i + 1}" for i in range(n)]
         _audio_cfg = sys_job.get("audio") if isinstance(sys_job, dict) else {}
         _audio_order = _audio_cfg.get("order", []) if isinstance(_audio_cfg, dict) else []
-        _all_slice_segs = [s for s in _audio_order if isinstance(s, str) and s.startswith("slice_")]
+        _all_slice_segs = numbered_segments(_audio_order, "slice")
         if not _all_slice_segs:
             _all_slice_segs = slice_segs  # fallback: audio.order absent → no ghost padding
 
@@ -1403,6 +1445,10 @@ class DonutBreakdownFinal(Scene):
             chips.append(chip)
 
         resolve_chip_overlaps(chips, sf, lane_top)
+        stack_chips_clear_of_donut(
+            chips, slice_mids, center, outer_r, sf, lane_top,
+            rank_of=lambda i: int(rank_map.get(i, i + 1)),
+        )
 
         callouts = VGroup().set_z_index(165)
         self.add(callouts)
@@ -1503,7 +1549,7 @@ class DonutBreakdownFinal(Scene):
             pop = np.array([np.cos(slice_mids[idx]), np.sin(slice_mids[idx]), 0]) * 0.24
             pop_vec = np.array([np.cos(slice_mids[idx]), np.sin(slice_mids[idx]), 0]) * 0.22  # must match callout math
 
-            seg_key = f"slice_{i_idx + 1}"
+            seg_key = _all_slice_segs[i_idx] if i_idx < len(_all_slice_segs) else f"slice_{i_idx + 1}"
             t_item = TL.seg_total(seg_key, 2.0)
             
             # Action pacing rules

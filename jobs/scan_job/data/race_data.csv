@@ -1,5 +1,5 @@
 #TITLE=GDP GROWTH RACE
-#SUB=Live trajectory + ranking HUD
+#SUB=Nominal GDP in US$ trillions, 2000–2024
 #FEED=FEED_RACE // LIVE
 #FOOTER=CONFIDENTIAL // VERIFIED
 #TOPK=5

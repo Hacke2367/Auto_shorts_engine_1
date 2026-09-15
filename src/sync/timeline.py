@@ -1,5 +1,6 @@
 # src/sync/timeline.py
 from __future__ import annotations
+import re
 import warnings
 from dataclasses import dataclass, field
 from typing import Dict, Any
@@ -23,6 +24,28 @@ def clamp(v: float, lo: float, hi: float) -> float:
     if v > hi:
         return hi
     return v
+
+
+_NUMBERED_SEG_RE = re.compile(r"^([A-Za-z]+)_?(\d+)$")
+
+
+def numbered_segments(order: list | None, base: str) -> list[str]:
+    """Numbered segments for `base` taken from audio.order, in play order.
+
+    Two spellings reach the renderer: hand-made jobs and test fixtures use
+    "item_1", while final_handoff.tag_to_engine_name emits "item1" (same for
+    slice / node / card). A template that matches only one spelling misses
+    every timeline entry, falls back to default durations, and its visuals
+    drift off the narration. Names are returned exactly as audio.order has them.
+    """
+    out: list[str] = []
+    base = base.lower()
+    for s in order or []:
+        name = str(s).strip()
+        m = _NUMBERED_SEG_RE.match(name)
+        if m and m.group(1).lower() == base:
+            out.append(name)
+    return out
 
 
 @dataclass
