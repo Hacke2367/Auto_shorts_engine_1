@@ -45,6 +45,10 @@ jobs/
 # Fonts, images, SFX — too large / not source code
 assets/
 
+# Windows fonts staged for upload to the render box (tools/collect_windows_fonts.ps1).
+# Licensed to this machine — never commit or publish these.
+.fonts_stage/
+
 
 # ─── Knowledge Graph Output ─────────────────────────────────
 graphify-out/
@@ -127,3 +131,7 @@ coverage.xml
 
 # Validation replay reports (contain model outputs, not source)
 validation/
+
+# RunPod upload bundle (regenerated on demand, never committed)
+runpod_bundle.tgz
+runpodctl.exe

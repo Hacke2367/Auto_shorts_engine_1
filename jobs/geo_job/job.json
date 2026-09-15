@@ -2,23 +2,60 @@
   "job_id": "geo_job_0001",
   "template_id": "geo_universal",
   "data_csv": "data/map_data.csv",
-
-  "video": { "w": 1080, "h": 1920 },
-
+  "video": {
+    "w": 1080,
+    "h": 1920
+  },
   "audio": {
     "segments": [
-      { "name": "hook", "path": "audio/hook.mp3" },
-      { "name": "setup", "path": "audio/setup.mp3" },
-      { "name": "node_1", "path": "audio/node_1.mp3" },
-      { "name": "node_2", "path": "audio/node_2.mp3" },
-      { "name": "node_3", "path": "audio/node_3.mp3" },
-      { "name": "node_4", "path": "audio/node_4.mp3" },
-      { "name": "node_5", "path": "audio/node_5.mp3" },
-      { "name": "node_6", "path": "audio/node_6.mp3" },
-      { "name": "node_7", "path": "audio/node_7.mp3" },
-      { "name": "node_8", "path": "audio/node_8.mp3" },
-      { "name": "winner", "path": "audio/winner.mp3" },
-      { "name": "outro", "path": "audio/outro.mp3" }
+      {
+        "name": "hook",
+        "path": "audio/hook.mp3"
+      },
+      {
+        "name": "setup",
+        "path": "audio/setup.mp3"
+      },
+      {
+        "name": "node_1",
+        "path": "audio/node_1.mp3"
+      },
+      {
+        "name": "node_2",
+        "path": "audio/node_2.mp3"
+      },
+      {
+        "name": "node_3",
+        "path": "audio/node_3.mp3"
+      },
+      {
+        "name": "node_4",
+        "path": "audio/node_4.mp3"
+      },
+      {
+        "name": "node_5",
+        "path": "audio/node_5.mp3"
+      },
+      {
+        "name": "node_6",
+        "path": "audio/node_6.mp3"
+      },
+      {
+        "name": "node_7",
+        "path": "audio/node_7.mp3"
+      },
+      {
+        "name": "node_8",
+        "path": "audio/node_8.mp3"
+      },
+      {
+        "name": "winner",
+        "path": "audio/winner.mp3"
+      },
+      {
+        "name": "outro",
+        "path": "audio/outro.mp3"
+      }
     ],
     "order": [
       "hook",
@@ -35,33 +72,29 @@
       "outro"
     ]
   },
-
   "timeline": {
-    "hook": 3.42,
-    "setup": 3.84,
-    "node_1": 2.35,
-    "node_2": 2.93,
-    "node_3": 3.11,
-    "node_4": 2.64,
-    "node_5": 2.93,
-    "node_6": 2.87,
-    "node_7": 2.87,
-    "node_8": 2.95,
-    "winner": 3.71,
-    "outro": 3.19
+    "hook": 3.308,
+    "setup": 3.649,
+    "node_1": 2.274,
+    "node_2": 2.83,
+    "node_3": 3.005,
+    "node_4": 2.553,
+    "node_5": 2.847,
+    "node_6": 2.796,
+    "node_7": 2.798,
+    "node_8": 2.875,
+    "winner": 3.559,
+    "outro": 3.094
   },
-
   "gains": {
     "gain_voice": 1.0,
     "gain_sfx": 1.0,
     "gain_bgm_db": -20.0
   },
-
   "sfx": {
     "enabled": true,
     "gain": 1.0
   },
-
   "bgm": {
     "enabled": false,
     "mode": "per_segment",
@@ -75,18 +108,18 @@
     "segments": {},
     "crossfade": 0.25
   },
-
   "mix": {
     "preset": "punchy",
     "duck_sfx": false
   },
-
   "captions": {
     "enabled": true,
     "script": {
       "path": "script/script.json",
       "source_lang": "hi",
-      "target_langs": ["en"]
+      "target_langs": [
+        "en"
+      ]
     },
     "render": {
       "format": "ass",
@@ -97,13 +130,23 @@
         "max_lines": 2
       },
       "tracks": [
-        { "lang": "hi", "mode": "reveal_words", "position": "bottom" },
-        { "lang": "en", "mode": "plain", "position": "above_bottom" }
+        {
+          "lang": "hi",
+          "mode": "reveal_words",
+          "position": "bottom"
+        },
+        {
+          "lang": "en",
+          "mode": "plain",
+          "position": "above_bottom"
+        }
       ],
-      "highlight": { "enabled": false, "mode": "word_reveal" }
+      "highlight": {
+        "enabled": false,
+        "mode": "word_reveal"
+      }
     }
   },
-
   "output": {
     "final_mp4": "output/final.mp4",
     "subtitles_ass": "output/subtitles.ass",

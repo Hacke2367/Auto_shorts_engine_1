@@ -16,6 +16,7 @@ from src.captions import run_captions_pipeline
 # Single source of truth for the voice silence-trim filter (shared with captions
 # timing so subtitles match the trimmed voice track exactly).
 from src.sync.audio_trim import SILENCE_TRIM_FILTER
+from src.sync.audio_normalize import normalize_voice_segments
 
 
 # Built-in fallback registry — used when templates.json is absent or unreadable.
@@ -747,13 +748,21 @@ def mux_av_ffmpeg(ffmpeg: str, video_path: Path, audio_path: Path, out_path: Pat
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # The VIDEO is the authority on length, never the audio. `-shortest` alone
+    # would cut the render down to whatever the audio happened to measure, which
+    # silently amputated the tail of every job (jobs/sort_job lost 6.3s -- the
+    # winner tail and the whole outro). `apad` extends the audio with silence so
+    # `-shortest` can only ever land on the video's own end.
     cmd = [
         ffmpeg, "-y",
         "-i", str(video_path),
         "-i", str(audio_path),
+        "-map", "0:v:0",
+        "-map", "1:a:0",
         "-c:v", "copy",
         "-c:a", "aac",
         "-b:a", "192k",
+        "-af", "apad",
         "-shortest",
         str(out_path),
     ]
@@ -780,6 +789,9 @@ def main():
     ap.add_argument("--open", action="store_true", help="open final video after render")
     ap.add_argument("--no_sfx", action="store_true", help="disable sfx mixing even if marks exist")
     ap.add_argument("--no-trim-silence", action="store_true", help="disable silence trim on voice segments before concat")
+    ap.add_argument("--no-normalize-audio", action="store_true",
+                    help="skip the pre-render silence trim (leaves timeline as-is; "
+                         "the render will not match the audio)")
     ap.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg binary (default: ffmpeg)")
     ap.add_argument("--keep-intermediates", action="store_true",
                     help="keep Manim media/ renders and audio intermediate files after mux")
@@ -835,6 +847,24 @@ def main():
 
     if not scene_file.exists():
         raise FileNotFoundError(f"Template file not found: {scene_file}")
+
+    # --- Normalize voice BEFORE rendering -------------------------------------
+    # Ordering matters more than the trim itself. The concat trims each segment,
+    # so if the scene is rendered against the untrimmed timeline the two lengths
+    # disagree and the mux resolves it by cutting the video. Baking the trim in
+    # here -- and rewriting job["timeline"] to the real durations -- means the
+    # scene is built against the audio that will actually be heard.
+    if not args.no_normalize_audio:
+        try:
+            changed, lines = normalize_voice_segments(args.ffmpeg, job_dir, job, job_json)
+            for ln in lines:
+                print(ln)
+            if changed:
+                # The scene reads timings from job.json via JOB_JSON_PATH, so the
+                # freshly written timeline is what Manim will render against.
+                print("[OK] timeline rewritten to trimmed audio durations")
+        except Exception as e:
+            print(f"[WARN] audio normalize skipped: {e}")
 
     # --- Media dir for manim output ---
     media_dir.mkdir(parents=True, exist_ok=True)
@@ -920,7 +950,10 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     voice_aac = out_dir / "_voice.aac"
-    concat_audio_ffmpeg(ffmpeg, audio_paths, voice_aac, trim_silence=(not args.no_trim_silence))
+    # Already trimmed in place above -- trimming twice would shorten the voice
+    # again and reintroduce the mismatch this fix removes.
+    _concat_trim = (not args.no_trim_silence) and args.no_normalize_audio
+    concat_audio_ffmpeg(ffmpeg, audio_paths, voice_aac, trim_silence=_concat_trim)
     print(f"[OK] Voice concat: {voice_aac}")
 
     # -----------------------------
@@ -1080,7 +1113,7 @@ def main():
                 job_dir=job_dir,
                 ffmpeg=ffmpeg,
                 video_in=out_path,  # burn-in needs final muxed video
-                trim_silence=(not args.no_trim_silence),  # match the trimmed voice track
+                trim_silence=_concat_trim,  # match the trimmed voice track
             )
             if isinstance(cap_res, dict):
                 if cap_res.get("ass_path"):

@@ -200,6 +200,19 @@ def get_cinematic_overlay(scene,
     footer.set_opacity(0.7)
 
     overlay.add(rec_dot, rec_label, timer, feed, footer)
+
+    # z-index has to be set on the HUD children, not on the group. The
+    # overlay.set_z_index(250) above ran while the VGroup was still empty, so
+    # these five stayed at the default z=0 -- which put two updater-bearing
+    # mobjects (rec_dot blink, timer) at the BOTTOM of the z-order. Cairo's
+    # static-frame cache treats the z-ordered suffix from the first
+    # updater-bearing mobject as "moving", so that silently forced the vignette
+    # (240), the scanlines (241) and the whole chart body to be re-rasterized
+    # every frame. Setting them here (rather than on the group) keeps the
+    # intended layering: vignette 240 < scanlines 241 < HUD 250.
+    for _hud in (rec_dot, rec_label, timer, feed, footer):
+        _hud.set_z_index(250)
+
     return overlay
 
 
@@ -322,26 +335,35 @@ def make_floating_particles(n=30,
             pass
 
     particles.add_updater(_update)
-    particles.set_z_index(5)
+    # z-index 245 (not 5): Cairo's static-frame cache treats the z-ordered
+    # SUFFIX starting at the first updater-bearing mobject as "moving"
+    # (Scene.get_moving_mobjects). Parking the one updater-driven decoration
+    # ABOVE the static overlay (vignette z=240, scanlines z=241) lets the whole
+    # background + chart body stay cached during holds instead of being
+    # re-rasterized every frame. Stays below REC/timer/watermark (z>=250).
+    particles.set_z_index(245)
     return particles
 
 
 # ============================================================
 # ✅ CINEMATIC BACKGROUND (shared atmosphere: gradient + brand glow)
-#   - additive only: instant scene.add() + ONE lightweight breathing
-#     updater (same render-cost class as the existing flicker/particles)
+#   - additive only: instant scene.add(); the optional breathing updater is
+#     OFF by default (it defeats Cairo's static-frame cache — see docstring)
 #   - fully fail-safe: any error degrades to the current flat background
 #     and never crashes a render
 # ============================================================
-def add_cinematic_background(scene, accent=None, breathing=True):
+def add_cinematic_background(scene, accent=None, breathing=False):
     """
     Premium background atmosphere shared by every template.
 
     Draws a subtle vertical gradient (cool charcoal -> near-black) plus a soft
     radial brand-tinted glow ("pool of light") just above frame centre, and
-    optionally attaches a single slow breathing updater (opacity sway + tiny
-    drift) in the same render-cost class as the existing particle/flicker
-    updaters.
+    ``breathing`` defaults to **False** on purpose. The glow sits at z=-90, the
+    second-lowest z-index in the scene, so attaching an updater to it made
+    Scene.get_moving_mobjects return practically the entire scene as "moving" —
+    defeating Cairo's static-frame cache and re-rasterizing every static
+    mobject (scanlines, vignette, grids, world.svg, cards, labels) on all
+    ~5,700 frames. Opt in per scene only if the sway is worth that cost.
 
     Sync-safe: no ``self.play()`` / ``run_time`` and no timeline math — only an
     instant ``scene.add(...)`` plus at most one lightweight updater. Returns the
