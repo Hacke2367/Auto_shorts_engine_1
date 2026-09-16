@@ -147,6 +147,11 @@ def retain_accent_geo(
         return lambda: None
     try:
         center     = focus.get_center().copy()
+        # Rings are sized to the focus. On a 3.6-wide card or the full-width ticker they
+        # became screen-sized circles cutting through neighbouring cards and the title.
+        # Large focus mobjects already get hold_breathing's rectangular glow: skip rings.
+        if float(getattr(focus, "width", 0.0)) > 1.2:
+            return lambda: None
         base_r     = max(0.14, focus.width / 2.0) if hasattr(focus, "width") else 0.14
         max_r      = base_r + 0.42
         ring_dur   = 1.80   # seconds for one ring to expand + fade

@@ -31,12 +31,16 @@ try:
         get_rotating_watermark,
         add_cinematic_background,
         IntroManager,
+        build_result_banner,
     )
 except Exception:
     class IntroManager:  # type: ignore
         @staticmethod
         def play_intro(*args, **kwargs):
             return None
+
+    def build_result_banner(*args, **kwargs):
+        return VGroup()
 
     DATA_DIR = "./geo_data"
     BACKGROUND_COLOR = "#050505"
@@ -894,7 +898,7 @@ class CinematicLineRace(Scene):
                 if prev[6] - cur[6] < min_gap:
                     cur[6] = prev[6] - min_gap
             if chips:
-                floor_y = clampy_to_plot(-1e9, chips[-1][3].height)
+                floor_y = clampy_to_plot(-1e9, chips[-1][3].height) + 0.22  # clear the x-axis arrow
                 lift = floor_y - chips[-1][6]
                 if lift > 0:
                     for ch in chips:
@@ -992,6 +996,38 @@ class CinematicLineRace(Scene):
         # ==========================================
         # 8) LAUNCH (timeline-driven segments)
         # ==========================================
+        # Live leader card in the empty space right of the ranking dock. It tracks the
+        # current #1 through the race and turns into the WINNER card at the finish,
+        # using the same result card as every other template. Added instantly (no
+        # play) so the race segments keep their exact timing.
+        room_left = panel.get_right()[0] + 0.20
+        room_w = sf["right"] - room_left
+        leader_state = {"name": None, "val": None, "t": -1.0}
+
+        def _leader_card(label, name, val):
+            card = build_result_banner(
+                label, str(name).upper(), f"{float(val):.1f}{meta.unit_suffix}",
+                width=room_w, accent=Design.GOLD, z=75,
+            )
+            return card.move_to([room_left + room_w / 2, panel.get_center()[1], 0])
+
+        _first = first_ranking[0] if first_ranking else (labels[0] if labels else "")
+        leader_card = _leader_card("LEADER", _first, float(series[_first][0]) if _first else 0.0)
+
+        def _update_leader(m, dt):
+            t = float(self.tracker.get_value())
+            name, val = max(((c, interp_value(c, t)) for c in labels), key=lambda x: x[1])
+            shown = round(float(val), 1)
+            now = float(self.time)
+            if name == leader_state["name"] and (shown == leader_state["val"] or now - leader_state["t"] < 0.25):
+                return
+            leader_state.update(name=name, val=shown, t=now)
+            m.become(_leader_card("LEADER", name, val))
+
+        if labels:
+            leader_card.add_updater(_update_leader)
+            self.add(leader_card)
+
         active_race_segments = list(race_segments)
         if not active_race_segments:
             fallback_seg = finish_seg or outro_seg
@@ -1026,28 +1062,12 @@ class CinematicLineRace(Scene):
 
             winner_val = final_scores[0][1] if final_scores else 0.0
 
-            w_head = Text("WINNER", font="Montserrat", weight=BOLD, font_size=16, color=Design.GOLD)
-            w_name = Text(str(winner_name).upper(), font="Montserrat", weight=BOLD, font_size=26, color=WHITE)
-            w_val = Text(f"{winner_val:.1f}{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=22, color=Design.CYAN)
-            winner_text = VGroup(w_head, w_name, w_val).arrange(DOWN, buff=0.08).set_z_index(76)
-
-            # Park the result in the empty space right of the ranking dock and keep it
-            # up through finish + outro. At the bottom it sat on the x-axis years, and it
-            # faded out after 0.9s, leaving ~9s of static chart with no result on screen.
-            room_left = panel.get_right()[0] + 0.20
-            room_w = sf["right"] - room_left
-            if winner_text.width > room_w - 0.50:
-                winner_text.scale_to_fit_width(room_w - 0.50)
-            winner_banner = RoundedRectangle(
-                width=winner_text.width + 0.45, height=winner_text.height + 0.36, corner_radius=0.18
-            ).set_z_index(75)
-            winner_banner.set_fill(color="#000000", opacity=0.72)
-            winner_banner.set_stroke(color=Design.GOLD, width=2.0, opacity=0.90)
-            winner_banner.move_to([room_left + room_w / 2, panel.get_center()[1], 0])
-            winner_text.move_to(winner_banner)
-
+            # The live leader card becomes the WINNER card and stays up through finish +
+            # outro (the old banner vanished after 0.9s, leaving ~9s with no result).
+            leader_card.clear_updaters()
+            winner_card = _leader_card("WINNER", winner_name, winner_val)
             sfx.mark("winner_rise", gain_db=-10, meta={"segment": finish_seg})
-            self.play(FadeIn(winner_banner, shift=UP * 0.08), FadeIn(winner_text, shift=UP * 0.08), run_time=0.40)
+            self.play(FadeOut(leader_card), FadeIn(winner_card, shift=UP * 0.08), run_time=0.40)
             sfx.mark("impact_soft", gain_db=-13, meta={"segment": finish_seg, "at": "lock_flash"})
             self.play(Flash(slot_cards[0]["body"].get_right(), color=WHITE, line_length=0.45, num_lines=9), run_time=0.22)
             TL.consume(finish_seg, float(self.time) - finish_t0)

@@ -344,7 +344,7 @@ def build_evidence_box(center: np.ndarray) -> Dict[str, Mobject]:
     inner.set_stroke(blue, 2.0, 0.28)
     inner.move_to(center + UP * 0.06)
 
-    label = safe_text("evidence intake", font="Consolas", font_size=12, color=Theme.TEXT_SUB)
+    label = safe_text("evidence intake", font="Consolas", font_size=16, color=Theme.TEXT_SUB)
     label.set_opacity(0.9)
     label.next_to(outer, DOWN, buff=0.12)
 
@@ -423,7 +423,7 @@ def build_scanner(center: np.ndarray) -> Dict[str, Mobject]:
         d.set_opacity(float(rng.uniform(0.03, 0.08)))
         sparks.add(d)
 
-    t_top = safe_text("AI TRIBUNAL", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD)
+    t_top = safe_text("AI TRIBUNAL", font="Consolas", font_size=14, color=Theme.TEXT_SUB, weight=BOLD)
     t_main = safe_text("SCANNING", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD)
 
     d1 = safe_text(".", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD).set_opacity(0.0)
@@ -1107,6 +1107,29 @@ class SortCardTribunalFinal(Scene):
             run_time=setup_act,
             rate_func=rf.ease_in_out_sine,
         )
+
+        # Line up the items to be judged inside the evidence box for the setup
+        # narration. It used to sit empty for the first ~17s of the video.
+        queue_cards = Group()
+        for _, _row in df.iterrows():
+            _img = str(_row.get("Image", "")).strip()
+            queue_cards.add(
+                build_card(resolve_card_image_path(_img), Theme.NEON_BLUE, _img.split(".")[0] if _img else "?")
+            )
+        if len(queue_cards):
+            queue_cards.arrange(RIGHT, buff=0.30)
+            _box = evidence["outer"]
+            _fit = min(
+                1.0,
+                (_box.width - 0.60) / max(queue_cards.width, 1e-6),
+                (_box.height - 0.20) / max(queue_cards.height, 1e-6),
+            )
+            queue_cards.scale(_fit).move_to(_box.get_center())
+            items_layer.add(queue_cards)
+            self.play(
+                LaggedStart(*[FadeIn(c, shift=UP * 0.08) for c in queue_cards], lag_ratio=0.12),
+                run_time=clamp(setup_act, 0.40, 1.00),
+            )
         
         # ✅ FIX: Setup Delta Math
         TL.consume(setup_seg, float(self.time) - setup_t0)
@@ -1131,7 +1154,11 @@ class SortCardTribunalFinal(Scene):
         c1, c2 = 0, 0
 
         def set_log(mobj: Mobject, text: str, color=Theme.TEXT_SUB):
-            new = safe_text(text, font="Consolas", font_size=11, color=color, weight=BOLD).move_to(mobj.get_center())
+            # 15pt fitted to the scanner pill (3.3 wide); at 11pt the log was unreadable.
+            new = safe_text(text, font="Consolas", font_size=15, color=color, weight=BOLD)
+            if new.width > 2.90:
+                new.scale_to_fit_width(2.90)
+            new.move_to(mobj.get_center())
             mobj.become(new)
 
         def counter_pop(counter: Dict[str, Mobject], value: int, accent: str):
@@ -1237,6 +1264,11 @@ class SortCardTribunalFinal(Scene):
             is_left = (cat == 1)
             accent = Theme.NEON_BLUE if is_left else Theme.NEON_PINK
             bin_ref = left_bin if is_left else right_bin
+
+            if idx == 0 and len(queue_cards):
+                # Clear the setup line-up before the first item is judged.
+                self.play(FadeOut(queue_cards), run_time=0.25)
+                items_layer.remove(queue_cards)
 
             img_path = resolve_card_image_path(img_name)
             fallback_label = img_name.split(".")[0] if img_name else "X"
@@ -1416,8 +1448,19 @@ class SortCardTribunalFinal(Scene):
             rate_func=rf.ease_in_out_sine,
         )
 
-        final_txt = safe_text("SORT COMPLETE", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
-        final_txt.set_z_index(600)
+        # Shared result card: the same end treatment as every other template, and it
+        # finally states the verdict (how the items split between the two tiers).
+        _parts = [p.strip() for p in re.split(r"\s+vs\s+", str(meta.get("TITLE", "TIER 1 vs TIER 2")), flags=re.IGNORECASE)]
+        _left_name = (_parts[0] if _parts else "TIER 1").upper()
+        _right_name = (_parts[1] if len(_parts) > 1 else "TIER 2").upper()
+        try:
+            from src.utils import build_result_banner
+            final_txt = build_result_banner(
+                "SORT COMPLETE", f"{_left_name}: {c1}   ·   {_right_name}: {c2}", z=600
+            )
+        except Exception:
+            final_txt = safe_text("SORT COMPLETE", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
+            final_txt.set_z_index(600)
         
         act_end = clamp(w_total * 0.35, 0.60, 1.40)
         sfx.mark("ui_pop", gain_db=-8, meta={"segment": winner_seg})

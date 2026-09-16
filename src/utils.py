@@ -189,14 +189,15 @@ def get_cinematic_overlay(scene,
 
     timer.add_updater(_update_timer)
 
-    # FEED label top-right
-    feed = Text(feed_text, font="Montserrat", font_size=12, color=Brand.TEXT_SUB)
-    feed.move_to([sf["right"] - 1.45, sf["top"] - 0.10, 0])
-    feed.set_opacity(0.75)
+    # FEED label top-right, on the timer's line just left of it. Stacked above the
+    # timer at top-0.10 its baseline touched the digits.
+    feed = Text(feed_text, font="Montserrat", font_size=13, color=Brand.TEXT_SUB)
+    feed.next_to(timer, LEFT, buff=0.28)
+    feed.set_opacity(0.80)
 
-    # Footer bottom-left
-    footer = Text(footer_text, font="Montserrat", font_size=12, color=Brand.CYAN)
-    footer.move_to([sf["left"] + 1.75, sf["bottom"] + 0.22, 0])
+    # Footer bottom-left, in the band below template content (bins, scoreboards).
+    footer = Text(footer_text, font="Montserrat", font_size=13, color=Brand.CYAN)
+    footer.move_to([sf["left"] + 1.75, sf["bottom"] + 0.06, 0])
     footer.set_opacity(0.7)
 
     overlay.add(rec_dot, rec_label, timer, feed, footer)
@@ -240,7 +241,9 @@ def get_rotating_watermark(margin=0.60):
     ).set_stroke(color=Brand.TEXT_MAIN, width=1.2, opacity=0.6)
 
     wm = VGroup(ring, cross)
-    wm.move_to([sf["right"] - 0.30, sf["bottom"] + 0.30, 0])
+    # Anchored to the frame corner (inside the border), not the safe frame, so it
+    # stays clear of bins / scoreboards that reach the safe-frame bottom.
+    wm.move_to([config.frame_width / 2 - 0.70, -config.frame_height / 2 + 0.70, 0])
     wm.set_opacity(0.40)
     wm.set_z_index(255)
 
@@ -514,7 +517,7 @@ class IntroManager:
         scene.add(cover)
 
         # SUB (alone)
-        sub = Text(f"> {brand_sub}", font="Consolas", font_size=22, color=Brand.PINK)
+        sub = Text(f"> {brand_sub}", font="Consolas", font_size=30, color=Brand.PINK)  # 22 was barely readable
         sub.set_z_index(501)
         sub.move_to(ORIGIN)
 
@@ -559,6 +562,43 @@ class IntroManager:
 
         # HARD safety remove
         scene.remove(title, cover)
+
+
+# ============================================================
+# ✅ RESULT BANNER (shared end card)
+# ============================================================
+def build_result_banner(label, headline, detail="", *, width=None, accent=None, z=200):
+    """The end-of-video result card every template uses.
+
+    Same treatment as bar_chart's TOP LEADER banner (label / big headline / detail
+    on a dark plate), so all seven templates finish on one recognisable card
+    instead of seven different end screens. Text shrinks to fit ``width``.
+    Returns a VGroup(plate, text); the plate is also exposed as ``.plate``.
+    """
+    sf = get_safe_frame(0.60)
+    accent = accent or Brand.PINK
+    parts = [
+        Text(str(label).upper(), font="Montserrat", weight=BOLD, font_size=22, color=Brand.TEXT_SUB),
+        Text(str(headline), font="Montserrat", weight=BOLD, font_size=46, color=Brand.TEXT_MAIN),
+    ]
+    if detail:
+        parts.append(Text(str(detail), font="Montserrat", weight=BOLD, font_size=24, color=Brand.CYAN))
+    txt = VGroup(*parts).arrange(DOWN, buff=0.12)
+
+    w = float(width) if width is not None else float(sf["w"])
+    if txt.width > w - 0.60:
+        txt.scale_to_fit_width(w - 0.60)
+
+    plate = RoundedRectangle(width=w, height=txt.height + 0.55, corner_radius=0.18)
+    plate.set_fill(color="#000000", opacity=0.85)
+    plate.set_stroke(color=accent, width=3, opacity=0.80)
+    txt.move_to(plate)
+    plate.set_z_index(z)
+    txt.set_z_index(z + 1)
+
+    banner = VGroup(plate, txt)
+    banner.plate = plate
+    return banner
 
 
 # ============================================================

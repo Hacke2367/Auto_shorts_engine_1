@@ -1173,6 +1173,25 @@ class BarChartTemplate(Scene):
 
         sfx.mark("scan_tick", gain_db=-16, meta={"at": "setup_guides"})
         self.play(Create(guide_group, run_time=clamp(setup_action * 0.75, 0.55, 1.05), lag_ratio=0.08))
+
+        # Show the empty ranking slots during setup so the chart is not a blank panel
+        # for the whole setup narration. Each real rank badge / track covers its ghost.
+        ghost_ranks = VGroup()
+        for gi in range(num_items):
+            gy = START_Y - (gi * GAP_Y)
+            g_ring = Circle(radius=0.25).set_fill(opacity=0).set_stroke(Theme.NEON_BLUE, width=2, opacity=0.30)
+            g_ring.move_to([RANK_X, gy, 0])
+            g_num = Text(f"{gi + 1}", font="Montserrat", weight=BOLD, font_size=20, color=WHITE).set_opacity(0.30)
+            g_num.move_to(g_ring)
+            g_track = RoundedRectangle(corner_radius=0.10, width=BAR_MAX_WIDTH, height=0.36)
+            g_track.set_fill(opacity=0).set_stroke(Theme.NEON_BLUE, width=1.5, opacity=0.14)
+            g_track.move_to([BAR_START_X + BAR_MAX_WIDTH / 2, gy, 0])
+            ghost_ranks.add(VGroup(g_ring, g_num, g_track))
+        ghost_ranks.set_z_index(8)
+        self.play(
+            LaggedStart(*[FadeIn(g) for g in ghost_ranks], lag_ratio=0.08),
+            run_time=clamp(setup_action * 0.60, 0.40, 0.90),
+        )
         
         # Drift-free anchor: end setup exactly on the master clock.
         sync_hold(self, TL, "setup", global_start_t0, focus=rail)
@@ -1205,7 +1224,9 @@ class BarChartTemplate(Scene):
             name_text = Text(str(name).upper(), font="Montserrat", weight=BOLD, font_size=24, color=WHITE)
             text_plate = RoundedRectangle(corner_radius=0.12, width=name_text.width + 0.55, height=0.52)
             text_plate.set_fill(color="#000000", opacity=0.70).set_stroke(width=0)
-            text_plate.move_to([LABEL_X, y_pos + 0.45, 0])
+            # Left-align on the rank badge. Centred at LABEL_X, long names
+            # ("MARK ZUCKERBERG") grew left across the rank rail.
+            text_plate.move_to([RANK_X - 0.30 + text_plate.width / 2, y_pos + 0.45, 0])
             name_text.move_to(text_plate)
 
             text_plate.move_to(
@@ -1420,7 +1441,8 @@ class BarChartTemplate(Scene):
             _winner_sweep(self, winner_bar, t_sweep, color_core=WHITE, color_glow=Theme.NEON_BLUE)
 
             banner_h = 1.65
-            banner = RoundedRectangle(width=sf["w"], height=banner_h, corner_radius=0.18)
+            # 1.0 narrower than the safe frame so the corner watermark stays clear of it.
+            banner = RoundedRectangle(width=sf["w"] - 1.0, height=banner_h, corner_radius=0.18)
             banner.set_fill(color="#000000", opacity=0.85)
             banner.set_stroke(color=Theme.NEON_PINK, width=3, opacity=0.8)
             banner.move_to([sf["cx"], sf["bottom"] + (banner_h / 2) + 0.35, 0])

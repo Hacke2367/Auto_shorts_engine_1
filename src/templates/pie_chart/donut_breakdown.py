@@ -862,10 +862,13 @@ def make_callout(center: np.ndarray, outer_r: float, slice_mid: float, pop_vec: 
     base_edge = center + np.array([np.cos(slice_mid) * outer_r, np.sin(slice_mid) * outer_r, 0])
     p0 = base_edge + pop_vec * 0.55
 
-    if chip.get_center()[0] >= center[0]:
-        dot_pos = chip.get_left() + LEFT * 0.12
-    else:
+    # Attach on the slice's own side. Chips are stacked centred above/below the ring,
+    # so choosing by chip x sent every line to the left and right-side slices' lines
+    # crossed the whole donut.
+    if np.cos(slice_mid) >= 0:
         dot_pos = chip.get_right() + RIGHT * 0.12
+    else:
+        dot_pos = chip.get_left() + LEFT * 0.12
 
     dot = Dot(dot_pos, radius=0.05, color=lighten_hex(col, 0.08)).set_z_index(166)
     dot.set_opacity(0.95)
@@ -1693,6 +1696,25 @@ class DonutBreakdownFinal(Scene):
         )
         sfx.mark("winner_sting", offset=0.0, meta={"at": "winner_announce"})
         self.play(Transform(commentary, leader), run_time=clamp(t_win * 0.25, 0.40, 0.90), rate_func=rf.ease_out_cubic)
+
+        # Shared result card (same end treatment as the other templates) in the free
+        # band under the lower callout stack; skipped when the callouts leave no room.
+        try:
+            from src.utils import build_result_banner
+            win_banner = build_result_banner(
+                "LEADER",
+                str(names[winner_idx]).upper(),
+                f"{int(round(float(pct_vals[winner_idx])))}% SHARE",
+                accent=winner_col,
+                z=220,
+            )
+            _lowest = min([float(c.get_bottom()[1]) for c in chips] + [float(center[1]) - outer_r])
+            _floor = float(sf["bottom"]) + 0.30
+            if (_lowest - 0.25) - _floor >= win_banner.height:
+                win_banner.move_to([float(sf["cx"]), _floor + win_banner.height / 2, 0])
+                self.play(FadeIn(win_banner, shift=UP * 0.10), run_time=clamp(t_win * 0.18, 0.30, 0.55))
+        except Exception:
+            pass
 
         sync_hold(self, TL, "winner", global_start_t0, focus=commentary)
 

@@ -781,22 +781,26 @@ class GeoUniversalMap(Scene):
             sfx.mark("node_reveal", meta={"segment": seg_name, "node": i})
             glow, core = ln[0], ln[1]
 
-            ping = Circle(radius=0.12).move_to(dot[2].get_center()).set_z_index(72)
-            ping.set_stroke(color=col, width=6, opacity=0.35)
-            self.add(ping)
+            # One-country data (states of one country) has a single map pin, so every
+            # route line converged on the same dot. Skip pin pings and routes there;
+            # the cards carry the data and sync_hold keeps the node on time.
+            if not single_country:
+                ping = Circle(radius=0.12).move_to(dot[2].get_center()).set_z_index(72)
+                ping.set_stroke(color=col, width=6, opacity=0.35)
+                self.add(ping)
 
-            self.play(
-                Flash(dot[2].get_center(), color=col, flash_radius=0.22, time_width=0.25),
-                dot.animate.scale(1.12),
-                ping.animate.scale(2.4).set_opacity(0),
-                run_time=act_ping,
-                rate_func=rf.ease_out_cubic,
-            )
-            self.remove(ping)
-            self.play(dot.animate.scale(1.00), run_time=0.12, rate_func=rf.ease_out_cubic)
+                self.play(
+                    Flash(dot[2].get_center(), color=col, flash_radius=0.22, time_width=0.25),
+                    dot.animate.scale(1.12),
+                    ping.animate.scale(2.4).set_opacity(0),
+                    run_time=act_ping,
+                    rate_func=rf.ease_out_cubic,
+                )
+                self.remove(ping)
+                self.play(dot.animate.scale(1.00), run_time=0.12, rate_func=rf.ease_out_cubic)
 
-            self.play(Create(core, rate_func=rf.linear), run_time=act_line)
-            self.play(FadeIn(glow), run_time=0.12)
+                self.play(Create(core, rate_func=rf.linear), run_time=act_line)
+                self.play(FadeIn(glow), run_time=0.12)
 
             self.play(
                 FadeIn(card, shift=UP * 0.12, scale=0.985),
@@ -996,6 +1000,21 @@ class GeoUniversalMap(Scene):
                     pass
                 self.play(winner.animate.scale(1.00), run_time=0.15)
                 
+        # Shared result card over a dim — same end treatment as the other templates,
+        # instead of ending on a still map with no stated result.
+        if winner_idx is not None and 0 <= winner_idx < len(placed):
+            try:
+                from src.utils import build_result_banner
+                (b_country, b_group, b_value, _, _, b_row), _, _ = placed[winner_idx]
+                b_title, _ = _card_title(b_country, b_group)
+                b_label = "BIGGEST GAP" if mode == "COMPARE" else "HIGHEST"
+                geo_dim = Rectangle(width=60, height=60).set_fill(BLACK, 0.55).set_stroke(width=0).set_z_index(190)
+                win_banner = build_result_banner(b_label, str(b_title).upper(), _format_value(b_row, b_value), z=200)
+                win_banner.move_to([sf["cx"], (lane_top + lane_bottom) / 2, 0])
+                self.play(FadeIn(geo_dim), FadeIn(win_banner, shift=UP * 0.10), run_time=0.45, rate_func=rf.ease_out_cubic)
+            except Exception:
+                pass
+
         # Drift-free anchor: end winner exactly on the master clock.
         sync_hold(self, TL, winner_seg, global_start_t0, focus=ticker_bg, text="LOCKING WINNER SIGNAL")
 

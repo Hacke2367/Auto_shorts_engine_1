@@ -139,8 +139,8 @@ class LayoutCfg:
 
     rows_shift_down: float = 0.45
 
-    node_radius: float = 0.40
-    node_w: float = 0.82
+    node_radius: float = 0.45  # was 0.40: "HANDLING" shrank to ~12pt inside the hexagon
+    node_w: float = 0.92
 
     bar_h: float = 0.48
     bar_tip_len: float = 0.30
@@ -150,7 +150,7 @@ class LayoutCfg:
     endbox_text_pad: float = 0.16
 
     row_gap_min: float = 0.90
-    row_gap_max: float = 1.35
+    row_gap_max: float = 1.50  # was 1.35: rows bunched in the top half, empty band below
 
     z_bg: int = 0
     z_atmo: int = 1
@@ -581,7 +581,8 @@ class ButterflyChart(Scene):
         scale = hook_action / 2.5
 
         header_top_y = sf["top"] - cfg.header_top_pad
-        title = Text("WHO WILL DOMINATE?", font=FONT_DISPLAY, weight=BOLD, font_size=30, color=Design.TEXT_MAIN).set_z_index(cfg.z_header)
+        # Same headline scale as the other templates' titles (~42pt display face).
+        title = Text("WHO WILL DOMINATE?", font=FONT_DISPLAY, weight=BOLD, font_size=40, color=Design.TEXT_MAIN).set_z_index(cfg.z_header)
         title.move_to([sf["cx"], header_top_y, 0])
 
         underline = Line(LEFT * 3.0, RIGHT * 3.0).set_z_index(cfg.z_header)
@@ -712,13 +713,16 @@ class ButterflyChart(Scene):
         meter_mid.set_stroke(color=WHITE, width=2, opacity=0.10)
         meter_mid.move_to(meter_bg.get_center())
 
+        # Start the fills INSIDE the meter. align_to(LEFT/RIGHT) only sets x, so they were
+        # created at y=0 and floated mid-screen as the stray cyan/pink "I" marks, growing
+        # each round instead of filling the ROUND TIMELINE meter.
         p1_fill = RoundedRectangle(width=0.01, height=meter_h, corner_radius=0.10).set_z_index(cfg.z_ui + 2)
         p1_fill.set_fill(color=Design.CYAN, opacity=0.85).set_stroke(width=0)
-        p1_fill.align_to(meter_bg, LEFT)
+        p1_fill.move_to(meter_bg.get_center()).align_to(meter_bg, LEFT)
 
         p2_fill = RoundedRectangle(width=0.01, height=meter_h, corner_radius=0.10).set_z_index(cfg.z_ui + 2)
         p2_fill.set_fill(color=Design.PINK, opacity=0.85).set_stroke(width=0)
-        p2_fill.align_to(meter_bg, RIGHT)
+        p2_fill.move_to(meter_bg.get_center()).align_to(meter_bg, RIGHT)
 
         sfx.mark("ui_in")
         self.play(
@@ -800,7 +804,7 @@ class ButterflyChart(Scene):
             t = Text(formatted, font="Montserrat", weight=BOLD, font_size=16, color=WHITE).set_z_index(cfg.z_node + 1)
             _high_contrast_text(t)
             t.move_to(hexagon)
-            t.scale_to_fit_width(hexagon.width * 0.85)
+            t.scale_to_fit_width(hexagon.width * 0.96)
 
             glow = hexagon.copy().set_z_index(cfg.z_node - 1)
             glow.set_fill(opacity=0)

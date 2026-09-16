@@ -485,7 +485,12 @@ def create_player_card(
         portrait = ImageMobject(img_path)
 
         inner_w = frame_w - 0.18
-        inner_h = frame_h - 0.18
+        # Fit the photo to the area ABOVE the name plate (plate top sits ~0.68 above
+        # the card bottom) and centre it there. Centred on the whole card, a square
+        # photo left a black band above it; top-aligned, a short one left the card empty.
+        area_top = frame_h / 2 - 0.09
+        area_bottom = -frame_h / 2 + 0.78
+        inner_h = area_top - area_bottom
 
         portrait.scale_to_fit_width(inner_w)
         if portrait.height > inner_h:
@@ -494,6 +499,8 @@ def create_player_card(
         portrait = safe_text((name[:1] or "?").upper(), font_size=96, color=accent, weight=BOLD)
 
     portrait.move_to(bg.get_center())
+    if isinstance(portrait, ImageMobject):
+        portrait.move_to(bg.get_center() + UP * ((area_top + area_bottom) / 2))
 
     frame = RoundedRectangle(width=frame_w, height=frame_h, corner_radius=0.18).set_fill(opacity=0)
     frame.set_stroke(accent, 2.9, 0.93).move_to(bg.get_center())
@@ -606,9 +613,11 @@ def build_decision_terminal(center: np.ndarray, w: float, h: float, accent: str,
     head_txt = safe_text("DECISION TERMINAL", font="Consolas", font_size=12, color=sub, weight=BOLD)
     head_txt.move_to(head.get_center() + LEFT * (w * 0.12))
 
-    line1 = safe_text("AI TRIBUNAL SCANNING", font="Consolas", font_size=18, color=WHITE, weight=BOLD)
-    line2 = safe_text("log: awaiting input...", font="Consolas", font_size=14, color=sub, weight=BOLD)
-    line3 = safe_text("status: online", font="Consolas", font_size=14, color=sub, weight=BOLD)
+    # 20/17/17, not 18/14/14: the terminal is a third of the screen and its log lines
+    # were unreadable on a phone. set_terminal_lines() scales anything too wide.
+    line1 = safe_text("AI TRIBUNAL SCANNING", font="Consolas", font_size=20, color=WHITE, weight=BOLD)
+    line2 = safe_text("log: awaiting input...", font="Consolas", font_size=17, color=sub, weight=BOLD)
+    line3 = safe_text("status: online", font="Consolas", font_size=17, color=sub, weight=BOLD)
 
     pad_x = 0.24
     body = VGroup(line1, line2, line3).arrange(DOWN, buff=0.08, aligned_edge=LEFT)
@@ -1252,11 +1261,11 @@ class VsCardFinal(Scene):
 
         def set_terminal_lines(l1: str, l2: str, l3: str, color: str):
             pad_x = float(terminal["pad_x"])
-            new1 = safe_text(l1, font="Consolas", font_size=18, color=WHITE, weight=BOLD)
+            new1 = safe_text(l1, font="Consolas", font_size=20, color=WHITE, weight=BOLD)
             if new1.width > (terminal["plate"].width - 0.55):
                 new1.scale_to_fit_width(terminal["plate"].width - 0.55)
-            new2 = safe_text(l2, font="Consolas", font_size=14, color=C_SUB, weight=BOLD)
-            new3 = safe_text(l3, font="Consolas", font_size=14, color=C_SUB, weight=BOLD)
+            new2 = safe_text(l2, font="Consolas", font_size=17, color=C_SUB, weight=BOLD)
+            new3 = safe_text(l3, font="Consolas", font_size=17, color=C_SUB, weight=BOLD)
             for ln in (new2, new3):
                 if ln.width > (terminal["plate"].width - 0.55):
                     ln.scale_to_fit_width(terminal["plate"].width - 0.55)
@@ -1514,9 +1523,16 @@ class VsCardFinal(Scene):
             conn_alpha.set_value(0.0)
             spine.set_opacity(0.0)
 
-            draw_head = safe_text("IT'S A DRAW!", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
-            draw_score = safe_text(f"{fmt_pts(p1_pts)}  —  {fmt_pts(p2_pts)}", font="Consolas", font_size=30, color=C_GOLD, weight=BOLD)
-            draw_txt = VGroup(draw_head, draw_score).arrange(DOWN, buff=0.18)
+            try:
+                from src.utils import build_result_banner
+                draw_txt = build_result_banner(
+                    "RESULT", "IT'S A DRAW", f"{fmt_pts(p1_pts)}  —  {fmt_pts(p2_pts)}",
+                    accent=C_GOLD, z=380,
+                )
+            except Exception:
+                draw_head = safe_text("IT'S A DRAW!", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
+                draw_score = safe_text(f"{fmt_pts(p1_pts)}  —  {fmt_pts(p2_pts)}", font="Consolas", font_size=30, color=C_GOLD, weight=BOLD)
+                draw_txt = VGroup(draw_head, draw_score).arrange(DOWN, buff=0.18)
             # Sit above the two cards. Centred, it was written across both photos and
             # white text on a gold nugget / bitcoin coin was unreadable.
             cards_top = max(p1["group"].get_top()[1], p2["group"].get_top()[1])
@@ -1581,20 +1597,29 @@ class VsCardFinal(Scene):
             rate_func=rf.ease_out_cubic,
         )
 
-        power1 = safe_text("WINNER CONFIRMED", font="Consolas", font_size=18, color=C_SUB, weight=BOLD)
-        power2 = safe_text("YOUR WINNER", font="Montserrat", font_size=30, color=WHITE, weight=BOLD)
-        power3 = safe_text(win["name"].upper(), font="Montserrat", font_size=56, color=win_color, weight=BOLD)
-
-        power = VGroup(power1, power2, power3).arrange(DOWN, buff=0.10)
-        power.move_to(loser_slot)
-        power.set_z_index(390)
-
         act_pow = clamp(w_total * 0.35, 0.55, 1.25)
         sfx.mark("impact_soft", gain_db=-10, meta={"segment": winner_seg, "at": "winner_announcement"})
-        self.play(FadeIn(power1, shift=UP * 0.08), run_time=act_pow * 0.20, rate_func=rf.ease_out_cubic)
-        self.play(Write(power2), run_time=act_pow * 0.35, rate_func=rf.ease_out_cubic)
-        self.play(Write(power3), run_time=act_pow * 0.45, rate_func=rf.ease_out_cubic)
-        self.play(Flash(power3, color=win_color, line_length=0.70, num_lines=14), run_time=0.35)
+        try:
+            # Shared result card, same as every other template's end screen.
+            from src.utils import build_result_banner
+            power = build_result_banner(
+                "WINNER", win["name"].upper(), f"{fmt_pts(p1_pts)}  —  {fmt_pts(p2_pts)}",
+                width=min(4.2, float(config.frame_width) - 1.2), accent=win_color, z=390,
+            )
+            power.move_to(loser_slot)
+            self.play(FadeIn(power, shift=UP * 0.10), run_time=act_pow * 0.65, rate_func=rf.ease_out_cubic)
+            self.play(Flash(power, color=win_color, line_length=0.70, num_lines=14), run_time=0.35)
+        except Exception:
+            power1 = safe_text("WINNER CONFIRMED", font="Consolas", font_size=18, color=C_SUB, weight=BOLD)
+            power2 = safe_text("YOUR WINNER", font="Montserrat", font_size=30, color=WHITE, weight=BOLD)
+            power3 = safe_text(win["name"].upper(), font="Montserrat", font_size=56, color=win_color, weight=BOLD)
+            power = VGroup(power1, power2, power3).arrange(DOWN, buff=0.10)
+            power.move_to(loser_slot)
+            power.set_z_index(390)
+            self.play(FadeIn(power1, shift=UP * 0.08), run_time=act_pow * 0.20, rate_func=rf.ease_out_cubic)
+            self.play(Write(power2), run_time=act_pow * 0.35, rate_func=rf.ease_out_cubic)
+            self.play(Write(power3), run_time=act_pow * 0.45, rate_func=rf.ease_out_cubic)
+            self.play(Flash(power3, color=win_color, line_length=0.70, num_lines=14), run_time=0.35)
         
         sync_hold(self, TL, winner_seg, global_start_t0, focus=win["group"], text="LOCKING WINNER DATA")
 

@@ -420,7 +420,9 @@ def banner_scan_hold(scene: Scene, banner: Mobject, seconds: float, color=WHITE)
     try:
         scan = Rectangle(width=banner.width * 0.98, height=0.10).set_stroke(width=0)
         scan.set_fill(color, opacity=0.10)
-        scan.set_z_index(getattr(banner, "z_index", 200) + 5)
+        # Just above the banner plate but below its text: at +5 the scanline swept
+        # across the headline and read as a grey strike-through.
+        scan.set_z_index(getattr(banner, "z_index", 200) + 0.5)
 
         t0 = float(scene.time)
 
