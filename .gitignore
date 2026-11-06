@@ -135,3 +135,8 @@ validation/
 # RunPod upload bundle (regenerated on demand, never committed)
 runpod_bundle.tgz
 runpodctl.exe
+
+# Claude Code per-machine overrides
+.claude/settings.local.json
+
+.superpowers/
