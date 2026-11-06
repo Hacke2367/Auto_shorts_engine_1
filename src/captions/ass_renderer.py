@@ -14,8 +14,19 @@ _log = logging.getLogger(__name__)
 # captions.render.style.safe_margin_px. vs_card's free band is 1265-1395px from the
 # top (between the player cards and the decision terminal), i.e. a 2-line caption
 # whose bottom edge sits 525px above the frame bottom.
+# 2026-11 finance skin: vs_card's decision terminal is hidden, so its band
+# (scoreboard top ~230px to the value boxes ~500px) is the caption band.
+# Others sit just above each template's bottom panel; tuned by -q l probes.
 _TEMPLATE_CAPTION_MARGIN_V: Dict[str, int] = {
-    "vs_card": 525,
+    # One line, bottom edge ~1560px: above the Shorts title/channel overlay and
+    # below each chart body. vs_card sits in the band the hidden terminal freed.
+    "vs_card": 420,
+    "bar_chart": 360,
+    "donut_breakdown": 360,
+    "scan_race": 360,
+    "butterfly_chart": 360,
+    "geo_universal": 360,
+    "sort_card": 360,
 }
 
 

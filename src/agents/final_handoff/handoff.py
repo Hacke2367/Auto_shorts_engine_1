@@ -214,11 +214,10 @@ def build_engine_job_json(
         },
         "render": {
             "format": "ass",
-            "burn_in": False,
-            "style": {"preset": "modern_clean", "safe_margin_px": 80, "max_lines": 2},
+            "burn_in": True,
+            "style": {"preset": "modern_clean", "safe_margin_px": 80, "max_lines": 1},
             "tracks": [
-                {"lang": "hi", "mode": "reveal_words", "position": "bottom"},
-                {"lang": "en", "mode": "plain", "position": "above_bottom"},
+                {"lang": "hi", "mode": "plain", "position": "bottom"},
             ],
             "highlight": {"enabled": False, "mode": "word_reveal"},
         },

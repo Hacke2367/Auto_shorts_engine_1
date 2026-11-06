@@ -27,6 +27,11 @@ except Exception:
     config.frame_height = 16.0
     config.frame_width = 9.0
 
+# Brand/intro switches live in src.config; defaults keep a bare import working.
+BRAND_NAME = globals().get("BRAND_NAME", "BIGDATA LEAK")
+BRAND_HANDLE = globals().get("BRAND_HANDLE", "")
+INTRO_ENABLED = globals().get("INTRO_ENABLED", False)
+
 
 # ============================================================
 # ✅ SYSTEM RULE: SAFE-FRAME FIRST (no overflow ever)
@@ -70,6 +75,9 @@ class Brand:
     BLACK = "#000000"
     TEXT_MAIN = getattr(Theme, "TEXT_MAIN", "#FFFFFF")
     TEXT_SUB = getattr(Theme, "TEXT_SUB", "#AEB7C2")
+    GOLD = getattr(Theme, "NEON_YELLOW", "#FFC74A")
+    NAME = BRAND_NAME
+    HANDLE = BRAND_HANDLE
 
 
 # ============================================================
@@ -89,10 +97,9 @@ def get_branding_border_lines(inset=0.25, stroke_w=6, opacity=1.0):
     bottom_line = Line(br, bl)
     left_line = Line(bl, tl)
 
-    top_line.set_stroke(width=stroke_w, color=Brand.PINK, opacity=opacity)
-    right_line.set_stroke(width=stroke_w, color=Brand.CYAN, opacity=opacity)
-    bottom_line.set_stroke(width=stroke_w, color=Brand.PINK, opacity=opacity)
-    left_line.set_stroke(width=stroke_w, color=Brand.CYAN, opacity=opacity)
+    # One quiet gold hairline (was a 6px pink/cyan neon frame).
+    for ln in (top_line, right_line, bottom_line, left_line):
+        ln.set_stroke(width=stroke_w, color=Brand.GOLD, opacity=opacity)
 
     for ln in (top_line, right_line, bottom_line, left_line):
         ln.set_z_index(300)
@@ -113,6 +120,19 @@ def _format_time(seconds: float) -> str:
     m = int(seconds // 60)
     s = int(seconds % 60)
     return f"{m:02d}:{s:02d}"
+
+
+def _hud_text(text, legacy_prefixes):
+    """Blank out hacker-skin placeholders; keep anything a template set on purpose."""
+    t = str(text or "").strip()
+    if any(t.upper().startswith(p) for p in legacy_prefixes):
+        return ""
+    return t
+
+
+def _source_label(source_text):
+    s = str(source_text or "").strip()
+    return f"SOURCE: {s}" if s else ""
 
 
 def get_cinematic_overlay(scene,
@@ -139,9 +159,9 @@ def get_cinematic_overlay(scene,
         vignette.add(_ring)
     vignette.set_z_index(240)
 
-    # Scanlines
+    # Scanlines: off (CRT look); kept as an empty group so callers stay valid.
     scanlines = VGroup()
-    lines_n = 46
+    lines_n = 0
     for i in range(lines_n):
         y = sf["bottom"] + (i * (sf["h"] / lines_n))
         ln = Line(LEFT * (config.frame_width), RIGHT * (config.frame_width))
@@ -152,55 +172,45 @@ def get_cinematic_overlay(scene,
 
     overlay.add(vignette, scanlines)
 
-    # REC top-left
-    rec_dot = Dot(color=Brand.PINK, radius=0.06)
+    # BRAND top-left (was a blinking REC dot). Static: no updater, so the
+    # Cairo static-frame cache is untouched.
+    rec_dot = Dot(color=Brand.GOLD, radius=0.05)
     rec_dot.move_to([sf["left"] + 0.35, sf["top"] - 0.28, 0])
 
-    rec_label = Text("REC", font="Montserrat", weight=BOLD, font_size=18, color=Brand.TEXT_MAIN)
+    rec_label = Text(Brand.NAME, font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
     rec_label.next_to(rec_dot, RIGHT, buff=0.12).align_to(rec_dot, DOWN)
-
-    def _blink(m, dt):
-        if not hasattr(m, "_t"):
-            m._t = 0.0
-        m._t += dt
-        m.set_opacity(0.35 + 0.65 * (0.5 + 0.5 * np.sin(6.0 * m._t)))
-
-    rec_dot.add_updater(_blink)
+    rec_label.set_opacity(0.85)
 
     # TIMER top-right
     timer = Text("00:00", font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
     timer.move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
     timer.set_opacity(0.9)
 
-    def _update_timer(m):
-        # Throttle: only rebuild the Text when the displayed MM:SS actually
-        # changes (~1x/sec) instead of every frame (~30x/sec). Pure render-time
-        # win — the on-screen result is identical.
-        new_str = _format_time(getattr(scene, "time", 0.0))
-        if getattr(m, "_last_str", None) == new_str:
-            return
-        m._last_str = new_str
-        m.become(
-            Text(new_str,
-                 font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
-            .move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
-            .set_opacity(0.9)
-        )
-
-    timer.add_updater(_update_timer)
+    # Timer is not shown (screen-recorder look); it stays only as the layout
+    # anchor for the source label, so it gets no updater.
 
     # FEED label top-right, on the timer's line just left of it. Stacked above the
     # timer at top-0.10 its baseline touched the digits.
-    feed = Text(feed_text, font="Montserrat", font_size=13, color=Brand.TEXT_SUB)
-    feed.next_to(timer, LEFT, buff=0.28)
-    feed.set_opacity(0.80)
+    # Legacy "FEED_X // Y" / "CONFIDENTIAL" strings from the hacker skin are dropped;
+    # the feed slot shows the data source once the template reports it (set_source).
+    feed_text = _source_label(getattr(scene, "hud_source", "")) or _hud_text(feed_text, ("FEED_",))
+    footer_text = _hud_text(footer_text, ("CONFIDENTIAL",)) or Brand.HANDLE or " "
+    # Empty text has no points (align/next_to would fail), so start from a bare
+    # VMobject and let set_source() fill it once the CSV meta is known.
+    feed = VMobject()
+    if feed_text:
+        feed = Text(feed_text, font="Montserrat", font_size=13, color=Brand.TEXT_SUB).set_opacity(0.80)
+        feed.move_to([timer.get_right()[0] - feed.width / 2, sf["top"] - 0.28, 0])
 
     # Footer bottom-left, in the band below template content (bins, scoreboards).
     footer = Text(footer_text, font="Montserrat", font_size=13, color=Brand.CYAN)
     footer.move_to([sf["left"] + 1.75, sf["bottom"] + 0.06, 0])
     footer.set_opacity(0.7)
 
-    overlay.add(rec_dot, rec_label, timer, feed, footer)
+    overlay.feed = feed
+    overlay.feed_right = float(timer.get_right()[0])
+    overlay.hud_y = float(sf["top"] - 0.28)
+    overlay.add(rec_dot, rec_label, feed, footer)
 
     # z-index has to be set on the HUD children, not on the group. The
     # overlay.set_z_index(250) above ran while the VGroup was still empty, so
@@ -211,7 +221,7 @@ def get_cinematic_overlay(scene,
     # (240), the scanlines (241) and the whole chart body to be re-rasterized
     # every frame. Setting them here (rather than on the group) keeps the
     # intended layering: vignette 240 < scanlines 241 < HUD 250.
-    for _hud in (rec_dot, rec_label, timer, feed, footer):
+    for _hud in (rec_dot, rec_label, feed, footer):
         _hud.set_z_index(250)
     # The footer sits in the bottom band templates use for scoreboards, bins and
     # winner cards. Drawn at 250 it printed across them; at 35 content covers it.
@@ -231,23 +241,17 @@ def get_rotating_watermark(margin=0.60):
     # tier bins, scoreboards and chart end-labels in five templates. It keeps its
     # high z-index because it rotates -- an updater-bearing mobject low in the
     # z-order would force the Cairo static-frame cache to re-rasterize everything.
-    ring = DashedVMobject(
-        Circle(radius=0.42, color=Brand.CYAN, stroke_width=2),
-        num_dashes=12
-    )
-    cross = VGroup(
-        Line(UP * 0.19, DOWN * 0.19),
-        Line(LEFT * 0.19, RIGHT * 0.19),
-    ).set_stroke(color=Brand.TEXT_MAIN, width=1.2, opacity=0.6)
-
-    wm = VGroup(ring, cross)
+    # Static brand handle (was a rotating crosshair ring). No updater: the
+    # old rotation forced per-frame re-rasterization of everything below it.
+    if not Brand.HANDLE:
+        return VGroup()
+    tag = Text(Brand.HANDLE, font="Montserrat", weight=BOLD, font_size=13, color=Brand.TEXT_SUB)
+    wm = VGroup(tag)
     # Anchored to the frame corner (inside the border), not the safe frame, so it
     # stays clear of bins / scoreboards that reach the safe-frame bottom.
-    wm.move_to([config.frame_width / 2 - 0.70, -config.frame_height / 2 + 0.70, 0])
-    wm.set_opacity(0.40)
+    wm.move_to([config.frame_width / 2 - 0.45 - wm.width / 2, -config.frame_height / 2 + 0.55, 0])
+    wm.set_opacity(0.45)
     wm.set_z_index(255)
-
-    wm.add_updater(lambda m, dt: m.rotate(-0.45 * dt))
     return wm
 
 
@@ -455,7 +459,7 @@ class IntroManager:
         if getattr(scene, "_branding_attached", False):
             return getattr(scene, "_branding_objs", {})
 
-        top, right, bottom, left = get_branding_border_lines(stroke_w=6, opacity=1.0)
+        top, right, bottom, left = get_branding_border_lines(stroke_w=2, opacity=0.55)
         overlay = get_cinematic_overlay(scene, feed_text=feed_text, footer_text=footer_text)
         watermark = get_rotating_watermark()
 
@@ -499,11 +503,33 @@ class IntroManager:
                 pass
 
     @staticmethod
+    def set_source(scene, source_text=""):
+        """Show "SOURCE: ..." in the HUD once the template has read its CSV meta."""
+        overlay = (getattr(scene, "_branding_objs", {}) or {}).get("overlay")
+        feed = getattr(overlay, "feed", None)
+        label = _source_label(source_text)
+        if feed is None or not label:
+            return
+        new = Text(label, font="Montserrat", font_size=13, color=Brand.TEXT_SUB).set_opacity(0.80)
+        fit_text(new, config.frame_width * 0.55)
+        right = getattr(overlay, "feed_right", config.frame_width / 2 - 0.6)
+        new.move_to([right - new.width / 2, getattr(overlay, "hud_y", 0.0), 0])
+        new.set_z_index(250)
+        feed.become(new)
+
+    @staticmethod
     def play_intro(scene,
                    brand_title="BIGDATA LEAK",
                    brand_sub="SYSTEM BREACH DETECTED",
                    feed_text="FEED_BAR // MARKET",
                    footer_text="CONFIDENTIAL // LEAKED_SOURCE"):
+
+        # Hook-first (INTRO_ENABLED=False): no black brand card, just the
+        # persistent branding. Templates measure post-intro time, so sync holds.
+        if not INTRO_ENABLED:
+            scene._intro_played = True
+            IntroManager._ensure_branding(scene, feed_text=feed_text, footer_text=footer_text)
+            return
 
         # Intro plays only once per Scene
         if getattr(scene, "_intro_played", False):
@@ -599,6 +625,62 @@ def build_result_banner(label, headline, detail="", *, width=None, accent=None, 
     banner = VGroup(plate, txt)
     banner.plate = plate
     return banner
+
+
+# ============================================================
+# ✅ NUMBER + TEXT HELPERS (shared by templates)
+# ============================================================
+def fmt_value(v, unit="", currency="", numfmt="intl", decimals=None):
+    """One number format for every template.
+
+    intl:   1.2K / 3.4M / 5.6B / 7.8T      indian: 1.2 L / 3.4 Cr (below 1 lakh: 12,345)
+    currency goes in front (₹, $); unit after ("%" tight, others spaced).
+    Small numbers keep one decimal only when they have one (2.4 -> "2.4", 817 -> "817").
+    """
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    unit = str(unit or "").strip()
+    _mag = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12, "L": 1e5, "Cr": 1e7}
+    if unit in _mag:  # value is already in that magnitude: fold it in, re-compact
+        x *= _mag[unit]
+        unit = ""
+    sign = "-" if x < 0 else ""
+    a = abs(x)
+    numfmt = (numfmt or "intl").lower()
+
+    def _num(n, d):
+        d = decimals if decimals is not None else d
+        s = f"{n:,.{d}f}"
+        if "." in s:
+            s = s.rstrip("0").rstrip(".")
+        return s
+
+    if numfmt == "indian" and a >= 1e5:
+        body = _num(a / 1e7, 2) + " Cr" if a >= 1e7 else _num(a / 1e5, 2) + " L"
+    elif numfmt != "indian" and a >= 1e3:
+        body = _num(a, 0)
+        for div, suf in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")):
+            if a >= div:
+                body = _num(a / div, 1) + suf
+                break
+    else:
+        body = _num(a, 0 if a == int(a) else (2 if a < 1 else 1))
+
+    tight = {"%", "x", "\u00d7"}
+    tail = unit if unit in tight else (f" {unit}" if unit else "")
+    return f"{sign}{str(currency or '').strip()}{body}{tail}"
+
+
+def fit_text(mob, max_width):
+    """Shrink a text mobject to fit max_width (never enlarges)."""
+    try:
+        if max_width and mob.width > float(max_width):
+            mob.scale_to_fit_width(float(max_width))
+    except Exception:
+        pass
+    return mob
 
 
 # ============================================================

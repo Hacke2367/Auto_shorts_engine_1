@@ -89,22 +89,17 @@
     },
     "render": {
       "format": "ass",
-      "burn_in": false,
+      "burn_in": true,
       "style": {
         "preset": "modern_clean",
         "safe_margin_px": 80,
-        "max_lines": 2
+        "max_lines": 1
       },
       "tracks": [
         {
           "lang": "hi",
-          "mode": "reveal_words",
-          "position": "bottom"
-        },
-        {
-          "lang": "en",
           "mode": "plain",
-          "position": "above_bottom"
+          "position": "bottom"
         }
       ],
       "highlight": {

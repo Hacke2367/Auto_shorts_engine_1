@@ -666,8 +666,12 @@ try:
         make_floating_particles,
         add_cinematic_background,
         Brand,
+        fmt_value,
     )
 except Exception:
+    def fmt_value(v, unit="", currency="", numfmt="intl", decimals=None):
+        return f"{currency}{int(round(float(v))):,}{(' ' + unit) if unit else ''}"
+
     BACKGROUND_COLOR = "#050505"
     DATA_DIR = os.path.join(project_root, "data")
     FONT_DISPLAY = "Montserrat"
@@ -982,6 +986,10 @@ class BarChartTemplate(Scene):
         # Measure how long the intro actually consumed so hook animations
         # are sized against the REMAINING budget, not the full budget.
         post_intro_t = float(self.time)
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
+        _unit = str(meta.get("UNIT", "") or "").strip()
+        _cur = str(meta.get("CURRENCY", "") or "").strip()
+        _numfmt = str(meta.get("NUMFMT", "intl") or "intl").strip().lower()
 
         # ============================================================
         # 2) SAFE FRAME
@@ -1028,6 +1036,8 @@ class BarChartTemplate(Scene):
         sub_text = (meta.get("SUB", "Tech leaders comparison") or "Tech leaders comparison").strip()
 
         title = Text(title_text, font=FONT_DISPLAY, weight=BOLD, font_size=52, color=Theme.TEXT_MAIN)
+        if title.width > sf["w"]:  # long titles shrink to the safe width, never off-frame
+            title.scale_to_fit_width(sf["w"])
         title.move_to([sf["cx"], sf["top"] - 1.05, 0])
         title.set_z_index(60)
         title_shadow = _soft_shadow_text(title, opacity=0.28)
@@ -1166,8 +1176,7 @@ class BarChartTemplate(Scene):
                 dashed_ratio=0.6,
             ).set_stroke(Theme.NEON_BLUE, width=2, opacity=0.12)
 
-            label_val = int(round(float(max_val) * frac))
-            label = Text(str(label_val), font="Montserrat", font_size=14, color=Theme.TEXT_SUB)
+            label = Text(fmt_value(float(max_val) * frac, _unit, _cur, _numfmt), font="Montserrat", font_size=14, color=Theme.TEXT_SUB)
             label.move_to([x_pos, rail_bottom - 0.55, 0])
             guide_group.add(v_line, label)
 
@@ -1305,7 +1314,7 @@ class BarChartTemplate(Scene):
             # Plain Montserrat text rebuilt as the count ticks. DecimalNumber goes through
             # LaTeX: an off-brand serif face that also rendered thin and faint.
             def _value_text(v: float) -> Text:
-                return Text(f"{int(round(v)):,}", font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
+                return Text(fmt_value(v, _unit, _cur, _numfmt), font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
 
             val_num = _value_text(0)
             val_num.set_z_index(60)
@@ -1423,7 +1432,8 @@ class BarChartTemplate(Scene):
 
         banner = None
         if bar_groups:
-            winner_index = int(np.argmax(values)) if values else 0
+            # Sorted data: rank #1 is the leader (largest for DESC, smallest for ASC).
+            winner_index = (0 if sort_mode in ("ASC", "DESC") else int(np.argmax(values))) if values else 0
             winner_index = int(np.clip(winner_index, 0, max(0, len(bar_groups) - 1)))
 
             winner = bar_groups[winner_index]
@@ -1455,8 +1465,7 @@ class BarChartTemplate(Scene):
             t2 = Text(win_name, font="Montserrat", weight=BOLD, font_size=46, color=Theme.TEXT_MAIN)
             # The value on its own — "SCORE:" mislabelled every metric this template draws
             # (net worth, revenue, population...).
-            _unit = str(meta.get("UNIT", "") or "").strip()
-            t3 = Text(f"{int(round(win_val)):,} {_unit}".strip(), font="Montserrat", weight=BOLD, font_size=24, color=Theme.NEON_BLUE)
+            t3 = Text(fmt_value(win_val, _unit, _cur, _numfmt), font="Montserrat", weight=BOLD, font_size=24, color=Theme.NEON_BLUE)
             txt = VGroup(t1, t2, t3).arrange(DOWN, buff=0.12).move_to(banner)
             txt.set_z_index(201)
 

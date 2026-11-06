@@ -76,7 +76,8 @@ async def async_phase1_discover(args):
     try:
         timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            await run_discovery(session, logger, out_dir, niche_hint=args.template)
+            # niche comes from APP_CONFIG.niche; --template is a template id, not a niche
+            await run_discovery(session, logger, out_dir, niche_hint=getattr(args, "niche", None))
             
         cands_file = out_dir / "raw_candidates.json"
         

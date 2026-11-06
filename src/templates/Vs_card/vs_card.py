@@ -288,27 +288,9 @@ def resolve_player_image_path(img_filename: str, *, fallback_index: int = 0) -> 
             except Exception:
                 pass
 
-    # 5) fallback: first N images (sorted)
-    try:
-        all_files = sorted(os.listdir(images_dir))
-    except Exception:
-        return ""
-
-    valid = []
-    for fn in all_files:
-        low = fn.lower()
-        if low.endswith((".png", ".jpg", ".jpeg", ".webp")):
-            full = os.path.join(images_dir, fn)
-            if exists(full):
-                valid.append(full)
-
-    if not valid:
-        return ""
-
-    idx = int(max(0, fallback_index))
-    if idx >= len(valid):
-        idx = len(valid) - 1
-    return valid[idx]
+    # 5) No match -> no photo: the card shows the contender's initial. Picking the
+    #    first files in the folder put one stock face on BOTH sides (auto_12).
+    return ""
 
 
 # ============================================================
@@ -834,6 +816,7 @@ class VsCardFinal(Scene):
         # file. Falls back to job_dir/data/vs_data.csv, then legacy DATA_DIR.
         csv_path = resolve_job_csv("vs_data.csv", DATA_DIR)
         meta, df = load_vs_csv(csv_path)
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
 
         # Dynamic template segment discovery based on input rows.
         n_rounds = max(1, len(df))
@@ -983,7 +966,10 @@ class VsCardFinal(Scene):
         # ----------------------------------------------------------------
         term_w, term_h = clamp(min(sf["width"] * 0.92, 6.2), 5.2, 6.2), 1.30
         terminal = build_decision_terminal(np.array([0.0, decision_y, 0]), term_w, term_h, C_GOLD, C_SUB)
-        terminal["group"].set_opacity(1.0)
+        # ponytail: hidden, not deleted (finance skin: no fake "AI TRIBUNAL" log). The
+        # freed band at decision_y is the caption band; remove with build_decision_terminal in Part 4.
+        terminal["group"].set_opacity(0.0)
+        terminal["scan"].clear_updaters()
         ui_layer.add(terminal["group"])
 
         # ----------------------------------------------------------------
@@ -1018,6 +1004,8 @@ class VsCardFinal(Scene):
             c_sub=C_SUB,
             c_high=C_HI,
         )
+        notes["group"].set_opacity(0.0)  # ponytail: status ticker hidden (see terminal note)
+        notes["caret"].clear_updaters()
         ui_layer.add(notes["group"])
 
         # ----------------------------------------------------------------
@@ -1078,7 +1066,7 @@ class VsCardFinal(Scene):
                 terminal["plate"].get_bottom() + DOWN * 0.05,
                 notes["chip"].get_top() + UP * 0.05,
                 C_GOLD,
-                opacity=0.12 * a_val(),
+                opacity=0.0,  # terminal + notes hidden (finance skin)
                 lock_x=0.0,
             )
         )
@@ -1205,8 +1193,8 @@ class VsCardFinal(Scene):
             LaggedStart(
                 v1["group"].animate.shift(UP * 0.18).set_opacity(1.0),
                 v2["group"].animate.shift(UP * 0.18).set_opacity(1.0),
-                terminal["group"].animate.shift(UP * 0.14).set_opacity(1.0),
-                notes["group"].animate.shift(UP * 0.14).set_opacity(1.0),
+                terminal["group"].animate.shift(UP * 0.14),
+                notes["group"].animate.shift(UP * 0.14),
                 scoreboard["group"].animate.shift(UP * 0.14).set_opacity(1.0),
                 lag_ratio=0.10,
             ),
@@ -1216,6 +1204,7 @@ class VsCardFinal(Scene):
 
         # PATCH #2: SYSTEM STATUS TICKER (1-line)
         def set_status(msg: str, *, color=WHITE):
+            return  # ticker hidden (finance skin)
             msg = (msg or "").strip()
             if not msg:
                 msg = "system: ok | backend: online"
@@ -1260,6 +1249,7 @@ class VsCardFinal(Scene):
         update_score_text()
 
         def set_terminal_lines(l1: str, l2: str, l3: str, color: str):
+            return  # terminal hidden (finance skin)
             pad_x = float(terminal["pad_x"])
             new1 = safe_text(l1, font="Consolas", font_size=20, color=WHITE, weight=BOLD)
             if new1.width > (terminal["plate"].width - 0.55):
@@ -1522,6 +1512,11 @@ class VsCardFinal(Scene):
             )
             conn_alpha.set_value(0.0)
             spine.set_opacity(0.0)
+            # The spine pulses back to visible through its updaters and drew a line
+            # through the draw card ("2 + 2"); stop and drop it here.
+            for _m in spine.get_family():
+                _m.clear_updaters()
+            self.remove(spine)
 
             try:
                 from src.utils import build_result_banner

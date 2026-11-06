@@ -334,14 +334,33 @@ class AppConfig(BaseModel):
         default=True, description="Enable the Phase 2 whole-script flow-polish pass."
     )
 
+    # Channel niche (2026-11: finance only). Used when no --niche is given, so
+    # discovery can never drift to "world history" or the template name again.
+    niche: str = Field(
+        default="finance and personal money: markets, gold, SIP/FD, tax, salaries, economy, billionaires (India-first, global comparisons welcome)",
+        description="Default discovery niche.",
+    )
+
     # Authority domains for Phase 1 source auditing (operational, not secret).
+    # Suffix match: "gov" covers *.gov, "gov.in" covers *.gov.in.
     primary_authority_domains: list[str] = Field(
-        default=["bloomberg.com", "un.org", "gov", "wsj.com", "socialblade.com", "youtube.com"],
+        default=[
+            "rbi.org.in", "sebi.gov.in", "nseindia.com", "bseindia.com", "amfiindia.com",
+            "mospi.gov.in", "pib.gov.in", "indiabudget.gov.in", "data.gov.in", "gov.in", "nic.in",
+            "worldbank.org", "imf.org", "oecd.org", "bis.org", "un.org", "gold.org",
+            "federalreserve.gov", "stlouisfed.org", "gov",
+            "bloomberg.com", "reuters.com", "ft.com", "wsj.com", "forbes.com",
+        ],
         description="Domains considered purely authoritative.",
     )
+    # Social/video sources: excluded from every Tavily search AND dropped at
+    # extraction. auto_12's deciding "484 vs 487 points" came from a YouTube transcript.
     social_authority_domains: list[str] = Field(
-        default=["reddit.com", "twitter.com", "x.com", "tiktok.com", "instagram.com"],
-        description="Domains representing social/forum signals.",
+        default=[
+            "reddit.com", "twitter.com", "x.com", "tiktok.com", "instagram.com", "facebook.com",
+            "youtube.com", "youtu.be", "socialblade.com", "quora.com", "pinterest.com",
+        ],
+        description="Social/forum/video domains: never used as data sources.",
     )
 
 

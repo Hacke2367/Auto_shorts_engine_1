@@ -18,9 +18,12 @@ try:
     sys.path.append(project_root)
 
     from src.config import DATA_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY  # type: ignore
-    from src.utils import IntroManager, get_safe_frame, add_cinematic_background  # type: ignore
+    from src.utils import IntroManager, get_safe_frame, add_cinematic_background, fmt_value  # type: ignore
 except Exception:
     HAS_PROJECT = False
+
+    def fmt_value(v, unit="", currency="", numfmt="intl", decimals=None):
+        return f"{currency}{int(round(float(v))):,}{unit}"
     DATA_DIR = "."
     BACKGROUND_COLOR = "#0A0A0A"
     FONT_DISPLAY = "Montserrat"
@@ -626,6 +629,8 @@ def build_header(sf: Dict[str, float], title_text: str, sub_text: str) -> Tuple[
         color=getattr(Theme, "TEXT_MAIN", "#FFFFFF"),
         weight=BOLD,
     ).set_z_index(200)
+    if title.width > sf["w"]:  # long titles shrink to the safe width, never off-frame
+        title.scale_to_fit_width(sf["w"])
     title.move_to([sf["cx"], sf["top"] - 0.95, 0])
 
     underline = Line(LEFT, RIGHT).set_z_index(200)
@@ -826,7 +831,7 @@ def make_callout_chip(name: str, value: float, unit: str, rank: int, col: str, f
         color=getattr(Theme, "TEXT_MAIN", "#FFFFFF"),
     )
 
-    v_str = f"{int(round(value))}{unit}" if unit else f"{int(round(value))}"
+    v_str = fmt_value(value, unit)
     vv = _safe_text(v_str, font="Montserrat", font_size=13, color=lighten_hex(col, 0.08), weight=BOLD)
 
     row = VGroup(badge, rank_txt, nm, vv).arrange(RIGHT, buff=0.14, aligned_edge=DOWN)
@@ -1157,6 +1162,7 @@ class DonutBreakdownFinal(Scene):
         if not os.path.isabs(csv_path):
             csv_path = os.path.join(job_dir, csv_path)
         meta, names, raw_vals, _csv_cols = load_donut_csv(csv_path)
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
         # Slice colors come from main's premium-palette resolver (matches the reference
         # video); feed neutral groups + empty CSV colors so the presets are used.
         groups = ["Default"] * len(names)
@@ -1546,7 +1552,6 @@ class DonutBreakdownFinal(Scene):
             sec = grp[1]
 
             col = colors[idx] if is_hex(colors[idx]) else FALLBACK_COLORS[idx % len(FALLBACK_COLORS)]
-            pct_int = int(round(float(pct_vals[idx])))
             is_winner = (idx == winner_idx)
 
             pop = np.array([np.cos(slice_mids[idx]), np.sin(slice_mids[idx]), 0]) * 0.24
@@ -1563,7 +1568,7 @@ class DonutBreakdownFinal(Scene):
             # ✅ FIX: Scope leak resolved (idx+1 instead of undefined i+1)
             sfx.mark("whoosh_short", offset=0.0, meta={"at": "slice_reveal", "i": int(idx + 1)})
 
-            new_comm = make_commentary(center, inner_r, "SEGMENT", str(names[idx]).upper(), f"{pct_int}%", col)
+            new_comm = make_commentary(center, inner_r, "SEGMENT", str(names[idx]).upper(), fmt_value(pct_vals[idx], "%"), col)
             self.play(
                 Transform(commentary, new_comm),
                 grp.animate.shift(pop).scale(1.03),
@@ -1691,7 +1696,7 @@ class DonutBreakdownFinal(Scene):
             inner_r,
             "LEADER",
             str(names[winner_idx]).upper(),
-            f"{int(round(float(pct_vals[winner_idx])))}%",
+            fmt_value(pct_vals[winner_idx], "%"),
             winner_col,
         )
         sfx.mark("winner_sting", offset=0.0, meta={"at": "winner_announce"})
@@ -1704,7 +1709,7 @@ class DonutBreakdownFinal(Scene):
             win_banner = build_result_banner(
                 "LEADER",
                 str(names[winner_idx]).upper(),
-                f"{int(round(float(pct_vals[winner_idx])))}% SHARE",
+                f"{fmt_value(pct_vals[winner_idx], '%')} SHARE",
                 accent=winner_col,
                 z=220,
             )

@@ -320,13 +320,13 @@ TEMPLATE_ROW_MAP: dict[str, type[BaseModel]] = {
 
 # Default capacity limits per template (from templates_registry.md)
 TEMPLATE_CAPACITIES: dict[str, TemplateCapacity] = {
-    "bar_chart": TemplateCapacity(min=5, max=10, ideal=6),
-    "butterfly_chart": TemplateCapacity(min=5, max=10, ideal=5),
+    "bar_chart": TemplateCapacity(min=5, max=8, ideal=6),
+    "butterfly_chart": TemplateCapacity(min=4, max=6, ideal=5),
     "scan_race": TemplateCapacity(min=4, max=10, ideal=6),
     "geo_universal": TemplateCapacity(min=5, max=10, ideal=8),
-    "donut_breakdown": TemplateCapacity(min=3, max=8, ideal=5),
+    "donut_breakdown": TemplateCapacity(min=3, max=6, ideal=5),
     "sort_card": TemplateCapacity(min=4, max=8, ideal=5),
-    "vs_card": TemplateCapacity(min=4, max=10, ideal=6),
+    "vs_card": TemplateCapacity(min=3, max=5, ideal=4),
 }
 
 

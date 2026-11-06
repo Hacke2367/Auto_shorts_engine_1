@@ -15,7 +15,7 @@ Contains:
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 FPS = 30
-BACKGROUND_COLOR = "#0A0A0A"
+BACKGROUND_COLOR = "#070B14"
 
 # Manim Global Config
 config.pixel_height = VIDEO_HEIGHT
@@ -30,9 +30,9 @@ config.background_color = BACKGROUND_COLOR
 # ----------------------------------------
 class Theme:
     # --- CORE BRANDING (Spy/Hacker Theme) ---
-    BACKGROUND = "#050505"  # Deepest Dark (Not Pitch Black)
-    BRAND_CYAN = "#00F0FF"  # Primary Brand Color (geo_data)
-    BRAND_RED = "#FF0055"  # Secondary Brand Color (Alert/REC)
+    BACKGROUND = "#070B14"  # Deep navy (finance terminal), not pitch black
+    BRAND_CYAN = "#38BDF8"  # Primary accent (sky blue; was neon cyan)
+    BRAND_RED = "#FF4D6D"  # Secondary accent (rose; was neon magenta)
     BRAND_WHITE = "#FFFFFF"
 
     # --- TEXT COLORS ---
@@ -41,9 +41,9 @@ class Theme:
     TEXT_DIM = "#555555"  # Grid numbers / Less visible text
 
     # --- NEON ACCENTS (For Graphs) ---
-    NEON_BLUE = "#00F0FF"  # Tech
-    NEON_PINK = "#FF0055"  # Aggressive
-    NEON_GREEN = "#00FF66"  # Success / Money
+    NEON_BLUE = "#38BDF8"  # Blue accent (finance skin 2026-11; was neon cyan)
+    NEON_PINK = "#FF4D6D"  # Rose accent (was neon magenta)
+    NEON_GREEN = "#22C55E"  # Up / profit
     NEON_PURPLE = "#BD00FF"  # Royal / Mystery
     NEON_YELLOW = "#FFC74A"  # Warning / Gold (richer amber-gold; was harsh #FFFF00)
     NEON_ORANGE = "#FF9900"  # Secondary Highlight
@@ -54,32 +54,39 @@ class Theme:
 
     # --- CHART SPECIFIC (Bar Chart / Line Chart) ---
     C_CONTAINER_FILL = "#050505"
-    C_CONTAINER_STROKE = "#004488"  # Dark Blue Border
+    C_CONTAINER_STROKE = "#1E3A5F"  # Navy border
 
     # Gradient for Bars
-    C_BAR_GRADIENT = ["#0033CC", "#0088FF", "#00FFFF"]
+    C_BAR_GRADIENT = ["#1D4ED8", "#38BDF8", "#BAE6FD"]
 
     # Laser/Dot Logic
     C_DOT_CORE = "#FFFFFF"
-    C_DOT_GLOW = "#00FFFF"
+    C_DOT_GLOW = "#38BDF8"
     C_LINE_CORE = "#FFFFFF"
-    C_LINE_GLOW = "#00FFFF"
+    C_LINE_GLOW = "#38BDF8"
 
     # --- UTILITY COLORS ---
     BAR_FILL = "#1F1F1F"  # Empty slot background
     AXIS_COLOR = "#333333"  # Grid lines (Subtle)
 
     # --- STATUS / VS MODE COLORS ---
-    PROFIT = "#00FF66"  # Green
-    LOSS = "#FF0055"  # Red
+    PROFIT = "#22C55E"  # Green (up)
+    LOSS = "#EF4444"  # Red (down)
 
     GOLD = "#FFD700"  # Rank 1 / Winner
     SILVER = "#C0C0C0"  # Rank 2
     BRONZE = "#CD7F32"  # Rank 3
 
     PLAYER_1 = NEON_BLUE  # Default P1
-    PLAYER_2 = NEON_PINK  # Default P2
+    PLAYER_2 = NEON_YELLOW  # Default P2 (gold vs blue reads finance, not gaming)
 
+
+# ----------------------------------------
+# 2b. BRAND + INTRO (finance skin, 2026-11)
+# ----------------------------------------
+BRAND_NAME = "BIGDATA LEAK"   # shown top-left on every frame; rename here only
+BRAND_HANDLE = ""             # e.g. "@bigdataleak"; empty -> watermark shows BRAND_NAME
+INTRO_ENABLED = False         # hook-first: no black brand card before the title
 
 # ----------------------------------------
 # 3. DIRECTORIES (Folder Paths)

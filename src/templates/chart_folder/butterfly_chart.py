@@ -447,7 +447,7 @@ class ButterflyChart(Scene):
             job_json_path = job_dir / "job.json"
             if job_json_path.exists():
                 try:
-                    job_cfg = _read_json(job_json_path)
+                    job_cfg = job  # already loaded above (_read_json never existed)
                     csv_rel = str(job_cfg.get("data_csv", "")).strip() if isinstance(job_cfg, dict) else ""
                     if csv_rel:
                         p = Path(csv_rel)
@@ -582,7 +582,10 @@ class ButterflyChart(Scene):
 
         header_top_y = sf["top"] - cfg.header_top_pad
         # Same headline scale as the other templates' titles (~42pt display face).
-        title = Text("WHO WILL DOMINATE?", font=FONT_DISPLAY, weight=BOLD, font_size=40, color=Design.TEXT_MAIN).set_z_index(cfg.z_header)
+        # The matchup itself, not a fixed "WHO WILL DOMINATE?" line.
+        title = Text(f"{p1_name} vs {p2_name}".upper(), font=FONT_DISPLAY, weight=BOLD, font_size=40, color=Design.TEXT_MAIN).set_z_index(cfg.z_header)
+        if title.width > sf["w"]:
+            title.scale_to_fit_width(sf["w"])
         title.move_to([sf["cx"], header_top_y, 0])
 
         underline = Line(LEFT * 3.0, RIGHT * 3.0).set_z_index(cfg.z_header)

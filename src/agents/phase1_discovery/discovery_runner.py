@@ -316,6 +316,7 @@ async def run_discovery(
                 "Failed to parse cached candidates.json: %s. Rerunning discovery.", e
             )
 
+    niche_hint = niche_hint or APP_CONFIG.niche
     with timed_operation(log, "phase1a_discovery", niche=niche_hint or "broad"):
         log.info("=== Phase 1A: Discovery Start (Idea-First) ===")
         

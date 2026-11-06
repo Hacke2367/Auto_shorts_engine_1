@@ -161,6 +161,7 @@ class RaceMeta:
     max_series: int = 10  # clean by default (user preference)
     unit_suffix: str = "T"
     kicker: str = ""  # optional small line above the title (#KICKER=...)
+    source: str = ""  # #SOURCE=... -> "SOURCE: ..." in the HUD
 
 
 def _parse_meta_lines(path: str) -> Dict[str, str]:
@@ -205,6 +206,7 @@ def _resolve_race_meta(meta: Dict[str, str]) -> RaceMeta:
     max_series = max(1, _int("MAX_SERIES", RaceMeta.max_series))
     unit_suffix = meta.get("UNIT", RaceMeta.unit_suffix)
     kicker = meta.get("KICKER", RaceMeta.kicker)
+    source = meta.get("SOURCE", RaceMeta.source)
     return RaceMeta(
         title=title,
         subtitle=subtitle,
@@ -214,6 +216,7 @@ def _resolve_race_meta(meta: Dict[str, str]) -> RaceMeta:
         max_series=max_series,
         unit_suffix=unit_suffix,
         kicker=kicker,
+        source=source,
     )
 
 
@@ -405,6 +408,7 @@ class CinematicLineRace(Scene):
             feed_text=meta.feed_text,
             footer_text=meta.footer_text,
         )
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.source)
 
         # ==========================================
         # 2) SAFE FRAME + DATA
@@ -443,13 +447,16 @@ class CinematicLineRace(Scene):
 
         min_year, max_year = float(np.min(years)), float(np.max(years))
         raw_max = float(df[labels].max().max()) if labels else 0.0
-        y_max = (int(raw_max // 5) + 1) * 5 if raw_max > 0 else 5
-
-        y_step = 5
-        if y_max >= 60:
-            y_step = 10
-        if y_max >= 150:
-            y_step = 25
+        raw_min = float(df[labels].min().min()) if labels else 0.0
+        # ~6 gridlines at a 1/2/2.5/5 x 10^k step, whatever the scale (a fixed
+        # 25 cap drew ~200 gridlines on 5,000-range data). Negative data gets a
+        # negative floor instead of plotting below the axis.
+        _span = max(raw_max, 0.0) - min(raw_min, 0.0) or 5.0
+        _raw = _span / 6.0
+        _mag = 10.0 ** np.floor(np.log10(_raw))
+        y_step = next(m * _mag for m in (1, 2, 2.5, 5, 10) if _raw <= m * _mag)
+        y_max = float(np.ceil(raw_max / y_step) * y_step) if raw_max > 0 else y_step
+        y_min = float(np.floor(raw_min / y_step) * y_step) if raw_min < 0 else 0.0
 
         TOPK = int(max(1, meta.topk))
         TOPK = min(TOPK, max(1, len(labels)))  # ✅ freeze-safe
@@ -520,6 +527,8 @@ class CinematicLineRace(Scene):
         kicker.move_to([sf["cx"], header_y + 0.44, 0])
 
         title = Text(meta.title, font=FONT_DISPLAY, weight=BOLD, font_size=42, color=Design.TEXT_MAIN)
+        if title.width > sf["w"]:  # long titles shrink to the safe width, never off-frame
+            title.scale_to_fit_width(sf["w"])
         title.move_to([sf["cx"], header_y, 0]).set_z_index(60)
         title_shadow = title.copy().set_color(BLACK).set_opacity(0.30).shift(DOWN * 0.05 + RIGHT * 0.04).set_z_index(59)
 
@@ -728,7 +737,7 @@ class CinematicLineRace(Scene):
 
         ax = Axes(
             x_range=[min_year, max_year + 2, 5],
-            y_range=[0, y_max, y_step],
+            y_range=[y_min, y_max, y_step],
             x_length=plot_w,
             y_length=plot_h,
             axis_config={
@@ -743,7 +752,7 @@ class CinematicLineRace(Scene):
         ).move_to([plot_center_x, plot_center_y, 0]).set_z_index(20)
 
         guides = VGroup()
-        for v in np.arange(y_step, y_max + 0.001, y_step):
+        for v in np.arange(y_min + y_step, y_max + y_step * 0.01, y_step):
             leftp = ax.c2p(min_year, v)
             rightp = ax.c2p(max_year + 2, v)
             ln = DashedLine(leftp, rightp, dash_length=0.18, dashed_ratio=0.6)
@@ -752,15 +761,15 @@ class CinematicLineRace(Scene):
 
         x_labels = VGroup()
         for yr in range(int(min_year), int(max_year) + 1, 5):
-            pos = ax.c2p(yr, 0)
+            pos = ax.c2p(yr, y_min)
             lbl = Text(str(yr), font="Montserrat", weight=BOLD, font_size=13, color=Design.TEXT_SUB)
             lbl.next_to(pos, DOWN, buff=0.20)
             x_labels.add(lbl)
 
         y_labels = VGroup()
-        for v in np.arange(0, y_max + 0.001, y_step):
+        for v in np.arange(y_min, y_max + y_step * 0.01, y_step):
             pos = ax.c2p(min_year, v)
-            txt = f"{int(v)}{meta.unit_suffix}" if v > 0 else "0"
+            txt = f"{v:,.6g}{meta.unit_suffix}" if abs(v) > 1e-9 else "0"
             lbl = Text(txt, font="Montserrat", weight=BOLD, font_size=12, color=Design.TEXT_SUB)
             lbl.next_to(pos, LEFT, buff=0.12)
             y_labels.add(lbl)

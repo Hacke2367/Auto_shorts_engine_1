@@ -127,6 +127,7 @@ async def _validate_hypothesis(
         "max_results": max_results,
         "include_raw_content": False,
         "topic": "general",
+        "exclude_domains": list(APP_CONFIG.social_authority_domains),
     }
 
     per_req_timeout = aiohttp.ClientTimeout(total=request_timeout)

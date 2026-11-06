@@ -89,16 +89,19 @@ async def tavily_search(
     query: str,
     session: aiohttp.ClientSession,
     log: logging.Logger,
-    max_results: int = 5,
+    max_results: int = 8,
 ) -> list[str]:
     """Search for relevant web pages via Tavily."""
     url = "https://api.tavily.com/search"
+    # advanced + 8: extraction search only runs on retries, so the extra credit
+    # is rare; social/video domains are never candidates.
     payload = {
         "api_key": settings.tavily_api_key.get_secret_value(),
         "query": query,
-        "search_depth": "basic",
+        "search_depth": "advanced",
         "max_results": max_results,
         "include_raw_content": False,
+        "exclude_domains": list(APP_CONFIG.social_authority_domains),
     }
 
     async for attempt in _get_retry_policy():
@@ -176,6 +179,10 @@ async def tavily_extract(
                         for d in APP_CONFIG.social_authority_domains
                     ):
                         tier = AuthorityTier.SOCIAL
+
+                    if tier == AuthorityTier.SOCIAL:
+                        log.info("Dropping social/video source: %s", u)
+                        continue
 
                     audits.append(
                         SourceAudit(
