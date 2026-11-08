@@ -1206,11 +1206,9 @@ class DonutBreakdownFinal(Scene):
         core.set_fill("#05080B", 0.90).set_stroke(getattr(Theme, "NEON_BLUE", "#2DD4FF"), 2, 0.18)
         core.move_to(center)
 
-        self.add(shadow_ring, track, outer_rim, inner_rim, core)
-
-        # Commentary (boot)
+        # Commentary (boot); donut base + commentary are added after the cold open
+        # so they never show through the transparent hook card.
         commentary = make_commentary(center, inner_r, "SHARE", "TOTAL", "100%", getattr(Theme, "NEON_BLUE", "#2DD4FF"))
-        self.add(commentary)
 
         # Segment plumbing — current audio-sync logic: derive slice_* from audio.order
         # so the ghost-padding loop below covers EVERY audio slot (not a hardcoded range).
@@ -1236,6 +1234,7 @@ class DonutBreakdownFinal(Scene):
         # the hook/setup sync_hold anchors.
         _gold = getattr(Theme, "NEON_YELLOW", "#FFC74A")
         cold_open(self, meta, 0.4, TL.seg_total("hook", 2.5), font=FONT_DISPLAY, gold=_gold, white=Theme.TEXT_MAIN)
+        self.add(shadow_ring, track, outer_rim, inner_rim, core, commentary)
 
         # Edge case: no geo_data
         if not names or not raw_vals:
