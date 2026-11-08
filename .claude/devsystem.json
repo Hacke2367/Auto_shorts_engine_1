@@ -1,6 +1,5 @@
 {
   "tier": "standard",
-  "branches": { "integration": "main" },
   "gate": {
     "commands": [
       ".venv/Scripts/python.exe -m pytest tests/core -q",
