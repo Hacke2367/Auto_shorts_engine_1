@@ -2,9 +2,15 @@
 
 Last updated: 2026-11-09
 Branch: `finance_launch`
-Current focus: plan step 4 (scan_race 15 fps memory), then step 5.
+Current focus: plan steps 4-9, code-only, visual batch on RunPod (item 0).
 
 ## Next up
+0. **Owner instruction (2026-11-09): code now, visuals later on RunPod.** Do as much of plan steps
+   4-9 as possible in one session, back to back. Self-check with `py_compile`, `-s` frame probes,
+   the skip-mode sync probe and `/gate`; do NOT stop per step for a visual sign-off and do NOT run
+   full local renders unless a diagnosis needs one. End the session with one batch list of RunPod
+   render commands (one per touched template/job) for the owner's visual check.
+   Suggested order: 5 (small) -> 6 -> 8 -> 7 -> 9; step 4 diagnose on RunPod if local RAM won't do.
 1. **Resume point.** Plan step 4, Todo, on branch `finance_launch` (stay on it; no `/start_work`
    needed). Skills: `/gate` before commits, `/handoff` at session end, `/ship` when steps 3-9 are
    reviewable. Read first: `docs/project_context.md`, `docs/development_plan.md`, then
