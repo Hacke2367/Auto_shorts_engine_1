@@ -64,6 +64,7 @@ from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp as _tl_clamp, numbered_segments
 from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold
 from src.sfx.engine import SFXEngine
+from src.fx import cold_open, build_loop_card, slam_in
 
 # ============================================================
 # SFX MARKS WRITER  (matches bar_chart.py exactly)
@@ -1231,6 +1232,10 @@ class DonutBreakdownFinal(Scene):
 
         # Audio starts for hook
         hook_t0 = global_start_t0
+        # Cold open (CSV meta HOOK_STAT/HOOK_LINE/HOOK_SUB); overrun is absorbed by
+        # the hook/setup sync_hold anchors.
+        _gold = getattr(Theme, "NEON_YELLOW", "#FFC74A")
+        cold_open(self, meta, 0.4, TL.seg_total("hook", 2.5), font=FONT_DISPLAY, gold=_gold, white=Theme.TEXT_MAIN)
 
         # Edge case: no geo_data
         if not names or not raw_vals:
@@ -1722,6 +1727,15 @@ class DonutBreakdownFinal(Scene):
             pass
 
         sync_hold(self, TL, "winner", global_start_t0, focus=commentary)
+
+        if str(meta.get("OUTRO_Q", "") or "").strip():
+            # Loop card over a dimmed chart, same look as the cold open (replay seam).
+            loop_card = build_loop_card(meta, "", 0.4, font=FONT_DISPLAY, gold=_gold, white=Theme.TEXT_MAIN)
+            veil = Rectangle(width=config.frame_width * 1.1, height=config.frame_height * 1.1)
+            veil.set_stroke(width=0).set_fill(BLACK, 0.0).set_z_index(390)
+            self.add(veil)
+            self.play(veil.animate.set_fill(opacity=0.72), run_time=0.20)
+            self.play(slam_in(loop_card, scale=1.6, run_time=0.34))
 
         # Outro padding
         sync_hold(self, TL, "outro", global_start_t0)

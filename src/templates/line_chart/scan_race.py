@@ -32,8 +32,12 @@ try:
         add_cinematic_background,
         IntroManager,
         build_result_banner,
+        fmt_value,
     )
 except Exception:
+    def fmt_value(v, unit="", currency="", numfmt="intl", decimals=None):
+        return f"{currency}{float(v):.1f}{unit}"
+
     class IntroManager:  # type: ignore
         @staticmethod
         def play_intro(*args, **kwargs):
@@ -109,6 +113,7 @@ from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp as tclamp
 from src.sync.retention import hold_breathing, banner_scan_hold
 from src.sfx.engine import SFXEngine
+from src.fx import cold_open, build_loop_card, slam_in
 
 
 # ==========================
@@ -124,7 +129,7 @@ class Design:
     GREEN = Brand.GREEN
     WHITE = Brand.WHITE
 
-    GOLD = "#FFD700"
+    GOLD = getattr(Theme, "NEON_YELLOW", "#FFC74A")  # brand gold (was harsh #FFD700)
 
     GLASS_FILL = "#0B0F12"
     GLASS_OP = 0.72
@@ -162,6 +167,8 @@ class RaceMeta:
     unit_suffix: str = "T"
     kicker: str = ""  # optional small line above the title (#KICKER=...)
     source: str = ""  # #SOURCE=... -> "SOURCE: ..." in the HUD
+    currency: str = ""  # #CURRENCY=₹ / $
+    numfmt: str = "intl"  # #NUMFMT=indian -> lakh/crore
 
 
 def _parse_meta_lines(path: str) -> Dict[str, str]:
@@ -207,6 +214,8 @@ def _resolve_race_meta(meta: Dict[str, str]) -> RaceMeta:
     unit_suffix = meta.get("UNIT", RaceMeta.unit_suffix)
     kicker = meta.get("KICKER", RaceMeta.kicker)
     source = meta.get("SOURCE", RaceMeta.source)
+    currency = meta.get("CURRENCY", RaceMeta.currency)
+    numfmt = meta.get("NUMFMT", RaceMeta.numfmt)
     return RaceMeta(
         title=title,
         subtitle=subtitle,
@@ -217,6 +226,8 @@ def _resolve_race_meta(meta: Dict[str, str]) -> RaceMeta:
         unit_suffix=unit_suffix,
         kicker=kicker,
         source=source,
+        currency=currency,
+        numfmt=numfmt,
     )
 
 
@@ -370,21 +381,30 @@ class CinematicLineRace(Scene):
             audio_order = _default_segment_order()
 
         TL = Timeline.from_dict(timeline_dict, defaults=_segment_defaults(audio_order))
+        TL.schedule(audio_order)
+        scene_t0 = float(self.time)
         hook_seg, setup_seg, race_segments, finish_seg, outro_seg = _segment_roles(audio_order)
         sfx = SFXEngine(self, job_dir)
 
         csv_path = _find_race_csv(job=job, job_dir=job_dir)
         meta = RaceMeta()
+        raw_meta: Dict[str, str] = {}
         if csv_path:
-            meta = _resolve_race_meta(_parse_meta_lines(csv_path))
+            raw_meta = _parse_meta_lines(csv_path)
+            meta = _resolve_race_meta(raw_meta)
+
+        def fmtv(v: float) -> str:
+            return fmt_value(v, meta.unit_suffix, meta.currency, meta.numfmt)
 
         def _pad_segment(name: Optional[str], focus: Optional[Mobject] = None, text: str = "EXPLANATION IN PROGRESS"):
             if not name:
                 return
-            rem = TL.remaining(name)
+            # Hold until this segment's ABSOLUTE end on the master clock. The old
+            # relative remaining() hold let every overrun push all later segments late.
+            rem = TL.target_elapsed(name) - (float(self.time) - scene_t0)
             if rem > 0.001:
                 hold_breathing(self, rem, focus=focus, text=text)
-                TL.consume(name, rem)
+            TL.consume(name, TL.remaining(name))
 
         # ==========================================
         # 1) INTRO (NO OVERLAP, NO RE-APPEAR)
@@ -409,6 +429,9 @@ class CinematicLineRace(Scene):
             footer_text=meta.footer_text,
         )
         getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.source)
+        _cold = cold_open(self, raw_meta, 0.4, hook_total, font=FONT_DISPLAY, gold=Design.GOLD, white=Design.TEXT_MAIN)
+        if _cold > 0:
+            hook_scale = tclamp(max(0.5, hook_total - _cold) * 0.82 / 2.55, 0.30, 1.45)
 
         # ==========================================
         # 2) SAFE FRAME + DATA
@@ -682,7 +705,7 @@ class CinematicLineRace(Scene):
             c0 = first_ranking[i] if i < len(first_ranking) else ""
             rank_txt = Text(str(i + 1), font="Montserrat", weight=BOLD, font_size=16, color=WHITE).move_to(badge).set_z_index(47)
 
-            val_str = f"{float(series[c0][0]):.1f}{meta.unit_suffix}" if c0 else " "
+            val_str = fmtv(series[c0][0]) if c0 else " "
             val_txt = Text(val_str, font="Montserrat", weight=BOLD, font_size=13, color=Design.CYAN).set_z_index(47)
             val_txt.move_to(body.get_right() + LEFT * 0.40)
 
@@ -769,7 +792,7 @@ class CinematicLineRace(Scene):
         y_labels = VGroup()
         for v in np.arange(y_min, y_max + y_step * 0.01, y_step):
             pos = ax.c2p(min_year, v)
-            txt = f"{v:,.6g}{meta.unit_suffix}" if abs(v) > 1e-9 else "0"
+            txt = fmtv(v) if abs(v) > 1e-9 else "0"
             lbl = Text(txt, font="Montserrat", weight=BOLD, font_size=12, color=Design.TEXT_SUB)
             lbl.next_to(pos, LEFT, buff=0.12)
             y_labels.add(lbl)
@@ -814,6 +837,18 @@ class CinematicLineRace(Scene):
         # ==========================================
         # 7) LINE ENGINE + CHIPS + DOCK UPDATE
         # ==========================================
+        # Per-frame labels: ~20 Text objects every frame, each a Pango->SVG parse,
+        # made the race laps take ~10 s/frame and exhaust RAM. Names/ranks never
+        # change and 1-decimal values repeat across frames, so cache and copy.
+        _text_cache: Dict[Tuple[str, int, str], Text] = {}
+
+        def ctext(s: str, size: int, color) -> Text:
+            key = (s, size, str(color))
+            t = _text_cache.get(key)
+            if t is None:
+                t = _text_cache[key] = Text(s, font="Montserrat", weight=BOLD, font_size=size, color=color)
+            return t.copy()
+
         pulse = {c: 0.0 for c in labels}
         slot_pulse = [0.0 for _ in range(TOPK)]
         prev_order = [None for _ in range(TOPK)]
@@ -878,7 +913,7 @@ class CinematicLineRace(Scene):
             for (c, v) in top:
                 p = ax.c2p(t, v)
                 col = color_map[c]
-                txt = Text(f"{v:.1f}{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=13, color=WHITE)
+                txt = ctext(fmtv(v), 13, WHITE)
                 pad_x, pad_y = 0.18, 0.10
 
                 box = RoundedRectangle(
@@ -970,12 +1005,12 @@ class CinematicLineRace(Scene):
                 badge = card["badge"]
 
                 card["rank_txt"].become(
-                    Text(str(i + 1), font="Montserrat", weight=BOLD, font_size=16, color=WHITE).move_to(badge)
+                    ctext(str(i + 1), 16, WHITE).move_to(badge)
                 )
 
-                nm = Text(str(c).upper(), font="Montserrat", weight=BOLD, font_size=13, color=WHITE)
+                nm = ctext(str(c).upper(), 13, WHITE)
 
-                vt = Text(f"{v:.1f}{meta.unit_suffix}", font="Montserrat", weight=BOLD, font_size=13, color=Design.CYAN)
+                vt = ctext(fmtv(v), 13, Design.CYAN)
                 vt.move_to(body.get_right() + LEFT * 0.40)
 
                 _fit_slot_name(nm, badge, vt)
@@ -1015,7 +1050,7 @@ class CinematicLineRace(Scene):
 
         def _leader_card(label, name, val):
             card = build_result_banner(
-                label, str(name).upper(), f"{float(val):.1f}{meta.unit_suffix}",
+                label, str(name).upper(), fmtv(val),
                 width=room_w, accent=Design.GOLD, z=75,
             )
             return card.move_to([room_left + room_w / 2, panel.get_center()[1], 0])
@@ -1093,8 +1128,16 @@ class CinematicLineRace(Scene):
                 run_time=outro_run,
                 rate_func=rf.ease_in_out_sine,
             )
+            if raw_meta.get("OUTRO_Q"):
+                # Loop card over a dimmed chart: same look as the cold open.
+                loop_card = build_loop_card(raw_meta, "", 0.4, font=FONT_DISPLAY, gold=Design.GOLD, white=Design.TEXT_MAIN)
+                veil = Rectangle(width=config.frame_width * 1.1, height=config.frame_height * 1.1)
+                veil.set_stroke(width=0).set_fill(BLACK, 0.0).set_z_index(390)
+                self.add(veil)
+                self.play(veil.animate.set_fill(opacity=0.72), run_time=0.20)
+                self.play(slam_in(loop_card, scale=1.6, run_time=0.34))
             TL.consume(outro_seg, float(self.time) - outro_t0)
-            _pad_segment(outro_seg, focus=subtitle, text="FINALIZING OUTPUT")
+            _pad_segment(outro_seg, text="FINALIZING OUTPUT")
 
         for seg_name in audio_order:
             _pad_segment(seg_name, focus=ax if seg_name in active_race_segments else None)

@@ -75,6 +75,8 @@ except Exception:
 from src.sync.job import load_job, resolve_job_csv
 from src.sync.timeline import Timeline, clamp as _tl_clamp
 from src.sfx.engine import SFXEngine
+from src.fx import (count_up, shake, slam_in, pop, fly_to, build_progress, progress_fill,
+                    cold_open, build_loop_card)
 try:
     from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_vs_card
@@ -529,17 +531,17 @@ def create_player_card(
 
 
 def build_value_box(center: np.ndarray, accent: str) -> Dict[str, Mobject]:
-    box = RoundedRectangle(width=2.25, height=0.86, corner_radius=0.22)
+    box = RoundedRectangle(width=2.55, height=1.00, corner_radius=0.24)
     box.set_fill("#000000", 0.92)
     box.set_stroke(accent, 4.0, 0.92)
     box.move_to(center)
 
     glow = box.copy().set_fill(opacity=0).set_stroke(accent, 22, 0.20)
-    txt = safe_text("?", font_size=30, color=WHITE, weight=BOLD).move_to(center)
+    txt = safe_text("?", font=FONT_DISPLAY, font_size=44, color=WHITE, weight=BOLD).move_to(center)
     txt.set_opacity(1.0)
 
     grp = VGroup(glow, box, txt)
-    grp.set_z_index(255)
+    grp.set_z_index(270)  # above the card edge it overlaps
     return {"group": grp, "box": box, "glow": glow, "txt": txt}
 
 
@@ -786,7 +788,7 @@ class VsCardFinal(Scene):
         C_WIN = getattr(Theme, "NEON_GREEN", "#00FF66")
         C_MAIN = getattr(Theme, "TEXT_MAIN", "#FFFFFF")
         C_SUB = getattr(Theme, "TEXT_SUB", "#B8B8B8")
-        C_GOLD = "#FFD700"
+        C_GOLD = getattr(Theme, "NEON_YELLOW", "#FFC74A")  # brand gold (was harsh #FFD700)
         C_HI = "#7CFFB8"
 
         # ============================================================
@@ -868,8 +870,11 @@ class VsCardFinal(Scene):
         TITLE_DROP = 0.05  # 5%
         top_y = sf["top"] - (0.35 + sf["height"] * TITLE_DROP)
         cards_y = 0.10
-        values_y = -2.05
-        score_y = sf["bottom"] + 0.48
+        values_y = -2.25
+        # Was sf["bottom"]+0.48 (~1764px): under the Shorts title/channel overlay.
+        # Captions (vs_card MarginV 420) end at 1500px = y -4.5, so the scoreboard
+        # sits between the values and the caption line.
+        score_y = -3.35
         notes_y = score_y + 0.92
         decision_y = notes_y + 1.30
 
@@ -907,7 +912,8 @@ class VsCardFinal(Scene):
         def vs_pulse(_m, dt):
             pulse.increment_value(dt)
             v = float(pulse.get_value())
-            vs_box.set_stroke(width=3.1 + 0.9 * (0.5 + 0.5 * math.sin(v * 5.0)), opacity=0.94)
+            # Follow the fill: a fixed 0.94 re-showed the hidden diamond outline at frame 0.
+            vs_box.set_stroke(width=3.1 + 0.9 * (0.5 + 0.5 * math.sin(v * 5.0)), opacity=0.94 * float(vs_box.get_fill_opacity()))
             vs_box.rotate(0.18 * dt)
 
         vs_box.add_updater(vs_pulse)
@@ -1078,11 +1084,11 @@ class VsCardFinal(Scene):
         # ================================================================
         hook_t0 = global_start_t0
 
-        # 1) HARD FIX: intro खत्म होते ही UI "already visible" नहीं होना चाहिए
+        # 1) Hidden until their entrance (cards + title halves enter from off-screen
+        #    at full opacity instead, so they keep their own glow/fill styles).
         for mob in [
             sub, scan_line,
             ann["group"],
-            p1["group"], p2["group"],
             v1["group"], v2["group"],
             terminal["group"],
             notes["group"],
@@ -1090,32 +1096,23 @@ class VsCardFinal(Scene):
         ]:
             mob.set_opacity(0.0)
 
-        tL.set_opacity(0.0)
-        tR.set_opacity(0.0)
-        vs_grp.set_opacity(0.0)
-        header.set_opacity(1.0)
+        vs_grp.set_opacity(0.0)  # (header.set_opacity(1.0) here re-showed VS at frame 0)
 
         spine.set_opacity(0.0)
         conn_alpha.set_value(0.0)
 
-        # 2) Prep: slide offsets
-        try:
-            tL.shift(LEFT * 0.55)
-            tR.shift(RIGHT * 0.55)
-        except Exception:
-            pass
-
-        try:
-            vs_grp.shift(UP * 0.28)
-        except Exception:
-            pass
+        # 2) Prep: off-screen / offset starts
+        CARD_FLY = W / 2 + card_w
+        p1["group"].shift(LEFT * CARD_FLY)
+        p2["group"].shift(RIGHT * CARD_FLY)
+        tL.shift(LEFT * W)
+        tR.shift(RIGHT * W)
+        vs_grp.scale(2.4)
 
         scan_line.shift(DOWN * 0.10)
         sub.shift(DOWN * 0.12)
 
         ann["group"].shift(UP * 0.22)
-        p1["group"].shift(LEFT * 0.55)
-        p2["group"].shift(RIGHT * 0.55)
 
         v1["group"].shift(DOWN * 0.18)
         v2["group"].shift(DOWN * 0.18)
@@ -1123,38 +1120,47 @@ class VsCardFinal(Scene):
         notes["group"].shift(DOWN * 0.14)
         scoreboard["group"].shift(DOWN * 0.14)
 
-        # ----------------------------------------------------------------
-        # [HOOK SEGMENT] -> 3) TITLE entrance
-        # ----------------------------------------------------------------
+        # "Camera" shake of the board; the HUD/brand row stays fixed. Shakes the
+        # two layers already in the scene (a new Group would be re-added by play()
+        # and, after the loser card is removed, would draw it again).
+        def stage_shake(**kw):
+            return AnimationGroup(shake(fx_layer, **kw), shake(ui_layer, **kw))
+
+        # Story-style round progress at the very top: one pip per round.
+        progress = build_progress(n_rounds, H / 2 - 0.16, W - 0.9, C_GOLD)
+        progress.set_opacity(0.0)
+        self.add(progress)
+
         hook_total = TL.seg_total(hook_seg, 3.8)
-        hook_act = clamp(hook_total * 0.85, 0.60, 2.5)
 
-        anims = []
-        try:
-            anims += [
-                tL.animate.shift(RIGHT * 0.55).set_opacity(1.0),
-                tR.animate.shift(LEFT * 0.55).set_opacity(1.0),
-                vs_grp.animate.shift(DOWN * 0.28).set_opacity(1.0),
-            ]
-        except Exception:
-            anims += [header.animate.set_opacity(1.0)]
+        # ----------------------------------------------------------------
+        # [HOOK] COLD OPEN: the twist number is on screen at frame 0 (no blank
+        # first frame), settles, then zooms through the camera into the board.
+        # CSV meta: HOOK_STAT (required for the cold open), HOOK_LINE, HOOK_SUB.
+        # ----------------------------------------------------------------
+        sfx.mark("impact_soft", gain_db=-8, meta={"segment": hook_seg, "at": "cold_open"})
+        cold_open(self, meta, cards_y + 0.3, hook_total, font=FONT_DISPLAY, gold=C_GOLD, white=C_MAIN)
 
+        # ----------------------------------------------------------------
+        # [HOOK SEGMENT] -> TITLE: halves whip in, VS diamond slams down
+        # ----------------------------------------------------------------
         sfx.mark("ui_pop", gain_db=-10, meta={"segment": hook_seg, "at": "title_in"})
         self.play(
-            *anims,
-            run_time=hook_act * 0.5,
-            rate_func=rf.ease_out_cubic,
+            tL.animate.shift(RIGHT * W),
+            tR.animate.shift(LEFT * W),
+            run_time=0.38,
+            rate_func=rf.ease_out_back,
         )
+        self.play(vs_grp.animate.scale(1 / 2.4).set_opacity(1.0), run_time=0.26, rate_func=rf.ease_out_back)
         self.play(
             scan_line.animate.shift(UP * 0.10).set_opacity(1.0),
-            run_time=hook_act * 0.3,
-            rate_func=rf.ease_out_cubic,
-        )
-        self.play(
             sub.animate.shift(UP * 0.12).set_opacity(0.90),
-            run_time=hook_act * 0.2,
+            progress.animate.set_opacity(1.0),
+            run_time=0.22,
             rate_func=rf.ease_out_cubic,
         )
+        for _pip in progress:
+            _pip[0].set_fill(opacity=0.18)  # set_opacity(1.0) above lit the dim base
         
         # NOTE: hook budget is consumed AFTER the full board reveal below, so the whole
         # layout builds right after the intro instead of holding on a boot screen for ~8s.
@@ -1165,27 +1171,27 @@ class VsCardFinal(Scene):
         # ----------------------------------------------------------------
         setup_t0 = float(self.time)
         setup_total = TL.seg_total(setup_seg, 3.8)
-        setup_act = clamp(setup_total * 0.85, 0.80, 2.8)
+        setup_act = clamp(setup_total * 0.85, 0.80, 2.2)
 
         sfx.mark("scan_tick", gain_db=-14, meta={"segment": setup_seg, "at": "metrics_down"})
         self.play(
             ann["group"].animate.shift(DOWN * 0.22).set_opacity(1.0),
-            run_time=setup_act * 0.20,
-            rate_func=rf.ease_out_cubic,
-        )
-        self.play(
-            spine.animate.set_opacity(1.0),
-            conn_alpha.animate.set_value(1.0),
-            run_time=setup_act * 0.15,
+            run_time=0.22,
             rate_func=rf.ease_out_cubic,
         )
 
+        # Cards fly in from both edges and collide in place (overshoot + shake).
         sfx.mark("impact_soft", gain_db=-12, meta={"segment": setup_seg, "at": "cards_in"})
         self.play(
-            p1["group"].animate.shift(RIGHT * 0.55).set_opacity(1.0),
-            p2["group"].animate.shift(LEFT * 0.55).set_opacity(1.0),
-            run_time=setup_act * 0.35,
-            rate_func=rf.ease_out_cubic,
+            p1["group"].animate.shift(RIGHT * CARD_FLY),
+            p2["group"].animate.shift(LEFT * CARD_FLY),
+            run_time=clamp(setup_act * 0.40, 0.38, 0.55),
+            rate_func=rf.ease_out_back,
+        )
+        self.play(
+            stage_shake(amp=0.09, run_time=0.24),
+            spine.animate.set_opacity(1.0),
+            conn_alpha.animate.set_value(1.0),
         )
 
         sfx.mark("ui_tick", gain_db=-15, meta={"segment": setup_seg, "at": "bottom_stack"})
@@ -1198,7 +1204,7 @@ class VsCardFinal(Scene):
                 scoreboard["group"].animate.shift(UP * 0.14).set_opacity(1.0),
                 lag_ratio=0.10,
             ),
-            run_time=setup_act * 0.30,
+            run_time=0.35,
             rate_func=rf.ease_out_cubic,
         )
 
@@ -1314,27 +1320,50 @@ class VsCardFinal(Scene):
                 new_main.scale_to_fit_width(ann["outer"].width - 0.55)
             new_sub = safe_text(sub_line, font="Consolas", font_size=14, color=C_SUB, weight=BOLD).move_to(ann["sub"].get_center())
 
-            new_v1 = safe_text(p1_val, font_size=30, color=C_MAIN, weight=BOLD).move_to(v1["txt"].get_center())
-            if new_v1.width > (v1["box"].width - 0.35):
-                new_v1.scale_to_fit_width(v1["box"].width - 0.35)
+            def value_maker(vb):
+                def make(txt: str):
+                    t = safe_text(txt, font=FONT_DISPLAY, font_size=44, color=C_MAIN, weight=BOLD)
+                    if t.width > (vb["box"].width - 0.35):
+                        t.scale_to_fit_width(vb["box"].width - 0.35)
+                    return t.move_to(vb["box"].get_center())
+                return make
 
-            new_v2 = safe_text(p2_val, font_size=30, color=C_MAIN, weight=BOLD).move_to(v2["txt"].get_center())
-            if new_v2.width > (v2["box"].width - 0.35):
-                new_v2.scale_to_fit_width(v2["box"].width - 0.35)
+            mk1, mk2 = value_maker(v1), value_maker(v2)
 
+            # Metric whip: old metric exits left, new one enters from the right;
+            # both values reset to "?" so every round has its own reveal.
             sfx.mark("ui_tick", gain_db=-14, meta={"segment": seg_name, "action": "metric_reveal"})
-            act_reveal = clamp(r_total * 0.15, 0.25, 0.45)
             self.play(
-                Transform(ann["top"], new_top),
-                Transform(ann["main"], new_main),
-                Transform(ann["sub"], new_sub),
-                Transform(v1["txt"], new_v1),
-                Transform(v2["txt"], new_v2),
+                progress_fill(progress, i),
+                ann["text"].animate.shift(LEFT * 0.8).set_opacity(0.0),
+                v1["txt"].animate.set_opacity(0.0),
+                v2["txt"].animate.set_opacity(0.0),
+                run_time=0.14,
+                rate_func=rf.ease_in_cubic,
+            )
+            ann["top"].become(new_top)
+            ann["main"].become(new_main)
+            ann["sub"].become(new_sub)
+            ann["text"].shift(RIGHT * 0.8).set_opacity(0.0)
+            v1["txt"].become(mk1("?"))
+            v2["txt"].become(mk2("?"))
+            self.play(
+                ann["text"].animate.shift(LEFT * 0.8).set_opacity(1.0),
                 ann["glow"].animate.set_stroke(opacity=0.26),
-                run_time=act_reveal * 0.65,
+                run_time=0.20,
                 rate_func=rf.ease_out_cubic,
             )
-            self.play(ann["glow"].animate.set_stroke(opacity=0.22), run_time=act_reveal * 0.35, rate_func=rf.ease_in_out_sine)
+
+            # Odometer reveal: P1 then P2 roll up from 0 and land on the real value.
+            sfx.mark("scan_tick", gain_db=-14, meta={"segment": seg_name, "action": "value_count"})
+            self.play(
+                LaggedStart(
+                    count_up(v1["txt"], p1_val, mk1, run_time=0.55),
+                    count_up(v2["txt"], p2_val, mk2, run_time=0.55),
+                    lag_ratio=0.45,
+                ),
+                ann["glow"].animate.set_stroke(opacity=0.22),
+            )
 
             # PATCH #2: status (backend/system feel)
             set_status(f"scanning: r{i+1}/{n_rounds} | stream: stable | parsing metric…", color=C_SUB)
@@ -1379,20 +1408,32 @@ class VsCardFinal(Scene):
                     run_time=act_win * 0.65,
                     rate_func=rf.ease_out_cubic,
                 )
+                win_val = v1 if winner == 1 else v2
                 self.play(
                     Flash(win_obj["frame"], color=C_WIN, line_length=0.35, num_lines=10),
+                    win_val["box"].animate.set_stroke(C_WIN, 4.6, 1.0),
                     run_time=act_win * 0.35,
                     rate_func=rf.ease_out_cubic,
                 )
+
+                # "+1" pops off the winning value and flies into the card's badge.
+                plus = safe_text(f"+{fmt_pts(add_pts)}", font=FONT_DISPLAY, font_size=60, color=C_WIN, weight=BOLD)
+                # Spawn over the card art (not the name plate), then fly up into the badge.
+                plus.move_to(win_obj["portrait"].get_center()).set_z_index(420)
+                self.play(FadeIn(plus, scale=0.5), run_time=0.12, rate_func=rf.ease_out_back)
+                self.play(fly_to(plus, win_obj["badge"].get_center(), run_time=0.36))
 
                 update_score_text()
                 act_score = clamp(r_total * 0.15, 0.20, 0.40)
                 sfx.mark("ui_pop", gain_db=-10, meta={"segment": seg_name, "action": "score_update"})
                 self.play(
+                    # Pop members individually: a temp VGroup would be added to the scene
+                    # by play() and keep this badge drawn after its card is removed.
+                    pop(win_obj["badge"], factor=1.35, run_time=act_score * 0.65),
+                    pop(win_obj["score"], factor=1.35, run_time=act_score * 0.65),
+                    pop(scoreboard["row"], factor=1.10, run_time=act_score * 0.65),
                     scoreboard["glow"].animate.set_stroke(opacity=0.26),
-                    Flash(scoreboard["score"], color=C_WIN, line_length=0.40, num_lines=8),
                     run_time=act_score * 0.65,
-                    rate_func=rf.ease_out_cubic,
                 )
                 self.play(scoreboard["glow"].animate.set_stroke(opacity=0.20), run_time=act_score * 0.35, rate_func=rf.ease_in_out_sine)
 
@@ -1421,6 +1462,7 @@ class VsCardFinal(Scene):
                     lose_obj["group"].animate.scale(1 / LOSE_SCALE).set_opacity(1.0),
                     lose_obj["glow"].animate.set_stroke(lose_obj["accent"], 20, 0.20),
                     lose_obj["frame"].animate.set_stroke(lose_obj["accent"], 2.8, 0.90),
+                    win_val["box"].animate.set_stroke(win_obj["accent"], 4.0, 0.92),
                     run_time=reset_rt,
                     rate_func=rf.ease_in_out_sine,
                 )
@@ -1618,8 +1660,20 @@ class VsCardFinal(Scene):
         
         sync_hold(self, TL, winner_seg, global_start_t0, focus=win["group"], text="LOCKING WINNER DATA")
 
-        # FINAL OUTRO PAD
-        sync_hold(self, TL, outro_seg, global_start_t0, focus=win["group"], text="SYSTEM SHUTDOWN")
+        # OUTRO: loop card. Same look/position as the cold open, so when Shorts
+        # replays, the last frame flows into the first. CSV meta: OUTRO_Q, OUTRO_SUB.
+        loop_card = build_loop_card(meta, f"{p1_name} ya {p2_name}?", cards_y + 0.3,
+                                    font=FONT_DISPLAY, gold=C_GOLD, white=C_MAIN)
+
+        sfx.mark("outro_swipe", gain_db=-12, meta={"segment": outro_seg, "at": "loop_card"})
+        self.play(
+            FadeOut(win["group"], scale=0.85),
+            FadeOut(power, scale=0.85),
+            run_time=0.22,
+            rate_func=rf.ease_in_cubic,
+        )
+        self.play(slam_in(loop_card, scale=1.6, run_time=0.34))
+        sync_hold(self, TL, outro_seg, global_start_t0)
 
         for seg in round_segments:
             _ = TL.remaining(seg) 

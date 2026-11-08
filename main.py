@@ -719,6 +719,8 @@ def mix_voice_sfx_bgm_ffmpeg(
     filters.append(
         "".join(mix_inputs) +
         f"amix=inputs={len(mix_inputs)}:duration=longest:dropout_transition=0:normalize=0,"
+        # Shorts plays at ~-14 LUFS; the raw mix measured -21 (sounded quiet).
+        f"loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100,"
         f"alimiter=limit=0.97[m]"
     )
 

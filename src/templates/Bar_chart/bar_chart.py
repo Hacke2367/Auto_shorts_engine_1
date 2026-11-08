@@ -731,6 +731,7 @@ except Exception:
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp, numbered_segments
 from src.sfx.engine import SFXEngine
+from src.fx import cold_open, build_loop_card, slam_in
 try:
     from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_bar_chart
@@ -983,10 +984,14 @@ class BarChartTemplate(Scene):
         except Exception as e:
             print(f"Intro Error: {e}")
 
-        # Measure how long the intro actually consumed so hook animations
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
+        # Cold open (CSV meta HOOK_STAT/HOOK_LINE/HOOK_SUB): hook number at frame 0.
+        _gold = getattr(Theme, "NEON_YELLOW", "#FFC74A")
+        cold_open(self, meta, 0.4, TL.seg_total("hook", 4.5), font=FONT_DISPLAY, gold=_gold, white=Theme.TEXT_MAIN)
+
+        # Measure how long the intro (+ cold open) consumed so hook animations
         # are sized against the REMAINING budget, not the full budget.
         post_intro_t = float(self.time)
-        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
         _unit = str(meta.get("UNIT", "") or "").strip()
         _cur = str(meta.get("CURRENCY", "") or "").strip()
         _numfmt = str(meta.get("NUMFMT", "intl") or "intl").strip().lower()
@@ -1539,6 +1544,16 @@ class BarChartTemplate(Scene):
             self.play(FadeIn(tag_group, shift=DOWN * 0.15), run_time=min(0.22, outro_action * 0.35), rate_func=rf.ease_out_cubic)
             self.play(AnimationGroup(*pulses, lag_ratio=0.12), run_time=max(0.20, outro_action - min(0.22, outro_action * 0.35)), rate_func=rf.ease_out_cubic)
             self.play(FadeOut(tag_group, shift=UP * 0.10), run_time=0.18, rate_func=rf.ease_in_cubic)
+
+        if str(meta.get("OUTRO_Q", "") or "").strip():
+            # Loop card over a dimmed chart, same look as the cold open (replay seam).
+            loop_card = build_loop_card(meta, "", 0.4, font=FONT_DISPLAY, gold=_gold, white=Theme.TEXT_MAIN)
+            veil = Rectangle(width=config.frame_width * 1.1, height=config.frame_height * 1.1)
+            veil.set_stroke(width=0).set_fill(BLACK, 0.0).set_z_index(390)
+            self.add(veil)
+            self.play(veil.animate.set_fill(opacity=0.72), run_time=0.20)
+            self.play(slam_in(loop_card, scale=1.6, run_time=0.34))
+            banner = None  # hold below must not scan a banner hidden under the veil
 
         # Drift-free anchor: end outro on the master clock (keep banner scanline if present).
         _rem_o = max(0.0, TL.target_elapsed("outro") - (float(self.time) - global_start_t0))

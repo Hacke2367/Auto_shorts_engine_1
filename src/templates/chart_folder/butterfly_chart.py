@@ -518,7 +518,8 @@ class ButterflyChart(Scene):
         # Absolute-clock schedule: each round ends on the master clock (sync_hold), so a
         # round that overruns its slot (e.g. a 1.7s round plus its score tick) is
         # absorbed at the next boundary instead of pushing the rest of the video late.
-        TL.schedule(audio_order)
+        # No audio.order (bare sample job) -> default order, else every target is 0.
+        TL.schedule(audio_order or (["hook", "setup"] + [_item_seg(i) for i in range(1, n_attr + 1)] + ["winner", "outro"]))
 
         # ==========================================
         # 3) ATMOSPHERE (original preserved)
@@ -686,7 +687,7 @@ class ButterflyChart(Scene):
         self.bring_to_front(p1_score, p2_score)
 
         TL.consume("hook", float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining("hook"), focus=underline)
+        sync_hold(self, TL, "hook", global_start_t0, focus=underline)
 
         setup_t0 = float(self.time)
 
@@ -791,7 +792,7 @@ class ButterflyChart(Scene):
         self.play(Create(spine), run_time=clamp(0.40 * setup_scale, 0.25, 0.60), rate_func=rf.ease_out_cubic)
 
         TL.consume("setup", float(self.time) - setup_t0)
-        hold_breathing(self, TL.remaining("setup"), focus=spine)
+        sync_hold(self, TL, "setup", global_start_t0, focus=spine)
 
         # ==========================================
         # 6) BUILD HELPERS
@@ -1144,7 +1145,7 @@ class ButterflyChart(Scene):
             # Wrap up sequence
             # End the round on the master clock (scene t=0 is audio t=0): absorbs any
             # overrun here instead of carrying it into every later round.
-            sync_hold(self, TL, seg_name, 0.0, focus=node)
+            sync_hold(self, TL, seg_name, global_start_t0, focus=node)
 
         # Ghost Padding Loop — cap derived from audio.order, not hardcoded 15.
         _ghost_cap = max(len(_item_segs_audio), n_attr)
@@ -1152,7 +1153,7 @@ class ButterflyChart(Scene):
             seg_key = _item_seg(ghost_i)
             # Master-clock anchor here too: spare audio slots (7 item segments for 5
             # attributes) are where a short round's overrun gets absorbed.
-            sync_hold(self, TL, seg_key, 0.0, focus=meter_bg)
+            sync_hold(self, TL, seg_key, global_start_t0, focus=meter_bg)
 
         # ==========================================
         # 8) WINNER ANNOUNCEMENT (sync: winner + outro)
@@ -1254,12 +1255,12 @@ class ButterflyChart(Scene):
         self.remove(scanline)
 
         TL.consume("winner", float(self.time) - winner_t0)
-        hold_breathing(self, TL.remaining("winner"), focus=banner)
+        sync_hold(self, TL, "winner", global_start_t0, focus=banner)
 
         # OUTRO segment
         outro_t0 = float(self.time)
         TL.consume("outro", float(self.time) - outro_t0)
-        hold_breathing(self, TL.remaining("outro"), focus=headline)
+        sync_hold(self, TL, "outro", global_start_t0, focus=headline)
 
         # Flush SFX marks to file
         sfx.flush()
