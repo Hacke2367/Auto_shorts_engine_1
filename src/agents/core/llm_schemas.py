@@ -134,6 +134,7 @@ _ROW_PROPERTIES: dict[str, dict[str, Any]] = {
         "image": _STR,
         "category": {"type": "string", "enum": ["1", "2"]},
         "reason": _STR,
+        "value": _NUM,
     },
     "vs_card": {
         "metric": _STR, "p1_value": _STR, "p2_value": _STR,

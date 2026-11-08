@@ -359,6 +359,7 @@ def _make_tracker_text(
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, numbered_segments
 from src.sfx.engine import SFXEngine
+from src.fx import pop, shake, slam_in, frame_flash
 try:
     from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_butterfly
@@ -1069,12 +1070,14 @@ class ButterflyChart(Scene):
             if winner == 1:
                 sfx.mark("score_tick")
                 tick_n_scale = clamp(0.18 * i_scale, 0.12, 0.28)
-                self.play(p1_score_t.animate.set_value(p1_wins), run_time=tick_n_scale, rate_func=rf.ease_out_cubic)
+                self.play(p1_score_t.animate.set_value(p1_wins), pop(p1_ring, factor=1.25, run_time=tick_n_scale),
+                          run_time=tick_n_scale, rate_func=rf.ease_out_cubic)
                 self.add_foreground_mobjects(p1_score)
             elif winner == 2:
                 sfx.mark("score_tick")
                 tick_n_scale = clamp(0.18 * i_scale, 0.12, 0.28)
-                self.play(p2_score_t.animate.set_value(p2_wins), run_time=tick_n_scale, rate_func=rf.ease_out_cubic)
+                self.play(p2_score_t.animate.set_value(p2_wins), pop(p2_ring, factor=1.25, run_time=tick_n_scale),
+                          run_time=tick_n_scale, rate_func=rf.ease_out_cubic)
                 self.add_foreground_mobjects(p2_score)
 
             self.bring_to_front(p1_score, p2_score)
@@ -1237,7 +1240,8 @@ class ButterflyChart(Scene):
             FadeIn(chroma_r),
             FadeIn(glow),
             GrowFromCenter(banner),
-            FadeIn(headline, shift=UP * 0.18),
+            FadeIn(tag, shift=UP * 0.18),
+            slam_in(name_txt, scale=1.7),
             FadeIn(score_line, shift=UP * 0.10),
             run_time=clamp(0.55 * w_scale, 0.40, 0.85),
             rate_func=rf.ease_out_cubic,
@@ -1245,7 +1249,10 @@ class ButterflyChart(Scene):
 
         self.add(scanline)
         sfx.mark("winner_hit")
+        frame_flash(self, color=accent, opacity=0.16, run_time=0.12)
         self.play(
+            shake(VGroup(banner, glow, chroma_l, chroma_r, headline, score_line), amp=0.06,
+                  run_time=clamp(0.40 * w_scale, 0.28, 0.60)),
             scanline.animate.move_to(banner.get_bottom() + UP * 0.28).set_opacity(0.0),
             sweep.animate.shift(DOWN * 1.25).set_opacity(0),
             Flash(banner.get_top(), color=WHITE, line_length=0.55, num_lines=12),

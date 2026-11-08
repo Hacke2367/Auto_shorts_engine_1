@@ -37,20 +37,26 @@ def split_number(text: str) -> Optional[Tuple[str, float, int, str, bool]]:
     return m["pre"] + m["sign"] + m["pre2"], float(num.replace(",", "")), decimals, m["suf"], "," in num
 
 
+def count_text(final_text: str, a: float = 0.0) -> str:
+    """The odometer string at progress ``a`` (0..1): "0.0%" for "33.5%" at 0.
+    ``final_text`` itself at a >= 1 or when it has no number. Use a=0 to pre-set
+    a label before it is revealed, so it does not flash the final value first."""
+    parts = split_number(final_text)
+    if parts is None or a >= 1.0:
+        return final_text
+    pre, val, dec, suf, comma = parts
+    v = val * rf.ease_out_cubic(a)
+    return f"{pre}{v:,.{dec}f}{suf}" if comma else f"{pre}{v:.{dec}f}{suf}"
+
+
 def count_up(mob, final_text: str, make: Callable[[str], object], run_time: float = 0.6) -> Animation:
     """Odometer: the number inside ``final_text`` rolls up from 0 and lands
     exactly on ``final_text``. ``make(s)`` returns the positioned/fitted mobject
     for string ``s``; ``mob`` becomes it. Text without a number just appears."""
-    parts = split_number(final_text)
     last = [None]
 
     def upd(m, a):
-        if parts is None or a >= 1.0:
-            s = final_text
-        else:
-            pre, val, dec, suf, comma = parts
-            v = val * rf.ease_out_cubic(a)
-            s = f"{pre}{v:,.{dec}f}{suf}" if comma else f"{pre}{v:.{dec}f}{suf}"
+        s = count_text(final_text, a)
         if s != last[0]:  # only rebuild when the string changes (Pango is slow)
             m.become(make(s))
             last[0] = s
@@ -78,8 +84,17 @@ def slam_in(mob, scale: float = 1.9, run_time: float = 0.32) -> Animation:
 
 
 def pop(mob, factor: float = 1.25, run_time: float = 0.25) -> Animation:
-    """Scale up and back (score badge, value lock)."""
-    return mob.animate(rate_func=rf.there_and_back, run_time=run_time).scale(factor)
+    """Scale up and back (score badge, value lock). Driven by alpha, so it still
+    lands on the original size inside a play() that sets its own rate_func
+    (play kwargs override every child animation's rate_func)."""
+    base = [None]
+
+    def upd(m, a):
+        if base[0] is None:
+            base[0] = m.copy()
+        m.become(base[0]).scale(1.0 + (factor - 1.0) * rf.there_and_back(min(1.0, max(0.0, a))))
+
+    return UpdateFromAlphaFunc(mob, upd, run_time=run_time)
 
 
 def frame_flash(scene, color: str = "#FFFFFF", opacity: float = 0.22, run_time: float = 0.14) -> None:
@@ -183,4 +198,16 @@ if __name__ == "__main__":  # self-check: python -m src.fx
     assert split_number("$4,705/oz") == ("$", 4705.0, 0, "/oz", True)
     assert split_number("₹1.07 Cr") == ("₹", 1.07, 2, " Cr", False)
     assert split_number("Losses") is None
+    assert count_text("33.5% year-over-year") == "0.0% year-over-year"
+    assert count_text("$4,705/oz", 1.0) == "$4,705/oz" and count_text("N/A") == "N/A"
+    from manim import Square
+    for _rf, _peak in ((rf.smooth, 0.5), (rf.ease_out_cubic, 0.2)):  # play(rate_func=...) overrides the child's
+        sq = Square()
+        an = pop(sq, 1.5, 0.3)
+        an.rate_func = _rf
+        an.begin()
+        an.interpolate(_peak)
+        assert sq.width > 2.4
+        an.finish()
+        assert abs(sq.width - 2.0) < 1e-6
     print("fx self-check: PASS")

@@ -129,7 +129,7 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
     static_tags = {
         "scan_race": {"FEED": "FEED_RACE // LIVE", "FOOTER": "CONFIDENTIAL // VERIFIED"},
         "donut_breakdown": {"TOP": "8", "PANEL_TOP": "6", "OTHERS_MIN_PCT": "2", "MODE": "DONUT"},
-        "sort_card": {"FEED": "FEED_SORT // TRIBUNAL"},
+        "sort_card": {"FEED": "FEED_SORT // MARKET"},
         "vs_card": {"P1_IMG": "player1.png", "P2_IMG": "player2.png"},
     }
 

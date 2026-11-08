@@ -13,7 +13,8 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 sys.path.append(project_root)
 
 from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY
-from src.utils import IntroManager, get_safe_frame, make_floating_particles, add_cinematic_background
+from src.utils import IntroManager, get_safe_frame, make_floating_particles, add_cinematic_background, fmt_value, fit_text
+from src.fx import count_up, count_text
 from src.geo_data.map_coords import COORDINATES
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp, numbered_segments
@@ -79,7 +80,8 @@ def _parse_meta_first_line(path: str) -> dict:
     return meta
 
 
-def _safe_int(x, default=None):
+def _safe_num(x, default=None):
+    # Float, not int: rounding turned 33.5% into "34%" on screen (a wrong number).
     try:
         if x is None:
             return default
@@ -87,7 +89,7 @@ def _safe_int(x, default=None):
             return default
         if pd.isna(x):
             return default
-        return int(round(float(x)))
+        return float(x)
     except Exception:
         return default
 
@@ -274,6 +276,7 @@ class GeoUniversalMap(Scene):
         mode = (meta.get("MODE") or "ALLIANCE").strip().upper()
         metric_name = (meta.get("METRIC") or "METRIC").strip()
         unit = (meta.get("UNIT") or "").strip()
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
 
         max_items = int(len(node_segments))
         if max_items <= 0:
@@ -362,7 +365,7 @@ class GeoUniversalMap(Scene):
         if len(metric_short) > 16:
             metric_short = metric_short[:16] + "…"
 
-        feed_label = Text("FEED_MAP // GEO", font="Consolas", font_size=13, color=Theme.TEXT_MAIN).set_z_index(112)
+        feed_label = Text("DATA MAP", font="Consolas",font_size=13, color=Theme.TEXT_MAIN).set_z_index(112)
         feed_label.set_opacity(0.95)
 
         live_dot = Dot(radius=0.035, color=Theme.NEON_GREEN).set_z_index(112)
@@ -414,7 +417,7 @@ class GeoUniversalMap(Scene):
         chips.move_to(ticker_bg.get_center() + UP * 0.06)
 
         feed_available = ticker_bg.width - 0.85
-        feed_text.scale_to_fit_width(feed_available)
+        fit_text(feed_text, feed_available)  # shrink only: short copy was blown up past the box
         feed_text.move_to(ticker_bg.get_center() + DOWN * 0.22)
 
         ticker_sweep = Rectangle(width=ticker_w * 0.18, height=ticker_h * 0.70).set_z_index(109)
@@ -424,7 +427,7 @@ class GeoUniversalMap(Scene):
 
         def ticker_set(msg: str, animate: bool = True):
             new_mob = Text(str(msg), font="Consolas", font_size=14, color=Theme.TEXT_MAIN).set_z_index(112)
-            new_mob.scale_to_fit_width(feed_available)
+            fit_text(new_mob, feed_available)
             new_mob.move_to(feed_text.get_center())
             if animate:
                 self.play(Transform(feed_text, new_mob), run_time=0.32, rate_func=rf.ease_out_cubic)
@@ -536,21 +539,23 @@ class GeoUniversalMap(Scene):
         vmax = max(1.0, vmax)
 
         def _format_value(row_obj, value):
-            iv = _safe_int(value, default=None)
+            iv = _safe_num(value, default=None)
             if mode == "COMPARE" and compare_a and compare_b:
-                a = _safe_int(row_obj.get(compare_a), default=None)
-                b = _safe_int(row_obj.get(compare_b), default=None)
+                a = _safe_num(row_obj.get(compare_a), default=None)
+                b = _safe_num(row_obj.get(compare_b), default=None)
                 if a is None and b is None:
                     return "–"
                 a = a if a is not None else 0
                 b = b if b is not None else 0
-                return f"{a}|{b}"
+                return f"{fmt_value(a)}|{fmt_value(b)}"
             if iv is None:
                 return "–"
-            # Currency symbols lead and big numbers get separators: "$126,500", not "126500$".
+            # Shared number format (keeps 33.5, compacts 126500 -> 126.5K);
+            # currency symbols lead: "$126.5K", not "126.5K$".
+            num = fmt_value(iv)
             if unit in ("$", "€", "£", "₹", "¥"):
-                return f"{unit}{iv:,}"
-            return f"{iv:,}{unit}" if unit else f"{iv:,}"
+                return f"{unit}{num}"
+            return f"{num}{unit}" if unit else num
 
         # One-country datasets (US states, Indian states...) carry the real place name
         # in Group. Headline that — "USA" on every card was noise, the state was tiny.
@@ -608,7 +613,7 @@ class GeoUniversalMap(Scene):
             meter_fill = RoundedRectangle(width=meter_w, height=meter_h, corner_radius=0.04)
             meter_fill.set_fill(color=col, opacity=0.70).set_stroke(width=0)
 
-            iv = _safe_int(value, default=None)
+            iv = _safe_num(value, default=None)
             if iv is None:
                 frac = 0.08
             else:
@@ -625,6 +630,15 @@ class GeoUniversalMap(Scene):
             max_w = 3.65
             if card.width > max_w:
                 card.scale_to_fit_width(max_w)
+
+            # Count-up source: same face/size/scale as the final label, centred on the
+            # label's CURRENT spot (the card is moved into its lane after this).
+            _k = val_txt.height / max(1e-6, Text(val_str, font="Montserrat", weight=BOLD, font_size=16).height)
+
+            def _mk_val(t, _k=_k, _v=val_txt, _col=col):
+                return Text(t, font="Montserrat", weight=BOLD, font_size=16, color=_col).scale(_k).move_to(_v.get_center()).set_z_index(90)
+
+            card.val_txt, card.val_str, card.mk_val = val_txt, val_str, _mk_val
 
             scale_factor = meter_bg.width / meter_w if meter_w != 0 else 1.0
             card.meter_final_width = max(0.01, float(final_w * scale_factor))
@@ -742,6 +756,21 @@ class GeoUniversalMap(Scene):
         )
         self.remove(scan)
 
+        # Motion during long holds: a faint band sweeps the map top -> bottom every
+        # 4 s. It never moves pins or cards, so the data stays put.
+        map_sweep = Rectangle(width=map_panel.width * 0.96, height=0.30).set_stroke(width=0)
+        map_sweep.set_fill(Theme.NEON_BLUE, 0.06).set_z_index(11)
+        _sw_top = map_panel.get_top()[1] - 0.20
+        _sw_bot = map_panel.get_bottom()[1] + 0.20
+        map_sweep._t = 0.0
+
+        def _sweep(m, dt):
+            m._t = (m._t + dt / 4.0) % 1.0
+            m.set_y(_sw_top + (_sw_bot - _sw_top) * m._t)
+
+        map_sweep.add_updater(_sweep)
+        self.add(map_sweep)
+
         self.play(
             ticker_bg.animate.set_stroke(width=3.0, opacity=0.95),
             run_time=0.35,
@@ -802,6 +831,10 @@ class GeoUniversalMap(Scene):
                 self.play(Create(core, rate_func=rf.linear), run_time=act_line)
                 self.play(FadeIn(glow), run_time=0.12)
 
+            # COMPARE shows "a|b"; an odometer would roll only the first number.
+            _count = mode != "COMPARE"
+            if _count:
+                card.val_txt.become(card.mk_val(count_text(card.val_str)))
             self.play(
                 FadeIn(card, shift=UP * 0.12, scale=0.985),
                 run_time=act_card,
@@ -812,9 +845,11 @@ class GeoUniversalMap(Scene):
                 meter_bg = card[4][0]
                 meter_fill = card[4][1]
                 final_w = getattr(card, "meter_final_width", meter_fill.width)
+                _roll = [count_up(card.val_txt, card.val_str, card.mk_val)] if _count else []
                 self.play(
                     meter_fill.animate.stretch_to_fit_width(max(0.01, final_w)).align_to(meter_bg, LEFT),
-                    run_time=act_meter,
+                    *_roll,
+                    run_time=max(act_meter, 0.45) if _count else act_meter,
                     rate_func=rf.ease_out_cubic,
                 )
             except Exception:
@@ -1033,6 +1068,7 @@ class GeoUniversalMap(Scene):
 
         try:
             live_dot.remove_updater(_pulse)
+            map_sweep.remove_updater(_sweep)
         except Exception:
             pass
         try:

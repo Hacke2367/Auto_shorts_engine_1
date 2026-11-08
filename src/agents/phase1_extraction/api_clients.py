@@ -237,7 +237,7 @@ async def extract_dataset(
         "scan_race": '{"year": "2024", "entities": {"YouTube": 2.5, "TikTok": 1.7}}',
         "geo_universal": '{"country": "India", "group": "Asia", "value": 8.5}',
         "donut_breakdown": '{"category": "Smartphones", "value": 45.2}',
-        "sort_card": '{"image": "apple_pay_logo.png", "category": 1, "reason": "Top performer"}',
+        "sort_card": '{"image": "apple_pay_logo.png", "category": 1, "reason": "Top performer", "value": 9.2}',
         "vs_card": '{"metric": "Top Speed", "p1_value": "200 mph", "p2_value": "180 mph", "winner": 1}',
     }
     example_row = schema_examples.get(template_name, '{"key": "value"}')

@@ -13,3 +13,10 @@ Top-left still says "BIGDATA LEAK". Set `BRAND_NAME` / `BRAND_HANDLE` in `src/co
 ## H-4 (open) Check two historical prices before posting the Gold vs Bitcoin video
 Nov 2016 and Nov 2021 gold/BTC prices in `jobs/vs_job/job_vs_card_2` came from model knowledge,
 not a fetched source (`data/best_fit/sources_audit.json`). Red line #1.
+
+## H-5 (open) India states map asset
+`assets/svgs/world.svg` is a 21 KB single-outline map; zoomed to India it is a blob, and Indian
+state data all pins to one point. Needs an India states map asset: pick the source and licence,
+and confirm it shows the official Survey of India boundary (J&K, Ladakh, Arunachal) before any
+India map is published. Blocks the rest of plan step 7.
+

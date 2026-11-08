@@ -20,3 +20,10 @@ animation overrun cannot drift later segments. Done for vs_card, bar, donut, sca
 
 ## D-6 (2026-11-09) devsystem tracking, tier standard
 Owner decision. Context: `docs/project_context.md`. Config: `.claude/devsystem.json`.
+
+## D-7 (2026-11-09) Captions and SFX are opt-in flags; sort_card carries a numeric Value
+Reversible default by Claude. `main.py` mixes SFX / burns captions only with `--sfx` / `--captions`
+(every existing job.json still says `enabled: true`, so a handoff-only change could not honour D-4).
+sort_card rows get a `value` (number, required in the extraction schema, optional in the CSV) and
+meta `UNIT`, shown as a count-up on the card.
+

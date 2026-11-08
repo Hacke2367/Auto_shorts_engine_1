@@ -66,7 +66,9 @@ python main.py --job jobs/job_0001 --template bar_chart -q h --ffmpeg "C:/ffmpeg
 | `--template` | from `job.json` | Override template ID. See **Template Registry** below. |
 | `-q / --quality` | `h` | Manim quality: `l` (low/fast), `m` (medium), `h` (1080p), `p` (4K) |
 | `--open` | `False` | Auto-open final video after render |
-| `--no_sfx` | `False` | Skip SFX mixing even if `output/sfx_marks.json` exists |
+| `--sfx` | `False` | Mix SFX from `output/sfx_marks.json` (off by default, D-4) |
+| `--captions` | `False` | Build + burn captions (off by default, D-4) |
+| `--no_sfx` | `False` | Legacy no-op; SFX is already off |
 | `--no-trim-silence` | `False` | Disable per-segment silence removal before concat |
 | `--ffmpeg` | `ffmpeg` | Path to FFmpeg binary (falls back to PATH) |
 

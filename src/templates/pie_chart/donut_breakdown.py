@@ -64,7 +64,8 @@ from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp as _tl_clamp, numbered_segments
 from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold
 from src.sfx.engine import SFXEngine
-from src.fx import cold_open, build_loop_card, slam_in
+from src.fx import cold_open, build_loop_card, slam_in, count_up, frame_flash
+from src.fx import pop as fx_pop
 
 # ============================================================
 # SFX MARKS WRITER  (matches bar_chart.py exactly)
@@ -1572,7 +1573,15 @@ class DonutBreakdownFinal(Scene):
             # ✅ FIX: Scope leak resolved (idx+1 instead of undefined i+1)
             sfx.mark("whoosh_short", offset=0.0, meta={"at": "slice_reveal", "i": int(idx + 1)})
 
-            new_comm = make_commentary(center, inner_r, "SEGMENT", str(names[idx]).upper(), fmt_value(pct_vals[idx], "%"), col)
+            _pct_s = fmt_value(pct_vals[idx], "%")
+            new_comm = make_commentary(center, inner_r, "SEGMENT", str(names[idx]).upper(), _pct_s, col)
+            # Count-up: the centre % lands on 0 and rolls to its value while the callout draws.
+            _pct_k = new_comm[2].height / max(1e-6, _safe_text(_pct_s, font="Montserrat", font_size=30, color=col, weight=BOLD).height)
+
+            def _mk_pct(s, _k=_pct_k, _c=new_comm[2].get_center(), _col=col):
+                return _safe_text(s, font="Montserrat", font_size=30, color=_col, weight=BOLD).scale(_k).move_to(_c)
+
+            new_comm[2].become(_mk_pct(fmt_value(0.0, "%")))
             self.play(
                 Transform(commentary, new_comm),
                 grp.animate.shift(pop).scale(1.03),
@@ -1613,6 +1622,7 @@ class DonutBreakdownFinal(Scene):
                     FadeIn(chip, shift=0.06 * UP, rate_func=rf.ease_out_cubic),
                     lag_ratio=0.06,
                 ),
+                count_up(commentary[2], _pct_s, _mk_pct, run_time=act_in),
                 run_time=act_in,
                 rate_func=rf.linear,
             )
@@ -1705,6 +1715,9 @@ class DonutBreakdownFinal(Scene):
         )
         sfx.mark("winner_sting", offset=0.0, meta={"at": "winner_announce"})
         self.play(Transform(commentary, leader), run_time=clamp(t_win * 0.25, 0.40, 0.90), rate_func=rf.ease_out_cubic)
+        # Winner beat: flash + punch on the leader label and its slice.
+        frame_flash(self, color=winner_col, opacity=0.16, run_time=0.12)
+        self.play(fx_pop(commentary, factor=1.18, run_time=0.28), fx_pop(slice_groups[winner_idx], factor=1.06, run_time=0.28))
 
         # Shared result card (same end treatment as the other templates) in the free
         # band under the lower callout stack; skipped when the callouts leave no room.

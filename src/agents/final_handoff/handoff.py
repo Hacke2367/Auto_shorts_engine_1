@@ -175,7 +175,7 @@ def build_engine_script(
 
 _DEFAULT_VIDEO = {"w": 1080, "h": 1920}
 _DEFAULT_GAINS = {"gain_voice": 1.0, "gain_sfx": 1.0, "gain_bgm_db": -20.0}
-_DEFAULT_SFX = {"enabled": True, "gain": 1.0}
+_DEFAULT_SFX = {"enabled": False, "gain": 1.0}  # D-4: owner adds SFX elsewhere
 _DEFAULT_BGM = {
     "enabled": False,
     "mode": "per_segment",
@@ -206,7 +206,7 @@ def build_engine_job_json(
     ]
     
     captions_block = {
-        "enabled": True,
+        "enabled": False,  # D-4: owner adds captions elsewhere
         "script": {
             "path": "script/engine_script.json",
             "source_lang": "hi",
@@ -214,7 +214,7 @@ def build_engine_job_json(
         },
         "render": {
             "format": "ass",
-            "burn_in": True,
+            "burn_in": False,
             "style": {"preset": "modern_clean", "safe_margin_px": 80, "max_lines": 1},
             "tracks": [
                 {"lang": "hi", "mode": "plain", "position": "bottom"},

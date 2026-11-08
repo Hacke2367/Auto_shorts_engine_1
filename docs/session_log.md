@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-11-09 (session 3)
+- **Did:** plan steps 5, 6, 8 done; step 7 done except India map; step 9 started (bar pill, sort pill, geo ticker). Gate green; drift 0.00 s on bar, butterfly, sort_card, geo.
+- **Decisions:** D-7; H-5 opened (India map asset).
+- **Open:** step 9 probe sweep; step 4 on RunPod; RunPod visual batch for steps 5-9; H-1..H-5.
+- **Next:** `docs/pending_work.md` item 1.
+
 ## 2026-11-09 (session 2)
 - **Did:** verified plan step 3 (bar + donut `-q l` renders, scan_race `-s` probes, segment-end drift 0.00 s in scan_race + butterfly); fixed donut ring/label showing through the hook card.
 - **Decisions:** none new.

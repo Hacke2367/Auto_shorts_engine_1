@@ -277,6 +277,9 @@ class SortCardRow(BaseModel):
     image: str = Field(default="", description="Image path or URL for the card.")
     category: str = Field(..., min_length=1, description="Tier / category label.")
     reason: str = Field(..., min_length=1, description="Why this tier?")
+    # Optional so CSVs made before the finance pass still load; the extraction
+    # schema asks for it on every new row.
+    value: float | None = Field(default=None, description="The number that decides the split.")
 
 
 class VsCardRow(BaseModel):
@@ -355,7 +358,7 @@ TEMPLATE_META_KEYS: dict[str, list[str]] = {
     "scan_race": ["TITLE", "SUB", "UNIT"],
     "geo_universal": ["TITLE", "SUB", "METRIC", "UNIT", "MODE"],
     "donut_breakdown": ["TITLE", "SUB", "UNIT"],
-    "sort_card": ["TITLE", "SUB", "METRIC"],
+    "sort_card": ["TITLE", "SUB", "METRIC", "UNIT"],
     "vs_card": ["TITLE", "SUB", "P1_NAME", "P2_NAME"],
 }
 
@@ -389,7 +392,7 @@ TEMPLATE_PRESENTATION_FIELDS: dict[str, set[str]] = {
 # read positionally).
 TEMPLATE_CSV_HEADERS: dict[str, dict[str, str]] = {
     "bar_chart": {"name": "Name", "value": "Value"},
-    "sort_card": {"image": "Image", "category": "Category", "reason": "Reason"},
+    "sort_card": {"image": "Image", "category": "Category", "reason": "Reason", "value": "Value"},
     "vs_card": {
         "metric": "Metric", "p1_value": "P1_Value", "p2_value": "P2_Value",
         "winner": "Winner", "emoji": "Emoji", "notes": "Notes",
@@ -415,7 +418,10 @@ TEMPLATE_EXTRACTION_RULES: dict[str, str] = {
         "single descriptive title here, and do NOT use 'vs.' with a period.\n"
         "3. For each row, set 'category' to the integer 1 (group A) or 2 (group B) — "
         "NEVER a descriptive label or name (no 'S Tier', no item name).\n"
-        "4. Keep each 'reason' a short punchy phrase (<= 30 characters)."
+        "4. Keep each 'reason' a short punchy phrase (<= 30 characters).\n"
+        "5. Set 'value' to the ONE sourced number behind the split for that item (the "
+        "METRIC, in meta.UNIT, same unit for every row, e.g. 9.2 for a 9.2x return). "
+        "Plain number only; never invent one."
     ),
     "vs_card": (
         "CRITICAL: the 'winner' field MUST be the integer 0, 1, or 2 ONLY "

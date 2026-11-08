@@ -119,19 +119,19 @@ def test_quality_gate_rejects_wrong_shape():
     # assertion vacuous, since it too was rejected for the count rather than for
     # the category shape it is actually meant to catch.
     good = _ds("sort_card", [
-        {"image": "a.png", "category": "1", "reason": "fast"},
-        {"image": "b.png", "category": "2", "reason": "slow"},
-        {"image": "c.png", "category": "1", "reason": "cheap"},
-        {"image": "d.png", "category": "2", "reason": "niche"},
+        {"image": "a.png", "category": "1", "reason": "fast", "value": 1.0},
+        {"image": "b.png", "category": "2", "reason": "slow", "value": 1.0},
+        {"image": "c.png", "category": "1", "reason": "cheap", "value": 1.0},
+        {"image": "d.png", "category": "2", "reason": "niche", "value": 1.0},
     ], meta={"TITLE": "Mainstream vs Emerging"})
     ok, reason = _validate_dataset_quality(good, "sort_card", _LOG)
     assert ok, f"schema-correct sort_card should pass the quality gate ({reason})"
 
     bad = _ds("sort_card", [
-        {"image": "a.png", "category": "Instant Settlement", "reason": "x"},
-        {"image": "b.png", "category": "Digital Currency", "reason": "y"},
-        {"image": "c.png", "category": "Secure Identity", "reason": "z"},
-        {"image": "d.png", "category": "AI Automation", "reason": "w"},
+        {"image": "a.png", "category": "Instant Settlement", "reason": "x", "value": 1.0},
+        {"image": "b.png", "category": "Digital Currency", "reason": "y", "value": 1.0},
+        {"image": "c.png", "category": "Secure Identity", "reason": "z", "value": 1.0},
+        {"image": "d.png", "category": "AI Automation", "reason": "w", "value": 1.0},
     ], meta={"TITLE": "Mainstream vs Emerging"})
     ok, reason = _validate_dataset_quality(bad, "sort_card", _LOG)
     assert not ok, f"wrong-shaped sort_card must be rejected; got ok ({reason})"

@@ -731,7 +731,7 @@ except Exception:
 from src.sync.job import load_job
 from src.sync.timeline import Timeline, clamp, numbered_segments
 from src.sfx.engine import SFXEngine
-from src.fx import cold_open, build_loop_card, slam_in
+from src.fx import cold_open, build_loop_card, slam_in, pop, shake, frame_flash
 try:
     from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_bar_chart
@@ -1506,9 +1506,12 @@ class BarChartTemplate(Scene):
 
             t_flash = clamp(winner_total * 0.14, 0.25, 0.40)
             sfx.mark("impact_soft", gain_db=-12, meta={"at": "winner_flash"})
+            frame_flash(self, opacity=0.16, run_time=0.12)
             self.play(
                 Flash(banner.get_top(), color=WHITE, line_length=0.6, num_lines=10),
                 Flash(winner_bar.get_right(), color=Theme.NEON_BLUE, line_length=0.6, num_lines=8),
+                shake(VGroup(banner, txt), amp=0.06, run_time=t_flash),
+                pop(winner_val, factor=1.30, run_time=t_flash),
                 run_time=t_flash,
             )
 
@@ -1541,7 +1544,9 @@ class BarChartTemplate(Scene):
                 pulses.append(Indicate(b, color=WHITE, scale_factor=1.03))
 
             sfx.mark("ui_pop", gain_db=-12, meta={"at": "outro_tag"})
-            self.play(FadeIn(tag_group, shift=DOWN * 0.15), run_time=min(0.22, outro_action * 0.35), rate_func=rf.ease_out_cubic)
+            # The pill lands on the x-axis tick row, so the tick labels make way for it.
+            self.play(FadeIn(tag_group, shift=DOWN * 0.15), *[FadeOut(m) for m in guide_group[1::2]],
+                      run_time=min(0.22, outro_action * 0.35), rate_func=rf.ease_out_cubic)
             self.play(AnimationGroup(*pulses, lag_ratio=0.12), run_time=max(0.20, outro_action - min(0.22, outro_action * 0.35)), rate_func=rf.ease_out_cubic)
             self.play(FadeOut(tag_group, shift=UP * 0.10), run_time=0.18, rate_func=rf.ease_in_cubic)
 

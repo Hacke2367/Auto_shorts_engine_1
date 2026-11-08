@@ -789,7 +789,10 @@ def main():
                          "Overrides job.json template_id.")
     ap.add_argument("-q", "--quality", default="h", help="manim quality: l/m/h/p (like manim -qh)")
     ap.add_argument("--open", action="store_true", help="open final video after render")
-    ap.add_argument("--no_sfx", action="store_true", help="disable sfx mixing even if marks exist")
+    # D-4: captions + SFX come from the owner's separate system, so both are opt-in.
+    ap.add_argument("--sfx", action="store_true", help="mix SFX from sfx_marks.json (off by default)")
+    ap.add_argument("--captions", action="store_true", help="build + burn captions (off by default)")
+    ap.add_argument("--no_sfx", action="store_true", help="kept for old commands; SFX is already off by default")
     ap.add_argument("--no-trim-silence", action="store_true", help="disable silence trim on voice segments before concat")
     ap.add_argument("--no-normalize-audio", action="store_true",
                     help="skip the pre-render silence trim (leaves timeline as-is; "
@@ -978,7 +981,7 @@ def main():
     # 4) Build SFX (optional)
     # -----------------------------
     sfx_cfg = job.get("sfx") if isinstance(job.get("sfx"), dict) else {}
-    sfx_enabled = bool(sfx_cfg.get("enabled", True)) and (not args.no_sfx)
+    sfx_enabled = args.sfx and bool(sfx_cfg.get("enabled", True)) and (not args.no_sfx)
 
     sfx_aac: Optional[Path] = None
     # sfx_marks path is already resolved from job["paths"]["sfx_marks"] above
@@ -997,8 +1000,8 @@ def main():
         )
         print(f"[OK] SFX mix: {sfx_aac}")
     else:
-        if args.no_sfx:
-            print("[NOTE] --no_sfx enabled -> skipping SFX.")
+        if not args.sfx or args.no_sfx:
+            print("[NOTE] SFX off (pass --sfx to mix) -> skipping SFX.")
         else:
             print("[NOTE] No sfx_marks.json or sfx disabled -> skipping SFX.")
 
@@ -1108,7 +1111,7 @@ def main():
     # -----------------------------
     captioned_video: Optional[str] = None
     cap_cfg = job.get("captions") if isinstance(job.get("captions"), dict) else {}
-    if isinstance(cap_cfg, dict) and bool(cap_cfg.get("enabled", False)):
+    if args.captions and isinstance(cap_cfg, dict) and bool(cap_cfg.get("enabled", False)):
         try:
             cap_res = run_captions_pipeline(
                 job=job,
@@ -1133,7 +1136,7 @@ def main():
         except Exception as e:
             print(f"[WARN] Captions failed (ignored): {e}")
     else:
-        print("[NOTE] Captions disabled -> skipping captions.")
+        print("[NOTE] Captions off (pass --captions to burn) -> skipping captions.")
 
     # -----------------------------
     # 9) Open output (optional)
