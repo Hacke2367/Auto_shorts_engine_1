@@ -21,8 +21,15 @@ import aiohttp
 # Ensure src is in python path if ran directly
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.agents.core.config import APP_CONFIG
+# Windows consoles default stdout/stderr to cp1252, which can't encode the emoji
+# used in CLI status messages (⚠️/✅/❌) — force UTF-8 so prints don't crash with
+# UnicodeEncodeError (e.g. on the ideation-unavailable abort path). Mirrors autoshorts.py.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
+from src.agents.core.config import APP_CONFIG, apply_provider_override
 from src.agents.core.job_manager import JobManager
+from src.agents.core.cost_tracker import get_session_summary, set_active_job_dir
 from src.agents.phase1_discovery.archive_manager import ArchiveManager
 from src.agents.phase1_discovery.discovery_runner import run_discovery
 from src.agents.phase1_extraction.runner import run_extraction
@@ -130,6 +137,51 @@ def _record_decision(
         )
         archive.add_to_queue(queued_topic)
 
+
+def _suggest_alternatives(
+    candidates: list[dict[str, Any]],
+    failed_index: int,
+    job_id: str,
+    limit: int = 3,
+) -> None:
+    """Print feasibility-ranked alternative candidates after a hard failure.
+
+    Manual-control contract: we SUGGEST, we never auto-select. The operator
+    explicitly chose the failed topic, so the next decision stays theirs.
+    """
+    # Recovering from a feasibility failure — surface the safest bets first by
+    # ranking remaining candidates on data_feasibility, then overall score.
+    alternatives = [
+        (i, c) for i, c in enumerate(candidates, 1) if i != failed_index
+    ]
+    alternatives.sort(
+        key=lambda pair: (
+            pair[1].get("data_feasibility_score", 0.0),
+            pair[1].get("final_score", 0.0),
+        ),
+        reverse=True,
+    )
+
+    if not alternatives:
+        print("\nNo other candidates remain in this discovery run.")
+        print("Re-run discovery for fresh topics:")
+        print('  python -m src.cli.phase1 discover --niche "<niche>" --top-n 10')
+        return
+
+    print("\nNext-best candidates from THIS run (ranked by data feasibility - you choose):\n")
+    for idx, c in alternatives[:limit]:
+        feas = float(c.get("data_feasibility_score", 0.0))
+        topic = c.get("topic", "Unknown")
+        tmpl = c.get("best_fit_template", "?")
+        print(f"  [{idx}] feasibility {feas:.1f}/10  |  {tmpl}")
+        print(f"      {topic}")
+        print(f"      python -m src.cli.phase1 approve --job-id {job_id} --index {idx}")
+        print()
+
+    print("Or re-run discovery for fresh topics:")
+    print('  python -m src.cli.phase1 discover --niche "<niche>" --top-n 10')
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -139,7 +191,8 @@ async def cmd_discover(args: argparse.Namespace) -> None:
     _print_header("PHASE 1: DISCOVER")
     jm = JobManager(template_name="auto")
     jm.initialize()
-    
+    set_active_job_dir(jm.job_dir)
+
     print(f"Job ID:  {jm.job_id}")
     print(f"Job Dir: {jm.job_dir}")
     print("Running discovery engines... This may take a minute.\n")
@@ -154,12 +207,57 @@ async def cmd_discover(args: argparse.Namespace) -> None:
             top_n=args.top_n
         )
         
+    if batch.error == "ideation_unavailable":
+        _print_header("DISCOVERY ABORTED — IDEATION UNAVAILABLE")
+        detail = (batch.error_detail or "")
+        is_rate_limited = "429" in detail or "Too Many Requests" in detail
+        provider = APP_CONFIG.llm.discovery_ideation.provider
+        if is_rate_limited:
+            # 429 is a QUOTA / rate-limit block — re-running immediately will just
+            # hit it again. Guide the operator to the actual remedy.
+            print(f"⚠️  {provider} RATE-LIMITED the ideation call (HTTP 429 Too Many Requests).")
+            print("    The run was stopped BEFORE any search/scoring spend — $0 wasted.")
+            print("    This is a QUOTA limit, NOT a code bug. Re-running right away will 429 again.")
+            print("    Fix one of these, THEN re-run:")
+            print("      • Wait for the quota window to reset (per-minute clears fast).")
+            if provider == "openai":
+                print("      • Check usage/limits at platform.openai.com/settings/organization/limits.")
+                print("      • Add credit or move up a usage tier for higher RPM/TPM.\n")
+            else:
+                print("      • The free-tier DAILY cap resets at midnight US-Pacific.")
+                print("      • Check usage/limits in Google AI Studio (aistudio.google.com).")
+                print("      • Enable billing for higher limits, or use a different GEMINI_API_KEY.\n")
+        else:
+            # Anything else (e.g. 503 / timeout) is a transient outage — safe to retry now.
+            print(f"⚠️  {provider} ideation API was unavailable (transient outage / 503 / timeout).")
+            print("    The run was stopped BEFORE any search/scoring spend — $0 wasted.")
+            print("    Nothing usable was produced; just re-run in a moment:\n")
+        if detail:
+            print(f"    (error detail: {detail})\n")
+        print(f'      python -m src.cli.phase1 discover --niche "{args.niche}" --top-n {args.top_n}\n')
+        return
+
+    if batch.error == "no_feasible_candidates":
+        _print_header("DISCOVERY STOPPED — NO PROVABLE DATA")
+        print(f"Topics were ideated and scored, but ALL {batch.gated_candidate_count} failed the")
+        print("data-feasibility gate: no single published source proves extractable data")
+        print("for any of them. A topic without data is worthless downstream, so nothing")
+        print("was passed on (extraction on dataless topics would waste far more).")
+        print("Re-run in a moment, or broaden/adjust the niche:\n")
+        print(f'      python -m src.cli.phase1 discover --niche "{args.niche}" --top-n {args.top_n}\n')
+        return
+
     _print_header("TOP CANDIDATES")
     for i, c in enumerate(batch.candidates, 1):
         _print_candidate(i, c)
-        
+
+    if batch.gated_candidate_count:
+        print(f"[GATE] {batch.gated_candidate_count} additional topic(s) were scored but dropped "
+              f"for lacking provable data (see log for which).")
+
     print(f"-> Candidates saved to: {jm.discovery_dir / 'candidates.json'}")
     print(f"-> To approve one, run: python -m src.cli.phase1 approve --job-id {jm.job_id} --index <N>")
+    print(get_session_summary(configured_rpm=APP_CONFIG.llm.rpm_limit))
 
 
 async def cmd_auto(args: argparse.Namespace) -> None:
@@ -167,7 +265,8 @@ async def cmd_auto(args: argparse.Namespace) -> None:
     _print_header("PHASE 1: AUTO-MODE (E2E)")
     jm = JobManager(template_name="auto")
     jm.initialize()
-    
+    set_active_job_dir(jm.job_dir)
+
     print(f"Job ID:  {jm.job_id}")
     print("Running discovery engines... (fetching from web + AI scoring)\n")
     
@@ -291,14 +390,42 @@ async def cmd_approve(args: argparse.Namespace) -> None:
     # Lock the real template into auto-mode JobManager so runner.py sees it
     jm.set_template(template)
     
+    seed_urls = selected.get("candidate_sources") or []
+    if seed_urls:
+        print(f"Seeding extraction with {len(seed_urls)} discovery source(s).")
+
     print("Running extraction...")
     try:
-        await run_extraction(job_manager=jm, topic=selected["topic"])
-        print("\n[SUCCESS] Extraction completed.")
-        ArchiveManager().mark_produced(selected["topic"], reason="CLI Approve Extract Success")
+        await run_extraction(
+            job_manager=jm, topic=selected["topic"], seed_urls=seed_urls
+        )
     except Exception as e:
-        print(f"\n[ERROR] Extraction failed: {e}")
-        
+        # Graceful hard-fail. The operator explicitly chose this topic, so we
+        # surface the failure and SUGGEST alternatives — we never silently
+        # auto-advance to a topic they did not pick.
+        _print_header("EXTRACTION FAILED — SELECTED TOPIC COULD NOT BE BUILT")
+        print(f"Topic:    {selected['topic']}")
+        print(f"Template: {template} (fallback: {final_fallback or 'none'})")
+        print(f"Reason:   {e}")
+        print()
+        print("This topic was NOT abandoned automatically. You explicitly selected it,")
+        print("so the decision to switch stays yours - no silent auto-advance.")
+
+        feas = selected.get("data_feasibility_score")
+        if feas is not None and float(feas) <= 3:
+            print()
+            print(f"Likely cause: low data feasibility ({float(feas):.1f}/10) - this resembles")
+            print("a DERIVED metric that no single source publishes as a ready-to-extract table.")
+
+        if jm.attempts_dir.exists():
+            print(f"\nPer-attempt failure logs: {jm.attempts_dir}")
+
+        _suggest_alternatives(candidates, args.index, jm.job_id)
+        sys.exit(1)
+
+    print("\n[SUCCESS] Extraction completed.")
+    ArchiveManager().mark_produced(selected["topic"], reason="CLI Approve Extract Success")
+    print(get_session_summary(configured_rpm=APP_CONFIG.llm.rpm_limit))
     await cmd_inspect(argparse.Namespace(job_id=jm.job_id, template=None))
 
 
@@ -337,7 +464,8 @@ async def cmd_extract(args: argparse.Namespace) -> None:
         
     jm = JobManager(template_name=args.template)
     jm.initialize()
-    
+    set_active_job_dir(jm.job_dir)
+
     print(f"Job ID:   {jm.job_id}")
     print(f"Topic:    {args.topic}")
     print(f"Template: {args.template}")
@@ -417,6 +545,11 @@ async def cmd_queue_show(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="AutoShorts Phase 1 Operator CLI")
+    parser.add_argument(
+        "--llm-provider", choices=["openai", "gemini"],
+        help="Run-scoped override: point EVERY LLM route at this provider. For A/B "
+             "runs only — the durable routing lives in LLMConfig (core/config.py).",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     
     # discover
@@ -459,7 +592,8 @@ def main() -> None:
     subparsers.add_parser("queue-show", help="Show saved topic queue")
 
     args = parser.parse_args()
-    
+    apply_provider_override(getattr(args, "llm_provider", None))
+
     # Route to handlers
     handlers = {
         "discover": cmd_discover,

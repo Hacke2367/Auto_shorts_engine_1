@@ -59,6 +59,8 @@ class AudioSynthesisSettings(BaseModel):
     similarity_boost: float | None = Field(default=None, ge=0.0, le=1.0)
     style: float | None = Field(default=None, ge=0.0, le=1.0)
     speaker_boost: bool | None = Field(default=None)
+    speed: float | None = Field(default=None, ge=0.7, le=1.2,
+                                description="ElevenLabs voice_settings.speed (1.0 = native pace).")
 
     concurrency_limit: int = Field(default=3, ge=1, description="Bounded concurrency for synthesis (enforced by runner).")
 

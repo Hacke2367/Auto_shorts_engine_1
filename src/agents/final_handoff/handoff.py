@@ -17,7 +17,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -131,12 +130,14 @@ def ensure_audio_aliases(job_dir: Path, tag_to_name: dict[str, str]) -> None:
             logger.debug(f"Same file on case-insensitive FS: {upper_name}")
             continue
 
-        if lower_path.exists() and lower_path.stat().st_size == upper_path.stat().st_size:
-            logger.debug(f"Alias already up-to-date: {lower_name}")
-            continue
+        if lower_path.exists():
+            if lower_path.stat().st_ino == upper_path.stat().st_ino:
+                logger.debug(f"Alias already linked: {lower_name}")
+                continue
+            lower_path.unlink()
 
-        shutil.copy2(upper_path, lower_path)
-        logger.info(f"Created audio alias: {upper_name} → {lower_name}")
+        os.link(upper_path, lower_path)
+        logger.info(f"Created audio hardlink: {upper_name} → {lower_name}")
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +175,7 @@ def build_engine_script(
 
 _DEFAULT_VIDEO = {"w": 1080, "h": 1920}
 _DEFAULT_GAINS = {"gain_voice": 1.0, "gain_sfx": 1.0, "gain_bgm_db": -20.0}
-_DEFAULT_SFX = {"enabled": True, "gain": 1.0}
+_DEFAULT_SFX = {"enabled": False, "gain": 1.0}  # D-4: owner adds SFX elsewhere
 _DEFAULT_BGM = {
     "enabled": False,
     "mode": "per_segment",
@@ -205,7 +206,7 @@ def build_engine_job_json(
     ]
     
     captions_block = {
-        "enabled": True,
+        "enabled": False,  # D-4: owner adds captions elsewhere
         "script": {
             "path": "script/engine_script.json",
             "source_lang": "hi",
@@ -214,10 +215,9 @@ def build_engine_job_json(
         "render": {
             "format": "ass",
             "burn_in": False,
-            "style": {"preset": "modern_clean", "safe_margin_px": 80, "max_lines": 2},
+            "style": {"preset": "modern_clean", "safe_margin_px": 80, "max_lines": 1},
             "tracks": [
-                {"lang": "hi", "mode": "reveal_words", "position": "bottom"},
-                {"lang": "en", "mode": "plain", "position": "above_bottom"},
+                {"lang": "hi", "mode": "plain", "position": "bottom"},
             ],
             "highlight": {"enabled": False, "mode": "word_reveal"},
         },

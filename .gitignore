@@ -32,6 +32,7 @@ src/media/
 */partial_movie_files/
 *.mp4
 *.aac
+*.wav
 Tex/
 
 
@@ -43,6 +44,10 @@ jobs/
 # ─── Assets (large binary files) ────────────────────────────
 # Fonts, images, SFX — too large / not source code
 assets/
+
+# Windows fonts staged for upload to the render box (tools/collect_windows_fonts.ps1).
+# Licensed to this machine — never commit or publish these.
+.fonts_stage/
 
 
 # ─── Knowledge Graph Output ─────────────────────────────────
@@ -123,3 +128,15 @@ coverage.xml
 # ─── Jupyter (future-proofing) ──────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
+
+# Validation replay reports (contain model outputs, not source)
+validation/
+
+# RunPod upload bundle (regenerated on demand, never committed)
+runpod_bundle.tgz
+runpodctl.exe
+
+# Claude Code per-machine overrides
+.claude/settings.local.json
+
+.superpowers/

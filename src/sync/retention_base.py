@@ -75,7 +75,7 @@ def _apply_living_data_breath(
     duration: float,
     *,
     period: float = 3.0,
-    glow_max_opacity: float = 0.18,
+    glow_max_opacity: float = 0.20,
     glow_color: str = "#FFFFFF",
     glow_stroke_width: float = 5.0,
     glow_buff: float = 0.10,
@@ -112,7 +112,7 @@ def _apply_living_data_breath(
             t = float(scene.time) - t0
             phase = np.sin(t * (2.0 * np.pi / period))        # −1 … +1
             op  = glow_max_opacity * (0.5 + 0.5 * phase)      #  0 … max_op
-            sw  = glow_stroke_width * (1.0 + 0.25 * (0.5 + 0.5 * phase))
+            sw  = glow_stroke_width * (1.0 + 0.32 * (0.5 + 0.5 * phase))
             m.set_stroke(opacity=float(np.clip(op, 0.0, glow_max_opacity)), width=sw)
 
         glow.add_updater(_glow_upd)
@@ -140,7 +140,7 @@ def _build_confidence_tick(
     *,
     accent: str = "#00F0FF",
     track_opacity: float = 0.25,
-    fill_opacity: float = 0.50,
+    fill_opacity: float = 0.60,
     height: float = 0.05,
     width_ratio: float = 0.96,
     y_offset: float = -0.05,
@@ -377,6 +377,37 @@ def hold_breathing(
 
 
 # -----------------------------------------------------------------------
+# PUBLIC: sync_hold  (drift-free absolute-clock segment anchor)
+# -----------------------------------------------------------------------
+
+def sync_hold(
+    scene: Scene,
+    tl,
+    name: str,
+    t0: float,
+    **hold_kwargs,
+) -> None:
+    """Hold (with the usual breathing visuals) until the absolute scene clock
+    reaches segment ``name``'s scheduled end.
+
+    This is the drift-free replacement for ``hold_breathing(scene, tl.remaining(name))``
+    at a segment boundary. Because it targets an ABSOLUTE time (``tl.target_elapsed``
+    measured from ``t0`` = the scene-start timestamp), any animation that overran
+    earlier in the segment is simply absorbed here instead of pushing every later
+    segment late. Requires ``tl.schedule(order)`` to have been called.
+
+    If the segment already overran its slot (no time left), it waits 0 — the next
+    segment's anchor re-syncs, so drift never accumulates.
+    """
+    try:
+        target = float(tl.target_elapsed(name))
+    except Exception:
+        target = 0.0
+    elapsed = float(scene.time) - float(t0)
+    hold_breathing(scene, max(0.0, target - elapsed), **hold_kwargs)
+
+
+# -----------------------------------------------------------------------
 # PUBLIC: banner_scan_hold  (unchanged from original)
 # -----------------------------------------------------------------------
 
@@ -389,7 +420,9 @@ def banner_scan_hold(scene: Scene, banner: Mobject, seconds: float, color=WHITE)
     try:
         scan = Rectangle(width=banner.width * 0.98, height=0.10).set_stroke(width=0)
         scan.set_fill(color, opacity=0.10)
-        scan.set_z_index(getattr(banner, "z_index", 200) + 5)
+        # Just above the banner plate but below its text: at +5 the scanline swept
+        # across the headline and read as a grey strike-through.
+        scan.set_z_index(getattr(banner, "z_index", 200) + 0.5)
 
         t0 = float(scene.time)
 

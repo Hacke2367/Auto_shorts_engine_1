@@ -1,9 +1,9 @@
 import logging
-import uuid
-from datetime import datetime
+import re
 from pathlib import Path
 import yaml
 
+from src.agents.core.cost_tracker import set_active_job_dir
 from src.agents.core.job_manager import JobManager
 
 def resolve_bucket(template_name: str) -> str:
@@ -24,15 +24,29 @@ def resolve_bucket(template_name: str) -> str:
     return f"{base}_job"
 
 
-def create_run_dir(bucket_name: str) -> Path:
-    """Create a structured job run folder matching the engine rules."""
-    now = datetime.now().strftime("%Y%m%d_%H%M%S")
-    short_id = uuid.uuid4().hex[:6]
-    run_id = f"job_{now}_{short_id}"
-    
-    # Needs to match main loop structure from project root
+def create_run_dir(bucket_name: str, template_name: str | None = None) -> Path:
+    """Create a structured job run folder matching the engine rules.
+
+    run_id is short and meaningful: job_<template>_<n>, sequentially numbered
+    per bucket directory (e.g. job_bar_chart_1, job_bar_chart_2, ...). Falls
+    back to bucket_name as the label when no template_name is given (tests
+    call this with only a sandbox bucket name).
+    """
     project_root = Path(__file__).resolve().parents[2]
-    run_dir = project_root / "jobs" / bucket_name / run_id
+    bucket_dir = project_root / "jobs" / bucket_name
+
+    label = template_name or bucket_name
+    pattern = re.compile(rf"^job_{re.escape(label)}_(\d+)$")
+    max_n = 0
+    if bucket_dir.exists():
+        for child in bucket_dir.iterdir():
+            if child.is_dir():
+                m = pattern.match(child.name)
+                if m:
+                    max_n = max(max_n, int(m.group(1)))
+    run_id = f"job_{label}_{max_n + 1}"
+
+    run_dir = bucket_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     
     # Create standard pipeline subdirs
@@ -90,8 +104,14 @@ def setup_cli_logger(run_dir: Path) -> logging.Logger:
     
     # File output
     log_file = run_dir / "logs" / "pipeline_execution.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
     file_h = logging.FileHandler(log_file, encoding="utf-8")
     file_h.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s [%(module)s] %(message)s"))
     logger.addHandler(file_h)
-    
+
+    # Point cost accounting at this run so every LLM call lands in
+    # <run_dir>/logs/cost.jsonl. Every subcommand resolves run_dir and then
+    # calls this, so hooking it here covers all of them at once.
+    set_active_job_dir(run_dir)
+
     return logger

@@ -657,18 +657,24 @@ sys.path.append(project_root)
 
 # --- IMPORTS (Robust) ---
 try:
-    from src.config import Theme, BACKGROUND_COLOR, DATA_DIR
+    from src.config import Theme, BACKGROUND_COLOR, DATA_DIR, FONT_DISPLAY
     from src.utils import (
         IntroManager,
         get_safe_frame,
         clamp_x,
         clamp_y,
         make_floating_particles,
+        add_cinematic_background,
         Brand,
+        fmt_value,
     )
 except Exception:
+    def fmt_value(v, unit="", currency="", numfmt="intl", decimals=None):
+        return f"{currency}{int(round(float(v))):,}{(' ' + unit) if unit else ''}"
+
     BACKGROUND_COLOR = "#050505"
     DATA_DIR = os.path.join(project_root, "data")
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -718,17 +724,26 @@ except Exception:
     def make_floating_particles(*args, **kwargs):
         return VGroup()
 
+    def add_cinematic_background(*args, **kwargs):
+        return None
+
 # --- SYNC HELPERS ---
 from src.sync.job import load_job
-from src.sync.timeline import Timeline, clamp
+from src.sync.timeline import Timeline, clamp, numbered_segments
 from src.sfx.engine import SFXEngine
+from src.fx import cold_open, build_loop_card, slam_in, pop, shake, frame_flash
 try:
-    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_bar_chart
 except Exception:
     def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
         if seconds > 0:
             scene.wait(seconds)
+    def sync_hold(scene, tl, name, t0, **kw):
+        target = float(tl.target_elapsed(name)) if hasattr(tl, "target_elapsed") else 0.0
+        wait = target - (float(scene.time) - float(t0))
+        if wait > 0:
+            scene.wait(wait)
     def banner_scan_hold(scene, banner, seconds: float, color=None):
         if seconds > 0:
             scene.wait(seconds)
@@ -740,7 +755,10 @@ except Exception:
 # ============================================================
 # CSV loader with optional META line
 # ============================================================
-_META_RE = re.compile(r"([A-Za-z_]+)\s*=\s*([^,]+)")
+# Keys may contain digits after the first char; `[A-Za-z_]+` would stop at a
+# digit. Harmless superset for the digit-free keys bar_chart uses today, kept
+# consistent with the vs_card/sort_card fix.
+_META_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^,]+)")
 
 def load_ai_stats_csv(csv_path: str):
     meta = {}
@@ -874,6 +892,7 @@ def _winner_sweep(scene: Scene, bar: Mobject, rt: float, color_core=WHITE, color
 class BarChartTemplate(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=Brand.CYAN)
 
         # ============================================================
         # ✅ 0) JOB + TIMELINE
@@ -902,6 +921,11 @@ class BarChartTemplate(Scene):
 
         values = [float(v) for v in values]
         max_val = float(max_val)
+        # Round the axis up to a clean scale for its 4 tick steps: MAX=890 printed
+        # 0 / 222 / 445 / 668 / 890. Steps snap to 1, 2, 2.5 or 5 x 10^k.
+        _raw_step = max(max_val, max(values) if values else 0.0, 1e-9) / 4.0
+        _mag = 10.0 ** np.floor(np.log10(_raw_step))
+        max_val = 4.0 * next(m * _mag for m in (1.0, 2.0, 2.5, 5.0, 10.0) if m * _mag >= _raw_step - 1e-9)
 
         sort_mode = (meta.get("SORT", "DESC") or "DESC").strip().upper()
         if sort_mode != "NONE":
@@ -916,18 +940,24 @@ class BarChartTemplate(Scene):
         # Falls back to num_items only if audio.order is absent (old jobs without audio block).
         _audio_cfg = job.get("audio") if isinstance(job, dict) else {}
         _audio_order = _audio_cfg.get("order", []) if isinstance(_audio_cfg, dict) else []
-        _item_segs_audio = [s for s in _audio_order if isinstance(s, str) and s.startswith("item_")]
+        _item_segs_audio = numbered_segments(_audio_order, "item")
+
+        def _item_seg(i: int) -> str:
+            """audio.order name of the i-th bar (1-based) — item_1 or item1."""
+            return _item_segs_audio[i - 1] if i - 1 < len(_item_segs_audio) else f"item_{i}"
 
         # Hook default raised to 4.5s — IntroManager takes ~1.9s, leaving ~2.6s for
         # hook animations + retention breathing room. Real jobs use job.json timeline.
         defaults = {"hook": 4.5, "setup": 1.3, "winner": 3.2, "outro": 1.2}
         for i in range(1, num_items + 1):
-            defaults[f"item_{i}"] = 2.0
+            defaults[_item_seg(i)] = 2.0
         # Ensure all audio-order item segments have a default (covers extra ghost slots)
         for seg in _item_segs_audio:
             if seg not in defaults:
                 defaults[seg] = 2.0
         TL = Timeline.from_dict(timeline_dict, defaults=defaults)
+        # Absolute-clock schedule -> drift-free segment anchoring via sync_hold.
+        TL.schedule(_audio_order if _audio_order else (["hook", "setup"] + list(_item_segs_audio) + ["winner", "outro"]))
 
         # ============================================================
         # 1) INTRO
@@ -947,16 +977,24 @@ class BarChartTemplate(Scene):
             IntroManager.play_intro(
                 self,
                 brand_title="BIGDATA LEAK",
-                brand_sub="> system breach detected",
+                brand_sub="SYSTEM BREACH DETECTED",
                 feed_text="FEED_BAR // MARKET",
-                footer_text="CONFIDENTIAL // LEAKED_SOURCE",
+                footer_text="CONFIDENTIAL // VERIFIED",  # same footer as the other six templates
             )
         except Exception as e:
             print(f"Intro Error: {e}")
 
-        # Measure how long the intro actually consumed so hook animations
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
+        # Cold open (CSV meta HOOK_STAT/HOOK_LINE/HOOK_SUB): hook number at frame 0.
+        _gold = getattr(Theme, "NEON_YELLOW", "#FFC74A")
+        cold_open(self, meta, 0.4, TL.seg_total("hook", 4.5), font=FONT_DISPLAY, gold=_gold, white=Theme.TEXT_MAIN)
+
+        # Measure how long the intro (+ cold open) consumed so hook animations
         # are sized against the REMAINING budget, not the full budget.
         post_intro_t = float(self.time)
+        _unit = str(meta.get("UNIT", "") or "").strip()
+        _cur = str(meta.get("CURRENCY", "") or "").strip()
+        _numfmt = str(meta.get("NUMFMT", "intl") or "intl").strip().lower()
 
         # ============================================================
         # 2) SAFE FRAME
@@ -1002,7 +1040,9 @@ class BarChartTemplate(Scene):
         title_text = (meta.get("TITLE", "MARKET LEADERS") or "MARKET LEADERS").strip()
         sub_text = (meta.get("SUB", "Tech leaders comparison") or "Tech leaders comparison").strip()
 
-        title = Text(title_text, font="Montserrat", weight=BOLD, font_size=52, color=Theme.TEXT_MAIN)
+        title = Text(title_text, font=FONT_DISPLAY, weight=BOLD, font_size=52, color=Theme.TEXT_MAIN)
+        if title.width > sf["w"]:  # long titles shrink to the safe width, never off-frame
+            title.scale_to_fit_width(sf["w"])
         title.move_to([sf["cx"], sf["top"] - 1.05, 0])
         title.set_z_index(60)
         title_shadow = _soft_shadow_text(title, opacity=0.28)
@@ -1064,8 +1104,8 @@ class BarChartTemplate(Scene):
             FadeIn(subtitle, shift=UP * 0.2, run_time=rt_sub),
         )
         
-        TL.consume("hook", float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining("hook"), focus=underline_core)
+        # Drift-free anchor: end hook exactly on the master clock.
+        sync_hold(self, TL, "hook", global_start_t0, focus=underline_core)
 
         # ============================================================
         # 6) LAYOUT
@@ -1141,16 +1181,34 @@ class BarChartTemplate(Scene):
                 dashed_ratio=0.6,
             ).set_stroke(Theme.NEON_BLUE, width=2, opacity=0.12)
 
-            label_val = int(round(float(max_val) * frac))
-            label = Text(str(label_val), font="Montserrat", font_size=14, color=Theme.TEXT_SUB)
+            label = Text(fmt_value(float(max_val) * frac, _unit, _cur, _numfmt), font="Montserrat", font_size=14, color=Theme.TEXT_SUB)
             label.move_to([x_pos, rail_bottom - 0.55, 0])
             guide_group.add(v_line, label)
 
         sfx.mark("scan_tick", gain_db=-16, meta={"at": "setup_guides"})
         self.play(Create(guide_group, run_time=clamp(setup_action * 0.75, 0.55, 1.05), lag_ratio=0.08))
+
+        # Show the empty ranking slots during setup so the chart is not a blank panel
+        # for the whole setup narration. Each real rank badge / track covers its ghost.
+        ghost_ranks = VGroup()
+        for gi in range(num_items):
+            gy = START_Y - (gi * GAP_Y)
+            g_ring = Circle(radius=0.25).set_fill(opacity=0).set_stroke(Theme.NEON_BLUE, width=2, opacity=0.30)
+            g_ring.move_to([RANK_X, gy, 0])
+            g_num = Text(f"{gi + 1}", font="Montserrat", weight=BOLD, font_size=20, color=WHITE).set_opacity(0.30)
+            g_num.move_to(g_ring)
+            g_track = RoundedRectangle(corner_radius=0.10, width=BAR_MAX_WIDTH, height=0.36)
+            g_track.set_fill(opacity=0).set_stroke(Theme.NEON_BLUE, width=1.5, opacity=0.14)
+            g_track.move_to([BAR_START_X + BAR_MAX_WIDTH / 2, gy, 0])
+            ghost_ranks.add(VGroup(g_ring, g_num, g_track))
+        ghost_ranks.set_z_index(8)
+        self.play(
+            LaggedStart(*[FadeIn(g) for g in ghost_ranks], lag_ratio=0.08),
+            run_time=clamp(setup_action * 0.60, 0.40, 0.90),
+        )
         
-        TL.consume("setup", float(self.time) - setup_t0)
-        hold_breathing(self, TL.remaining("setup"), focus=rail)
+        # Drift-free anchor: end setup exactly on the master clock.
+        sync_hold(self, TL, "setup", global_start_t0, focus=rail)
 
         # ============================================================
         # 7) BAR ENGINE (item_1 ... item_n)
@@ -1158,7 +1216,7 @@ class BarChartTemplate(Scene):
         bar_groups = []
 
         for i, (name, value) in enumerate(zip(names, values)):
-            seg = f"item_{i+1}"
+            seg = _item_seg(i + 1)
             item_t0 = float(self.time)
             item_total = TL.seg_total(seg, 2.0)
 
@@ -1180,7 +1238,9 @@ class BarChartTemplate(Scene):
             name_text = Text(str(name).upper(), font="Montserrat", weight=BOLD, font_size=24, color=WHITE)
             text_plate = RoundedRectangle(corner_radius=0.12, width=name_text.width + 0.55, height=0.52)
             text_plate.set_fill(color="#000000", opacity=0.70).set_stroke(width=0)
-            text_plate.move_to([LABEL_X, y_pos + 0.45, 0])
+            # Left-align on the rank badge. Centred at LABEL_X, long names
+            # ("MARK ZUCKERBERG") grew left across the rank rail.
+            text_plate.move_to([RANK_X - 0.30 + text_plate.width / 2, y_pos + 0.45, 0])
             name_text.move_to(text_plate)
 
             text_plate.move_to(
@@ -1256,7 +1316,12 @@ class BarChartTemplate(Scene):
             sheen.set_stroke(width=0).set_fill(color=WHITE, opacity=0.18)
             sheen.align_to(final_bar, UP).align_to(final_bar, LEFT).set_opacity(0)
 
-            val_num = DecimalNumber(0, num_decimal_places=0, font_size=24, color=Theme.NEON_BLUE)
+            # Plain Montserrat text rebuilt as the count ticks. DecimalNumber goes through
+            # LaTeX: an off-brand serif face that also rendered thin and faint.
+            def _value_text(v: float) -> Text:
+                return Text(fmt_value(v, _unit, _cur, _numfmt), font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
+
+            val_num = _value_text(0)
             val_num.set_z_index(60)
             self.add(val_num)
 
@@ -1270,7 +1335,8 @@ class BarChartTemplate(Scene):
 
             def update_single_bar(_):
                 t = tracker.get_value()
-                val_num.set_value(t * float(value))
+                val_num.become(_value_text(t * float(value)))
+                val_num.set_z_index(60)
 
                 x = VALUE_ANCHOR_X - (val_num.width / 2)
                 x = clamp_x(x, val_num.width, 0.70)
@@ -1348,8 +1414,8 @@ class BarChartTemplate(Scene):
             if settle_rt > 0.02:
                 _micro_settle(self, [final_bar, val_pill, val_num], settle_rt)
 
-            TL.consume(seg, float(self.time) - item_t0)
-            hold_breathing(self, TL.remaining(seg), focus=final_bar)
+            # Drift-free anchor: end this item exactly on the master clock.
+            sync_hold(self, TL, seg, global_start_t0, focus=final_bar)
 
             bar_groups.append(
                 VGroup(branch, bolt, rank_bg, rank_num, label_group, container, final_bar, sheen, val_pill, val_num)
@@ -1359,10 +1425,8 @@ class BarChartTemplate(Scene):
         # Cap derived from audio.order so jobs with >15 items are handled correctly.
         _ghost_cap = max(len(_item_segs_audio), num_items)
         for ghost_i in range(num_items, _ghost_cap):
-            seg_key = f"item_{ghost_i+1}"
-            g_t0 = float(self.time)
-            TL.consume(seg_key, float(self.time) - g_t0)
-            hold_breathing(self, TL.remaining(seg_key))
+            seg_key = _item_seg(ghost_i + 1)
+            sync_hold(self, TL, seg_key, global_start_t0)
 
         # ============================================================
         # 8) WINNER REVEAL
@@ -1373,14 +1437,16 @@ class BarChartTemplate(Scene):
 
         banner = None
         if bar_groups:
-            winner_index = int(np.argmax(values)) if values else 0
+            # Sorted data: rank #1 is the leader (largest for DESC, smallest for ASC).
+            winner_index = (0 if sort_mode in ("ASC", "DESC") else int(np.argmax(values))) if values else 0
             winner_index = int(np.clip(winner_index, 0, max(0, len(bar_groups) - 1)))
 
             winner = bar_groups[winner_index]
             others = [g for j, g in enumerate(bar_groups) if j != winner_index]
 
             t_dim = clamp(winner_total * 0.12, 0.25, 0.45)
-            self.play(*[g.animate.set_opacity(0.20) for g in others], run_time=t_dim)
+            # 0.38, not 0.20: the spotlight should still leave the other names readable.
+            self.play(*[g.animate.set_opacity(0.38) for g in others], run_time=t_dim)
 
             winner_bar = winner[6]
             winner_val = winner[9]
@@ -1390,7 +1456,8 @@ class BarChartTemplate(Scene):
             _winner_sweep(self, winner_bar, t_sweep, color_core=WHITE, color_glow=Theme.NEON_BLUE)
 
             banner_h = 1.65
-            banner = RoundedRectangle(width=sf["w"], height=banner_h, corner_radius=0.18)
+            # 1.0 narrower than the safe frame so the corner watermark stays clear of it.
+            banner = RoundedRectangle(width=sf["w"] - 1.0, height=banner_h, corner_radius=0.18)
             banner.set_fill(color="#000000", opacity=0.85)
             banner.set_stroke(color=Theme.NEON_PINK, width=3, opacity=0.8)
             banner.move_to([sf["cx"], sf["bottom"] + (banner_h / 2) + 0.35, 0])
@@ -1401,13 +1468,25 @@ class BarChartTemplate(Scene):
 
             t1 = Text("TOP LEADER", font="Montserrat", weight=BOLD, font_size=22, color=Theme.TEXT_SUB)
             t2 = Text(win_name, font="Montserrat", weight=BOLD, font_size=46, color=Theme.TEXT_MAIN)
-            t3 = Text(f"SCORE: {int(round(win_val))}", font="Montserrat", weight=BOLD, font_size=22, color=Theme.NEON_BLUE)
+            # The value on its own — "SCORE:" mislabelled every metric this template draws
+            # (net worth, revenue, population...).
+            t3 = Text(fmt_value(win_val, _unit, _cur, _numfmt), font="Montserrat", weight=BOLD, font_size=24, color=Theme.NEON_BLUE)
             txt = VGroup(t1, t2, t3).arrange(DOWN, buff=0.12).move_to(banner)
             txt.set_z_index(201)
 
             dimmer = Rectangle(width=60, height=60).set_fill(color=BLACK, opacity=0.28).set_stroke(width=0)
             dimmer.set_z_index(180)
             self.add(dimmer)
+
+            # Keep every bar's value number readable at the end. The bars stay
+            # dimmed for the winner spotlight, but the numbers (val_pill=8,
+            # val_num=9) were sinking under the dimmer (z=180) and the 0.20
+            # group-dim — making them invisible. Lift + un-dim just the numbers.
+            for _bg in bar_groups:
+                _bg[8].set_opacity(1.0)
+                _bg[8].set_z_index(190)
+                _bg[9].set_opacity(1.0)
+                _bg[9].set_z_index(191)
 
             t_focus = clamp(winner_total * 0.22, 0.35, 0.60)
             self.play(
@@ -1427,14 +1506,18 @@ class BarChartTemplate(Scene):
 
             t_flash = clamp(winner_total * 0.14, 0.25, 0.40)
             sfx.mark("impact_soft", gain_db=-12, meta={"at": "winner_flash"})
+            frame_flash(self, opacity=0.16, run_time=0.12)
             self.play(
                 Flash(banner.get_top(), color=WHITE, line_length=0.6, num_lines=10),
                 Flash(winner_bar.get_right(), color=Theme.NEON_BLUE, line_length=0.6, num_lines=8),
+                shake(VGroup(banner, txt), amp=0.06, run_time=t_flash),
+                pop(winner_val, factor=1.30, run_time=t_flash),
                 run_time=t_flash,
             )
 
-            TL.consume(winner_seg, float(self.time) - winner_t0)
-            banner_scan_hold(self, banner, TL.remaining(winner_seg), color=WHITE)
+            # Drift-free anchor (keep the banner scanline): end winner on the master clock.
+            _rem = max(0.0, TL.target_elapsed(winner_seg) - (float(self.time) - global_start_t0))
+            banner_scan_hold(self, banner, _rem, color=WHITE)
 
         # ============================================================
         # OUTRO
@@ -1451,7 +1534,9 @@ class BarChartTemplate(Scene):
             tag = Text("TOP 3 LOCKED", font="Montserrat", weight=BOLD, font_size=24, color=WHITE)
             tag_bg = RoundedRectangle(corner_radius=0.18, width=tag.width + 0.70, height=0.62)
             tag_bg.set_fill(color=BLACK, opacity=0.55).set_stroke(color=Theme.NEON_BLUE, width=2, opacity=0.35)
-            tag_group = VGroup(tag_bg, tag).move_to([sf["cx"], sf["top"] - 2.15, 0]).set_z_index(210)
+            # Just above the TOP LEADER banner. At top - 2.15 it covered the subtitle.
+            tag_y = (banner.get_top()[1] + 0.50) if banner is not None else (sf["top"] - 2.15)
+            tag_group = VGroup(tag_bg, tag).move_to([sf["cx"], tag_y, 0]).set_z_index(210)
 
             pulses = []
             for j, ii in enumerate(top3):
@@ -1459,18 +1544,31 @@ class BarChartTemplate(Scene):
                 pulses.append(Indicate(b, color=WHITE, scale_factor=1.03))
 
             sfx.mark("ui_pop", gain_db=-12, meta={"at": "outro_tag"})
-            self.play(FadeIn(tag_group, shift=DOWN * 0.15), run_time=min(0.22, outro_action * 0.35), rate_func=rf.ease_out_cubic)
+            # The pill lands on the x-axis tick row, so the tick labels make way for it.
+            self.play(FadeIn(tag_group, shift=DOWN * 0.15), *[FadeOut(m) for m in guide_group[1::2]],
+                      run_time=min(0.22, outro_action * 0.35), rate_func=rf.ease_out_cubic)
             self.play(AnimationGroup(*pulses, lag_ratio=0.12), run_time=max(0.20, outro_action - min(0.22, outro_action * 0.35)), rate_func=rf.ease_out_cubic)
             self.play(FadeOut(tag_group, shift=UP * 0.10), run_time=0.18, rate_func=rf.ease_in_cubic)
 
-        TL.consume("outro", float(self.time) - outro_t0)
+        if str(meta.get("OUTRO_Q", "") or "").strip():
+            # Loop card over a dimmed chart, same look as the cold open (replay seam).
+            loop_card = build_loop_card(meta, "", 0.4, font=FONT_DISPLAY, gold=_gold, white=Theme.TEXT_MAIN)
+            veil = Rectangle(width=config.frame_width * 1.1, height=config.frame_height * 1.1)
+            veil.set_stroke(width=0).set_fill(BLACK, 0.0).set_z_index(390)
+            self.add(veil)
+            self.play(veil.animate.set_fill(opacity=0.72), run_time=0.20)
+            self.play(slam_in(loop_card, scale=1.6, run_time=0.34))
+            banner = None  # hold below must not scan a banner hidden under the veil
+
+        # Drift-free anchor: end outro on the master clock (keep banner scanline if present).
+        _rem_o = max(0.0, TL.target_elapsed("outro") - (float(self.time) - global_start_t0))
         try:
             if banner is not None:
-                banner_scan_hold(self, banner, TL.remaining("outro"), color=WHITE)
+                banner_scan_hold(self, banner, _rem_o, color=WHITE)
             else:
-                hold_breathing(self, TL.remaining("outro"), focus=underline_core)
+                hold_breathing(self, _rem_o, focus=underline_core)
         except Exception:
-            hold_breathing(self, TL.remaining("outro"), focus=underline_core)
+            hold_breathing(self, _rem_o, focus=underline_core)
 
         # ✅ MOST IMPORTANT: write marks JSON so main.py can mix SFX
         sfx.flush()

@@ -16,13 +16,18 @@ from pathlib import Path
 # Fix python path for local execution from root
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+# Windows consoles default stdout/stderr to cp1252, which can't encode the
+# emoji used in CLI status messages (✅/❌) — force UTF-8 so prints don't crash.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 from src.cli.cli_utils import resolve_bucket, create_run_dir, get_cli_job_manager, setup_cli_logger
-from src.agents.core.cost_tracker import record_cost
+from src.agents.core.cost_tracker import record_cost, get_session_summary
 from src.agents.phase2_scripting.runner import run_scripting
 from src.agents.phase3_audio.runner import run_phase3
 from src.agents.phase3_audio.contracts import AudioSynthesisSettings
 from src.agents.final_handoff.handoff import run_handoff
-from src.agents.core.config import APP_CONFIG
+from src.agents.core.config import APP_CONFIG, apply_provider_override
 
 
 def get_bucket_name(template_name: str) -> str:
@@ -47,7 +52,7 @@ def log_cost(run_dir: Path, phase: str, step: str, status: str, notes: str = "")
 def cmd_new(args):
     """Create a new job run folder for a given template."""
     bucket = get_bucket_name(args.template)
-    run_dir = create_run_dir(bucket)
+    run_dir = create_run_dir(bucket, template_name=args.template)
     print(f"✅ Created new job bucket: {run_dir.resolve()}")
     print(f"To run phase 2, ensure dataset is located at '{run_dir.resolve()}/data/{args.template}_dataset.json'")
     print(f"and '{run_dir.resolve()}/data/data_manifest.json' exists (or just run phase1-extract).")
@@ -71,7 +76,8 @@ async def async_phase1_discover(args):
     try:
         timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            await run_discovery(session, logger, out_dir, niche_hint=args.template)
+            # niche comes from APP_CONFIG.niche; --template is a template id, not a niche
+            await run_discovery(session, logger, out_dir, niche_hint=getattr(args, "niche", None))
             
         cands_file = out_dir / "raw_candidates.json"
         
@@ -122,7 +128,10 @@ def cmd_phase1_approve(args):
             
         approved_out = {
             "topic": topics[args.index].get("topic"),
-            "template_name": args.template
+            "template_name": args.template,
+            # Carried forward so extraction can scrape the evidence discovery
+            # already validated instead of re-searching from scratch.
+            "candidate_sources": topics[args.index].get("candidate_sources") or [],
         }
         
         approved_file = run_dir / "discovery" / "approved.json"
@@ -152,9 +161,9 @@ async def async_phase1_extract(args):
     try:
         jm = JobManager(template_name="auto")
         jm.initialize()
-        jm.set_template(args.template)
-        
+
         topic = getattr(args, "topic", None)
+        seed_urls = []
         if not topic:
             # Fallback to checking for approved.json
             approved_file = run_dir / "discovery" / "approved.json"
@@ -163,13 +172,28 @@ async def async_phase1_extract(args):
                 with open(approved_file, "r", encoding="utf-8") as f:
                     appr = json.load(f)
                     topic = appr.get("topic")
-            
+                    seed_urls = appr.get("candidate_sources") or []
+
         if not topic:
             logger.error("❌ No --topic provided and no discovery/approved.json found.")
             raise ValueError("No --topic provided and no discovery/approved.json found.")
-            
+
+        # run_extraction()'s auto-mode branch reads the target template from
+        # phase1_discovery step metadata (selected_template), NOT from
+        # set_template() alone — set_template() only updates state["template"],
+        # a different field. Mirrors the working pattern in src/cli/phase1.py's
+        # cmd_auto/cmd_approve (mark_step_completed BEFORE set_template).
+        jm.mark_step_completed("phase1_discovery", {
+            "selected_topic": topic,
+            "selected_template": args.template,
+            "fallback_template": None,
+        })
+        jm.set_template(args.template)
+
         logger.info(f"Extracting topic: {topic}")
-        await run_extraction(jm, topic=topic)
+        if seed_urls:
+            logger.info(f"Seeding extraction with {len(seed_urls)} discovery source(s).")
+        await run_extraction(jm, topic=topic, seed_urls=seed_urls)
         
         # Locate extraction directories
         attempt_dirs = sorted(jm.attempts_dir.glob(f"*_{args.template}"))
@@ -227,9 +251,9 @@ async def async_phase2(args):
     run_dir = Path(args.job).resolve()
     logger = setup_cli_logger(run_dir)
     log_cost(run_dir, "phase2", "script_generation", "start")
-    
+
     script_file = run_dir / "script" / "script.json"
-    if args.force and script_file.exists():
+    if getattr(args, "force", False) and script_file.exists():
         logger.info(f"Forcing Phase 2: Removed cached script.json")
         script_file.unlink()
         
@@ -245,6 +269,7 @@ async def async_phase2(args):
         await run_scripting(jm, persona_id=args.persona)
         log_cost(run_dir, "phase2", "script_generation", "success")
         logger.info("✅ Phase 2 Completed Successfully")
+        print(get_session_summary(configured_rpm=APP_CONFIG.llm.rpm_limit))
     except Exception as e:
         log_cost(run_dir, "phase2", "script_generation", "fail", str(e))
         logger.error(f"❌ Phase 2 Failed: {e}")
@@ -281,13 +306,23 @@ async def async_phase3(args):
     v_id = "OFFLINE" if args.offline else args.voice_id
     m_id = "OFFLINE" if args.offline else args.model_id
         
-    # Extensible TTS Settings
+    # Extensible TTS Settings.
+    # Voice delivery params come from config.py (APP_CONFIG.tts) — previously they
+    # were omitted entirely, so ElevenLabs used the voice's saved defaults and the
+    # delivery was uncontrolled (flat/slow with long pauses). Offline mode leaves
+    # them None so the synthetic tone wrapper is unaffected.
+    _tts = APP_CONFIG.tts
     tts_settings = AudioSynthesisSettings(
         provider="elevenlabs",
         voice_id=v_id,
         model_id=m_id,
         output_format=args.output_format,
-        concurrency_limit=args.concurrency
+        concurrency_limit=args.concurrency,
+        stability=None if args.offline else _tts.stability,
+        similarity_boost=None if args.offline else _tts.similarity_boost,
+        style=None if args.offline else _tts.style,
+        speaker_boost=None if args.offline else _tts.speaker_boost,
+        speed=None if args.offline else _tts.speed,
     )
     
     try:
@@ -416,8 +451,12 @@ def sync_render(args):
     logger = setup_cli_logger(run_dir)
     log_cost(run_dir, "phase4", "video_engine", "start")
     
+    # Use the SAME interpreter that is running this CLI (sys.executable), NOT a
+    # bare "python" — under an activated .venv on Windows, bare "python" can still
+    # resolve to the global interpreter (which lacks manim), silently bypassing the
+    # venv. main.py then inherits that wrong interpreter via its own sys.executable.
     cmd = [
-        "python", "main.py",
+        sys.executable, "main.py",
         "--job", str(run_dir),
         "-q", args.quality
     ]
@@ -427,7 +466,9 @@ def sync_render(args):
     logger.info(f"Invoking Video Engine: {' '.join(cmd)}")
     
     try:
-        proc = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parents[3]))
+        # autoshorts.py lives at src/cli/, so the project root (where main.py is)
+        # is parents[2] — NOT parents[3], which resolves to the drive root (C:\).
+        proc = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parents[2]))
         if proc.returncode != 0:
             raise RuntimeError(f"Engine crashed with code {proc.returncode}")
             
@@ -468,6 +509,13 @@ def cmd_run(args):
 
 def main():
     parser = argparse.ArgumentParser(description="AutoShorts Master Pipeline CLI")
+    parser.add_argument(
+        "--llm-provider", choices=["openai", "gemini"],
+        help="Run-scoped override: point EVERY LLM route at this provider. For A/B "
+             "runs only — the durable routing lives in LLMConfig (core/config.py). "
+             "Pair with a FRESH job dir, or the phase caches will serve the other "
+             "provider's output.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # NEW
@@ -555,6 +603,7 @@ def main():
     p_run.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
+    apply_provider_override(getattr(args, "llm_provider", None))
     args.func(args)
 
 

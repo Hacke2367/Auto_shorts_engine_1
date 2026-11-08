@@ -52,6 +52,14 @@ class ArchiveManager:
         self._rejected: dict[str, ArchiveEntry] = {}
         self._saved_queue: list[QueuedTopic] = []
 
+        # Snapshots of {produced, rejected, saved_queue} as of the last
+        # successful _load(). Used by _save() to detect local mutations
+        # (additions/removals) that must survive the disk re-read it does
+        # for cross-process safety. See _save() for details.
+        self._produced_baseline: dict[str, ArchiveEntry] = {}
+        self._rejected_baseline: dict[str, ArchiveEntry] = {}
+        self._saved_queue_baseline: list[QueuedTopic] = []
+
         self._load()
         # NOTE: expire_stale_entries() is NOT called here.
         # Call it explicitly at session start via run_discovery or CLI.
@@ -235,6 +243,13 @@ class ArchiveManager:
         self._rejected = self._migrate_entries(raw_rejected, "rejected")
         self._saved_queue = self._migrate_queue(raw_queue)
 
+        # Record this as the new baseline: the state-as-on-disk at this
+        # moment, against which future local mutations will be diffed in
+        # _save() (see _save() for why this is necessary).
+        self._produced_baseline = dict(self._produced)
+        self._rejected_baseline = dict(self._rejected)
+        self._saved_queue_baseline = list(self._saved_queue)
+
         logger.debug(
             "Loaded archive: %d produced, %d rejected, %d queued",
             len(self._produced),
@@ -308,9 +323,69 @@ class ArchiveManager:
                 )
         return queue
 
+    def _merge_pending_into_disk_state(
+        self,
+        pending_produced: dict[str, ArchiveEntry],
+        pending_rejected: dict[str, ArchiveEntry],
+        pending_queue: list[QueuedTopic],
+        base_produced_keys: set[str],
+        base_rejected_keys: set[str],
+        base_queue_norms: set[str],
+    ) -> dict[str, Any]:
+        """Combine the freshly-reloaded disk state (already in self._*) with
+        the in-memory mutation that triggered this save.
+
+        ``pending_*`` is the in-memory state right before the disk re-read —
+        i.e. "disk state we last loaded, plus our local mutation".
+        ``base_*`` is the state as of that last load — i.e. "disk state
+        before our local mutation". The difference between ``pending`` and
+        ``base`` is exactly our local mutation (additions and/or removals),
+        which we replay on top of the just-reloaded ``self._*`` so that:
+          - our own change is preserved (fixes entries silently vanishing), and
+          - any concurrent additions picked up by the reload are kept too.
+        """
+        merged_produced = dict(self._produced)
+        for key in base_produced_keys - pending_produced.keys():
+            merged_produced.pop(key, None)  # locally removed -> stays removed
+        merged_produced.update(pending_produced)  # locally added/kept -> present
+
+        merged_rejected = dict(self._rejected)
+        for key in base_rejected_keys - pending_rejected.keys():
+            merged_rejected.pop(key, None)
+        merged_rejected.update(pending_rejected)
+
+        pending_queue_norms = {q.normalized_topic for q in pending_queue}
+        removed_norms = base_queue_norms - pending_queue_norms
+        merged_queue = [q for q in self._saved_queue if q.normalized_topic not in removed_norms]
+        seen_norms = {q.normalized_topic for q in merged_queue}
+        for q in pending_queue:
+            if q.normalized_topic not in seen_norms:
+                merged_queue.append(q)
+                seen_norms.add(q.normalized_topic)
+
+        self._produced = merged_produced
+        self._rejected = merged_rejected
+        self._saved_queue = merged_queue
+
+        return {
+            "produced": {k: v.model_dump(mode="json") for k, v in self._produced.items()},
+            "rejected": {k: v.model_dump(mode="json") for k, v in self._rejected.items()},
+            "saved_queue": [q.model_dump(mode="json") for q in self._saved_queue],
+        }
+
     def _save(self) -> None:
         """Persist archive to disk using an atomic write with cross-process locking."""
         lock_path = self._archive_path.with_suffix(".lock")
+
+        # Snapshot the in-memory state that triggered this save (i.e. the
+        # baseline from the last _load(), plus whatever mutation the caller
+        # just applied), BEFORE _load() re-reads disk and overwrites self._*.
+        pending_produced = dict(self._produced)
+        pending_rejected = dict(self._rejected)
+        pending_queue = list(self._saved_queue)
+        base_produced_keys = set(self._produced_baseline.keys())
+        base_rejected_keys = set(self._rejected_baseline.keys())
+        base_queue_norms = {q.normalized_topic for q in self._saved_queue_baseline}
 
         if sys.platform == "win32":
             import msvcrt
@@ -325,11 +400,10 @@ class ArchiveManager:
                 # while we were waiting for the lock
                 self._load()
 
-                payload: dict[str, Any] = {
-                    "produced": {k: v.model_dump(mode="json") for k, v in self._produced.items()},
-                    "rejected": {k: v.model_dump(mode="json") for k, v in self._rejected.items()},
-                    "saved_queue": [q.model_dump(mode="json") for q in self._saved_queue],
-                }
+                payload: dict[str, Any] = self._merge_pending_into_disk_state(
+                    pending_produced, pending_rejected, pending_queue,
+                    base_produced_keys, base_rejected_keys, base_queue_norms,
+                )
 
                 fd, tmp_path = tempfile.mkstemp(
                     dir=str(self._archive_path.parent), suffix=".tmp", prefix=".archive_"
@@ -362,11 +436,10 @@ class ArchiveManager:
                 # while we were waiting for the lock
                 self._load()
 
-                payload = {
-                    "produced": {k: v.model_dump(mode="json") for k, v in self._produced.items()},
-                    "rejected": {k: v.model_dump(mode="json") for k, v in self._rejected.items()},
-                    "saved_queue": [q.model_dump(mode="json") for q in self._saved_queue],
-                }
+                payload = self._merge_pending_into_disk_state(
+                    pending_produced, pending_rejected, pending_queue,
+                    base_produced_keys, base_rejected_keys, base_queue_norms,
+                )
 
                 fd, tmp_path = tempfile.mkstemp(
                     dir=str(self._archive_path.parent), suffix=".tmp", prefix=".archive_"
@@ -385,6 +458,12 @@ class ArchiveManager:
             finally:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
                 lock_fd.close()
+
+        # The just-persisted state becomes the new baseline for any
+        # subsequent _save() calls on this instance.
+        self._produced_baseline = dict(self._produced)
+        self._rejected_baseline = dict(self._rejected)
+        self._saved_queue_baseline = list(self._saved_queue)
 
 
 if __name__ == "__main__":

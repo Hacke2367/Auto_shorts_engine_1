@@ -13,6 +13,7 @@ try:
     from src.config import *  # expects: Theme, BACKGROUND_COLOR, etc.
 except Exception:
     BACKGROUND_COLOR = "#050505"
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#00F0FF"
@@ -20,11 +21,16 @@ except Exception:
         NEON_PURPLE = "#BD00FF"
         NEON_GREEN = "#00FF66"
         TEXT_MAIN = "#FFFFFF"
-        TEXT_SUB = "#B8B8B8"
+        TEXT_SUB = "#AEB7C2"
         AXIS_COLOR = "#00F0FF"
 
     config.frame_height = 16.0
     config.frame_width = 9.0
+
+# Brand/intro switches live in src.config; defaults keep a bare import working.
+BRAND_NAME = globals().get("BRAND_NAME", "BIGDATA LEAK")
+BRAND_HANDLE = globals().get("BRAND_HANDLE", "")
+INTRO_ENABLED = globals().get("INTRO_ENABLED", False)
 
 
 # ============================================================
@@ -68,7 +74,10 @@ class Brand:
     WHITE = "#FFFFFF"
     BLACK = "#000000"
     TEXT_MAIN = getattr(Theme, "TEXT_MAIN", "#FFFFFF")
-    TEXT_SUB = getattr(Theme, "TEXT_SUB", "#B8B8B8")
+    TEXT_SUB = getattr(Theme, "TEXT_SUB", "#AEB7C2")
+    GOLD = getattr(Theme, "NEON_YELLOW", "#FFC74A")
+    NAME = BRAND_NAME
+    HANDLE = BRAND_HANDLE
 
 
 # ============================================================
@@ -88,10 +97,9 @@ def get_branding_border_lines(inset=0.25, stroke_w=6, opacity=1.0):
     bottom_line = Line(br, bl)
     left_line = Line(bl, tl)
 
-    top_line.set_stroke(width=stroke_w, color=Brand.PINK, opacity=opacity)
-    right_line.set_stroke(width=stroke_w, color=Brand.CYAN, opacity=opacity)
-    bottom_line.set_stroke(width=stroke_w, color=Brand.PINK, opacity=opacity)
-    left_line.set_stroke(width=stroke_w, color=Brand.CYAN, opacity=opacity)
+    # One quiet gold hairline (was a 6px pink/cyan neon frame).
+    for ln in (top_line, right_line, bottom_line, left_line):
+        ln.set_stroke(width=stroke_w, color=Brand.GOLD, opacity=opacity)
 
     for ln in (top_line, right_line, bottom_line, left_line):
         ln.set_z_index(300)
@@ -114,6 +122,19 @@ def _format_time(seconds: float) -> str:
     return f"{m:02d}:{s:02d}"
 
 
+def _hud_text(text, legacy_prefixes):
+    """Blank out hacker-skin placeholders; keep anything a template set on purpose."""
+    t = str(text or "").strip()
+    if any(t.upper().startswith(p) for p in legacy_prefixes):
+        return ""
+    return t
+
+
+def _source_label(source_text):
+    s = str(source_text or "").strip()
+    return f"SOURCE: {s}" if s else ""
+
+
 def get_cinematic_overlay(scene,
                           feed_text="FEED_BAR // MARKET",
                           footer_text="CONFIDENTIAL // LEAKED_SOURCE",
@@ -123,66 +144,90 @@ def get_cinematic_overlay(scene,
     overlay = VGroup()
     overlay.set_z_index(250)
 
-    # Vignette
-    vignette = Rectangle(width=config.frame_width + 2, height=config.frame_height + 2)
-    vignette.set_fill(color=BLACK, opacity=0)
-    vignette.set_stroke(color=BLACK, width=140, opacity=0.45)
+    # Vignette — soft radial-ish edge falloff (replaces the old hard 140px band).
+    # Stacked black strokes on the same oversized frame: a wide low-opacity stroke
+    # reaches furthest inward (gentle falloff) while narrower, slightly denser
+    # strokes darken the very edge. Cumulatively this fades edge->centre like a
+    # gradient instead of a hard ring. Fully static (zero per-frame cost).
+    vignette = VGroup()
+    vig_w = config.frame_width + 2
+    vig_h = config.frame_height + 2
+    for _w, _op in [(240, 0.10), (160, 0.13), (100, 0.16), (50, 0.20)]:
+        _ring = Rectangle(width=vig_w, height=vig_h)
+        _ring.set_fill(opacity=0)
+        _ring.set_stroke(color=BLACK, width=_w, opacity=_op)
+        vignette.add(_ring)
     vignette.set_z_index(240)
 
-    # Scanlines
+    # Scanlines: off (CRT look); kept as an empty group so callers stay valid.
     scanlines = VGroup()
-    lines_n = 46
+    lines_n = 0
     for i in range(lines_n):
         y = sf["bottom"] + (i * (sf["h"] / lines_n))
         ln = Line(LEFT * (config.frame_width), RIGHT * (config.frame_width))
         ln.set_y(y)
-        ln.set_stroke(color=Brand.CYAN, width=1, opacity=0.02)
+        ln.set_stroke(color=Brand.CYAN, width=1, opacity=0.05)
         scanlines.add(ln)
     scanlines.set_z_index(241)
 
     overlay.add(vignette, scanlines)
 
-    # REC top-left
-    rec_dot = Dot(color=Brand.PINK, radius=0.06)
+    # BRAND top-left (was a blinking REC dot). Static: no updater, so the
+    # Cairo static-frame cache is untouched.
+    rec_dot = Dot(color=Brand.GOLD, radius=0.05)
     rec_dot.move_to([sf["left"] + 0.35, sf["top"] - 0.28, 0])
 
-    rec_label = Text("REC", font="Montserrat", weight=BOLD, font_size=18, color=Brand.TEXT_MAIN)
+    rec_label = Text(Brand.NAME, font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
     rec_label.next_to(rec_dot, RIGHT, buff=0.12).align_to(rec_dot, DOWN)
-
-    def _blink(m, dt):
-        if not hasattr(m, "_t"):
-            m._t = 0.0
-        m._t += dt
-        m.set_opacity(0.35 + 0.65 * (0.5 + 0.5 * np.sin(6.0 * m._t)))
-
-    rec_dot.add_updater(_blink)
+    rec_label.set_opacity(0.85)
 
     # TIMER top-right
     timer = Text("00:00", font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
     timer.move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
     timer.set_opacity(0.9)
 
-    def _update_timer(m):
-        m.become(
-            Text(_format_time(getattr(scene, "time", 0.0)),
-                 font="Montserrat", weight=BOLD, font_size=16, color=Brand.TEXT_MAIN)
-            .move_to([sf["right"] - 0.55, sf["top"] - 0.28, 0])
-            .set_opacity(0.9)
-        )
+    # Timer is not shown (screen-recorder look); it stays only as the layout
+    # anchor for the source label, so it gets no updater.
 
-    timer.add_updater(_update_timer)
+    # FEED label top-right, on the timer's line just left of it. Stacked above the
+    # timer at top-0.10 its baseline touched the digits.
+    # Legacy "FEED_X // Y" / "CONFIDENTIAL" strings from the hacker skin are dropped;
+    # the feed slot shows the data source once the template reports it (set_source).
+    feed_text = _source_label(getattr(scene, "hud_source", "")) or _hud_text(feed_text, ("FEED_",))
+    footer_text = _hud_text(footer_text, ("CONFIDENTIAL",)) or Brand.HANDLE or " "
+    # Empty text has no points (align/next_to would fail), so start from a bare
+    # VMobject and let set_source() fill it once the CSV meta is known.
+    feed = VMobject()
+    if feed_text:
+        feed = Text(feed_text, font="Montserrat", font_size=13, color=Brand.TEXT_SUB).set_opacity(0.80)
+        feed.move_to([timer.get_right()[0] - feed.width / 2, sf["top"] - 0.28, 0])
 
-    # FEED label top-right
-    feed = Text(feed_text, font="Montserrat", font_size=12, color=Brand.TEXT_SUB)
-    feed.move_to([sf["right"] - 1.45, sf["top"] - 0.10, 0])
-    feed.set_opacity(0.75)
-
-    # Footer bottom-left
-    footer = Text(footer_text, font="Montserrat", font_size=12, color=Brand.CYAN)
-    footer.move_to([sf["left"] + 1.75, sf["bottom"] + 0.22, 0])
+    # Footer bottom-left, in the band below template content (bins, scoreboards).
+    footer = Text(footer_text, font="Montserrat", font_size=13, color=Brand.CYAN)
+    footer.move_to([sf["left"] + 1.75, sf["bottom"] + 0.06, 0])
     footer.set_opacity(0.7)
 
-    overlay.add(rec_dot, rec_label, timer, feed, footer)
+    overlay.feed = feed
+    overlay.feed_right = float(timer.get_right()[0])
+    overlay.hud_y = float(sf["top"] - 0.28)
+    overlay.add(rec_dot, rec_label, feed, footer)
+
+    # z-index has to be set on the HUD children, not on the group. The
+    # overlay.set_z_index(250) above ran while the VGroup was still empty, so
+    # these five stayed at the default z=0 -- which put two updater-bearing
+    # mobjects (rec_dot blink, timer) at the BOTTOM of the z-order. Cairo's
+    # static-frame cache treats the z-ordered suffix from the first
+    # updater-bearing mobject as "moving", so that silently forced the vignette
+    # (240), the scanlines (241) and the whole chart body to be re-rasterized
+    # every frame. Setting them here (rather than on the group) keeps the
+    # intended layering: vignette 240 < scanlines 241 < HUD 250.
+    for _hud in (rec_dot, rec_label, feed, footer):
+        _hud.set_z_index(250)
+    # The footer sits in the bottom band templates use for scoreboards, bins and
+    # winner cards. Drawn at 250 it printed across them; at 35 content covers it.
+    # Safe for the static-frame cache: the footer has no updater.
+    footer.set_z_index(35)
+
     return overlay
 
 
@@ -192,21 +237,21 @@ def get_cinematic_overlay(scene,
 def get_rotating_watermark(margin=0.60):
     sf = get_safe_frame(margin)
 
-    ring = DashedVMobject(
-        Circle(radius=0.7, color=Brand.CYAN, stroke_width=2),
-        num_dashes=12
-    )
-    cross = VGroup(
-        Line(UP * 0.32, DOWN * 0.32),
-        Line(LEFT * 0.32, RIGHT * 0.32),
-    ).set_stroke(color=Brand.TEXT_MAIN, width=1.2, opacity=0.6)
-
-    wm = VGroup(ring, cross)
-    wm.move_to([sf["right"] - 0.75, sf["bottom"] + 0.65, 0])
-    wm.set_opacity(0.55)
+    # Small and tucked into the corner: at r=0.7 it sat on top of winner cards,
+    # tier bins, scoreboards and chart end-labels in five templates. It keeps its
+    # high z-index because it rotates -- an updater-bearing mobject low in the
+    # z-order would force the Cairo static-frame cache to re-rasterize everything.
+    # Static brand handle (was a rotating crosshair ring). No updater: the
+    # old rotation forced per-frame re-rasterization of everything below it.
+    if not Brand.HANDLE:
+        return VGroup()
+    tag = Text(Brand.HANDLE, font="Montserrat", weight=BOLD, font_size=13, color=Brand.TEXT_SUB)
+    wm = VGroup(tag)
+    # Anchored to the frame corner (inside the border), not the safe frame, so it
+    # stays clear of bins / scoreboards that reach the safe-frame bottom.
+    wm.move_to([config.frame_width / 2 - 0.45 - wm.width / 2, -config.frame_height / 2 + 0.55, 0])
+    wm.set_opacity(0.45)
     wm.set_z_index(255)
-
-    wm.add_updater(lambda m, dt: m.rotate(-0.45 * dt))
     return wm
 
 
@@ -218,22 +263,184 @@ def make_floating_particles(n=30,
                             radius_range=(0.02, 0.05),
                             opacity_range=(0.10, 0.25),
                             drift=0.04,
-                            margin=0.60):
+                            margin=0.60,
+                            palette=None,
+                            twinkle=True,
+                            parallax=True):
+    """
+    Atmospheric floating-particle field (shared by every template).
+
+    Backward-compatible: the original 6 args behave exactly as before. The
+    premium upgrade lives entirely inside the SAME single O(n) VGroup updater
+    (no new per-frame mobjects — same render-cost class as the old one-line
+    shift updater):
+      - twinkle      : per-particle opacity pulse on a precomputed phase offset
+      - depth parallax: two bands (near = larger/brighter/faster, far =
+                        smaller/dimmer/slower) for a subtle 3D feel
+      - colour variety: optional small accent palette instead of one flat colour
+                        (default = the requested accent + brand cyan)
+      - soft edge wrap: particles drifting past the top safe edge recycle to the
+                        bottom so the cloud never empties on longer videos
+    """
     sf = get_safe_frame(margin)
     color = color or Brand.CYAN
 
+    # Colour variety: default = requested accent + brand cyan. Passing a single
+    # colour (or palette=[c]) collapses back to the old flat look.
+    if palette is None:
+        palette = [color, Brand.CYAN]
+    if not palette:
+        palette = [color]
+
+    top, bottom = sf["top"], sf["bottom"]
+    left, right = sf["left"], sf["right"]
+
+    r_lo, r_hi = radius_range
+    o_lo, o_hi = opacity_range
+    r_mid = (r_lo + r_hi) / 2.0
+    o_mid = (o_lo + o_hi) / 2.0
+
     particles = VGroup()
+    phases, base_ops, speeds, amps = [], [], [], []  # per-particle state (closure)
+
     for _ in range(n):
-        r = random.uniform(*radius_range)
-        p = Dot(radius=r, color=color)
-        p.move_to([random.uniform(sf["left"], sf["right"]),
-                   random.uniform(sf["bottom"], sf["top"]), 0])
-        p.set_opacity(random.uniform(*opacity_range))
+        # Two depth bands. ~45% near (foreground), rest far (background).
+        near = parallax and (random.random() < 0.45)
+        if near:
+            # near = clear foreground: noticeably larger + a touch brighter so
+            # the eye actually reads them (feedback: particles were too small).
+            r = random.uniform(r_hi, r_hi * 1.7)
+            base_op = random.uniform(o_mid, min(o_hi * 1.15, 0.32))
+            speed = drift * random.uniform(1.2, 1.6)
+            amp = 0.45
+        else:
+            r = random.uniform(r_lo, r_mid) if parallax else random.uniform(r_lo, r_hi)
+            base_op = random.uniform(o_lo, o_mid) if parallax else random.uniform(o_lo, o_hi)
+            speed = drift * (random.uniform(0.5, 0.85) if parallax else 1.0)
+            amp = 0.30
+
+        p = Dot(radius=r, color=random.choice(palette))
+        p.move_to([random.uniform(left, right),
+                   random.uniform(bottom, top), 0])
+        p.set_opacity(base_op)
         particles.add(p)
 
-    particles.add_updater(lambda m, dt: m.shift(UP * drift * dt))
-    particles.set_z_index(5)
+        phases.append(random.uniform(0.0, 2.0 * np.pi))
+        base_ops.append(base_op)
+        speeds.append(speed)
+        amps.append(amp if twinkle else 0.0)
+
+    clock = [0.0]
+    twinkle_freq = 1.6
+
+    def _update(group, dt):
+        # Single O(n) updater — drift + soft-wrap + twinkle. Fail-safe so a
+        # decoration error can never crash a render.
+        try:
+            clock[0] += dt
+            t = clock[0]
+            for idx, p in enumerate(group.submobjects):
+                p.shift(UP * speeds[idx] * dt)
+                if p.get_center()[1] > top + 0.15:        # recycle off the top
+                    p.move_to([random.uniform(left, right), bottom - 0.10, 0])
+                if amps[idx]:                              # twinkle around base
+                    op = base_ops[idx] * (1.0 + amps[idx] * np.sin(t * twinkle_freq + phases[idx]))
+                    p.set_opacity(op if op > 0.02 else 0.02)
+        except Exception:
+            pass
+
+    particles.add_updater(_update)
+    # z-index 245 (not 5): Cairo's static-frame cache treats the z-ordered
+    # SUFFIX starting at the first updater-bearing mobject as "moving"
+    # (Scene.get_moving_mobjects). Parking the one updater-driven decoration
+    # ABOVE the static overlay (vignette z=240, scanlines z=241) lets the whole
+    # background + chart body stay cached during holds instead of being
+    # re-rasterized every frame. Stays below REC/timer/watermark (z>=250).
+    particles.set_z_index(245)
     return particles
+
+
+# ============================================================
+# ✅ CINEMATIC BACKGROUND (shared atmosphere: gradient + brand glow)
+#   - additive only: instant scene.add(); the optional breathing updater is
+#     OFF by default (it defeats Cairo's static-frame cache — see docstring)
+#   - fully fail-safe: any error degrades to the current flat background
+#     and never crashes a render
+# ============================================================
+def add_cinematic_background(scene, accent=None, breathing=False):
+    """
+    Premium background atmosphere shared by every template.
+
+    Draws a subtle vertical gradient (cool charcoal -> near-black) plus a soft
+    radial brand-tinted glow ("pool of light") just above frame centre, and
+    ``breathing`` defaults to **False** on purpose. The glow sits at z=-90, the
+    second-lowest z-index in the scene, so attaching an updater to it made
+    Scene.get_moving_mobjects return practically the entire scene as "moving" —
+    defeating Cairo's static-frame cache and re-rasterizing every static
+    mobject (scanlines, vignette, grids, world.svg, cards, labels) on all
+    ~5,700 frames. Opt in per scene only if the sway is worth that cost.
+
+    Sync-safe: no ``self.play()`` / ``run_time`` and no timeline math — only an
+    instant ``scene.add(...)`` plus at most one lightweight updater. Returns the
+    background ``VGroup`` (callers may ``.remove()`` it; not required) or ``None``
+    if anything fails.
+    """
+    try:
+        accent = accent or Brand.CYAN
+
+        W = config.frame_width + 2
+        H = config.frame_height + 2
+
+        # --- Base vertical gradient: cool charcoal (top) -> near-black (bottom).
+        # Stacked full-width strips guarantee a clean top->bottom gradient and
+        # stay fully static (zero per-frame Python cost).
+        strips = VGroup()
+        n_strips = 24
+        strip_h = H / n_strips
+        for i in range(n_strips):
+            strip = Rectangle(width=W, height=strip_h + 0.03, stroke_width=0)
+            strip.set_fill(opacity=1.0)
+            strip.move_to([0.0, (H / 2.0) - strip_h * (i + 0.5), 0.0])
+            strips.add(strip)
+        strips.set_color_by_gradient("#0E1116", "#050608")
+        strips.set_z_index(-100)
+
+        # --- Radial brand glow: concentric low-opacity ellipses approximate a
+        # soft gaussian pool of light with zero per-frame cost.
+        glow_center = np.array([0.0, config.frame_height * 0.12, 0.0])
+        glow_specs = [
+            (config.frame_width * 1.50, config.frame_height * 0.90, 0.060),
+            (config.frame_width * 1.05, config.frame_height * 0.62, 0.045),
+            (config.frame_width * 0.65, config.frame_height * 0.40, 0.030),
+        ]
+        glow = VGroup()
+        base_ops = []
+        for w, h, op in glow_specs:
+            e = Ellipse(width=w, height=h, stroke_width=0)
+            e.set_fill(color=accent, opacity=op)
+            e.move_to(glow_center)
+            glow.add(e)
+            base_ops.append(op)
+        glow.set_z_index(-90)
+
+        bg = VGroup(strips, glow)
+        scene.add(bg)
+
+        # --- Breathing drift: the ONE allowed updater (flicker cost class).
+        # Gently sways glow opacity (~+-25% of base) and nudges it a few
+        # hundredths in Y on a slow sine. O(3) per frame.
+        if breathing:
+            def _breathe(m, dt):
+                phase = np.sin(getattr(scene, "time", 0.0) * 0.4)
+                for e, base_op in zip(m.submobjects, base_ops):
+                    e.set_fill(opacity=base_op * (1.0 + 0.25 * phase))
+                m.move_to(glow_center + np.array([0.0, 0.06 * phase, 0.0]))
+            glow.add_updater(_breathe)
+
+        return bg
+    except Exception:
+        # Decoration must never break a render.
+        return None
 
 
 # ============================================================
@@ -252,7 +459,7 @@ class IntroManager:
         if getattr(scene, "_branding_attached", False):
             return getattr(scene, "_branding_objs", {})
 
-        top, right, bottom, left = get_branding_border_lines(stroke_w=6, opacity=1.0)
+        top, right, bottom, left = get_branding_border_lines(stroke_w=2, opacity=0.55)
         overlay = get_cinematic_overlay(scene, feed_text=feed_text, footer_text=footer_text)
         watermark = get_rotating_watermark()
 
@@ -296,11 +503,33 @@ class IntroManager:
                 pass
 
     @staticmethod
+    def set_source(scene, source_text=""):
+        """Show "SOURCE: ..." in the HUD once the template has read its CSV meta."""
+        overlay = (getattr(scene, "_branding_objs", {}) or {}).get("overlay")
+        feed = getattr(overlay, "feed", None)
+        label = _source_label(source_text)
+        if feed is None or not label:
+            return
+        new = Text(label, font="Montserrat", font_size=13, color=Brand.TEXT_SUB).set_opacity(0.80)
+        fit_text(new, config.frame_width * 0.55)
+        right = getattr(overlay, "feed_right", config.frame_width / 2 - 0.6)
+        new.move_to([right - new.width / 2, getattr(overlay, "hud_y", 0.0), 0])
+        new.set_z_index(250)
+        feed.become(new)
+
+    @staticmethod
     def play_intro(scene,
                    brand_title="BIGDATA LEAK",
                    brand_sub="SYSTEM BREACH DETECTED",
                    feed_text="FEED_BAR // MARKET",
                    footer_text="CONFIDENTIAL // LEAKED_SOURCE"):
+
+        # Hook-first (INTRO_ENABLED=False): no black brand card, just the
+        # persistent branding. Templates measure post-intro time, so sync holds.
+        if not INTRO_ENABLED:
+            scene._intro_played = True
+            IntroManager._ensure_branding(scene, feed_text=feed_text, footer_text=footer_text)
+            return
 
         # Intro plays only once per Scene
         if getattr(scene, "_intro_played", False):
@@ -314,12 +543,12 @@ class IntroManager:
         scene.add(cover)
 
         # SUB (alone)
-        sub = Text(f"> {brand_sub}", font="Consolas", font_size=22, color=Brand.PINK)
+        sub = Text(f"> {brand_sub}", font="Consolas", font_size=30, color=Brand.PINK)  # 22 was barely readable
         sub.set_z_index(501)
         sub.move_to(ORIGIN)
 
         # TITLE (alone)
-        title = Text(brand_title, font="Montserrat", weight=BOLD, font_size=54)
+        title = Text(brand_title, font=FONT_DISPLAY, weight=BOLD, font_size=54)
         title.set_color_by_gradient(Brand.CYAN, Brand.TEXT_MAIN)
         title.set_z_index(501)
         title.move_to(ORIGIN)
@@ -359,6 +588,99 @@ class IntroManager:
 
         # HARD safety remove
         scene.remove(title, cover)
+
+
+# ============================================================
+# ✅ RESULT BANNER (shared end card)
+# ============================================================
+def build_result_banner(label, headline, detail="", *, width=None, accent=None, z=200):
+    """The end-of-video result card every template uses.
+
+    Same treatment as bar_chart's TOP LEADER banner (label / big headline / detail
+    on a dark plate), so all seven templates finish on one recognisable card
+    instead of seven different end screens. Text shrinks to fit ``width``.
+    Returns a VGroup(plate, text); the plate is also exposed as ``.plate``.
+    """
+    sf = get_safe_frame(0.60)
+    accent = accent or Brand.PINK
+    parts = [
+        Text(str(label).upper(), font="Montserrat", weight=BOLD, font_size=22, color=Brand.TEXT_SUB),
+        Text(str(headline), font="Montserrat", weight=BOLD, font_size=46, color=Brand.TEXT_MAIN),
+    ]
+    if detail:
+        parts.append(Text(str(detail), font="Montserrat", weight=BOLD, font_size=24, color=Brand.CYAN))
+    txt = VGroup(*parts).arrange(DOWN, buff=0.12)
+
+    w = float(width) if width is not None else float(sf["w"])
+    if txt.width > w - 0.60:
+        txt.scale_to_fit_width(w - 0.60)
+
+    plate = RoundedRectangle(width=w, height=txt.height + 0.55, corner_radius=0.18)
+    plate.set_fill(color="#000000", opacity=0.85)
+    plate.set_stroke(color=accent, width=3, opacity=0.80)
+    txt.move_to(plate)
+    plate.set_z_index(z)
+    txt.set_z_index(z + 1)
+
+    banner = VGroup(plate, txt)
+    banner.plate = plate
+    return banner
+
+
+# ============================================================
+# ✅ NUMBER + TEXT HELPERS (shared by templates)
+# ============================================================
+def fmt_value(v, unit="", currency="", numfmt="intl", decimals=None):
+    """One number format for every template.
+
+    intl:   1.2K / 3.4M / 5.6B / 7.8T      indian: 1.2 L / 3.4 Cr (below 1 lakh: 12,345)
+    currency goes in front (₹, $); unit after ("%" tight, others spaced).
+    Small numbers keep one decimal only when they have one (2.4 -> "2.4", 817 -> "817").
+    """
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    unit = str(unit or "").strip()
+    _mag = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12, "L": 1e5, "Cr": 1e7}
+    if unit in _mag:  # value is already in that magnitude: fold it in, re-compact
+        x *= _mag[unit]
+        unit = ""
+    sign = "-" if x < 0 else ""
+    a = abs(x)
+    numfmt = (numfmt or "intl").lower()
+
+    def _num(n, d):
+        d = decimals if decimals is not None else d
+        s = f"{n:,.{d}f}"
+        if "." in s:
+            s = s.rstrip("0").rstrip(".")
+        return s
+
+    if numfmt == "indian" and a >= 1e5:
+        body = _num(a / 1e7, 2) + " Cr" if a >= 1e7 else _num(a / 1e5, 2) + " L"
+    elif numfmt != "indian" and a >= 1e3:
+        body = _num(a, 0)
+        for div, suf in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")):
+            if a >= div:
+                body = _num(a / div, 1) + suf
+                break
+    else:
+        body = _num(a, 0 if a == int(a) else (2 if a < 1 else 1))
+
+    tight = {"%", "x", "\u00d7"}
+    tail = unit if unit in tight else (f" {unit}" if unit else "")
+    return f"{sign}{str(currency or '').strip()}{body}{tail}"
+
+
+def fit_text(mob, max_width):
+    """Shrink a text mobject to fit max_width (never enlarges)."""
+    try:
+        if max_width and mob.width > float(max_width):
+            mob.scale_to_fit_width(float(max_width))
+    except Exception:
+        pass
+    return mob
 
 
 # ============================================================

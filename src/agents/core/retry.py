@@ -25,8 +25,15 @@ import aiohttp
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src.agents.core.config import APP_CONFIG
+from src.agents.core.llm_errors import LLMRateLimitError
 
 # Default exception set for transient network/server errors.
+#
+# NOTE: ``aiohttp.ClientResponseError`` subclasses ``ClientError``, so anything
+# that reaches ``raise_for_status()`` — including 400 and 401 — matches here.
+# core/llm_client.py therefore does NOT call raise_for_status() on 4xx; it maps
+# those to the non-retryable ``LLMBadRequestError`` first. Non-LLM callers
+# (Tavily) still use the blanket behaviour.
 _TRANSIENT_EXC = (aiohttp.ClientError, asyncio.TimeoutError)
 
 
@@ -61,13 +68,13 @@ def rate_limit_retry_policy(
 ) -> AsyncRetrying:
     """Conservative long-backoff retry for HTTP 429 responses.
 
-    Pass the caller's own rate-limit exception via ``exceptions``. If omitted,
-    defaults to Gemini's ``GeminiRateLimitError`` (imported lazily to avoid a
-    circular import).
+    Defaults to the provider-neutral ``LLMRateLimitError``. This used to lazily
+    import a Gemini-specific exception from deep inside ``phase1_discovery`` at
+    call time purely to dodge a circular import; ``llm_errors`` is a leaf module,
+    so a normal top-level import works now.
     """
     if exceptions is None:
-        from src.agents.phase1_discovery.candidate_score import GeminiRateLimitError
-        exceptions = (GeminiRateLimitError,)
+        exceptions = (LLMRateLimitError,)
 
     rc = APP_CONFIG.retry
     return AsyncRetrying(

@@ -20,11 +20,19 @@ import tempfile
 from pathlib import Path
 
 
-# Strip leading/trailing (and internal dead-air) silence at -50 dB.
+# Strip leading silence and ONLY egregious (>=0.5 s) dead-air at -50 dB.
 # This is the exact filter used by the voice concat in main.py.
+#
+# Phase 3 (`trimming.py`) is now the primary pacer: it trims leads/tails and
+# collapses long internal pauses to ~0.26 s. This concat-time filter is a light
+# safety net only — `stop_duration=0.5` means it will NOT touch Phase 3's kept
+# word-releases or natural sub-0.5 s pauses, so the concatenated voice length
+# stays ~equal to job["timeline"] (no voice↔visual desync) and endings are not
+# re-clipped. `start_duration=0.05` (> Phase 3's 0.04 s lead pad) means leading
+# silence is effectively already gone, so this is near-idempotent on fresh audio.
 SILENCE_TRIM_FILTER = (
-    "silenceremove=start_periods=1:start_duration=0.02:start_threshold=-50dB:"
-    "stop_periods=-1:stop_duration=0.02:stop_threshold=-50dB"
+    "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-50dB:"
+    "stop_periods=-1:stop_duration=0.5:stop_threshold=-50dB"
 )
 
 

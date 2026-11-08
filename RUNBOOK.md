@@ -24,7 +24,8 @@ ffprobe -version
 > The Video Generation renderer (`main.py`) does not need any API keys.
 > ```
 > TAVILY_API_KEY=...
-> GEMINI_API_KEY=...
+> OPENAI_API_KEY=...
+> # GEMINI_API_KEY=...   # optional, only for --llm-provider gemini A/B runs
 > ELEVENLABS_API_KEY=...   # optional (Phase 3 TTS)
 > ```
 > `.env` = secrets only. Model selection, temperature, RPM, timeout, retry, and
@@ -65,7 +66,9 @@ python main.py --job jobs/job_0001 --template bar_chart -q h --ffmpeg "C:/ffmpeg
 | `--template` | from `job.json` | Override template ID. See **Template Registry** below. |
 | `-q / --quality` | `h` | Manim quality: `l` (low/fast), `m` (medium), `h` (1080p), `p` (4K) |
 | `--open` | `False` | Auto-open final video after render |
-| `--no_sfx` | `False` | Skip SFX mixing even if `output/sfx_marks.json` exists |
+| `--sfx` | `False` | Mix SFX from `output/sfx_marks.json` (off by default, D-4) |
+| `--captions` | `False` | Build + burn captions (off by default, D-4) |
+| `--no_sfx` | `False` | Legacy no-op; SFX is already off |
 | `--no-trim-silence` | `False` | Disable per-segment silence removal before concat |
 | `--ffmpeg` | `ffmpeg` | Path to FFmpeg binary (falls back to PATH) |
 
@@ -159,7 +162,7 @@ python tools/audio_durations.py --job jobs/job_0001 --write-timeline
 # Create a new empty job directory bucket
 python -m src.cli.autoshorts new --template bar_chart
 
-# Phase 1: Topic Discovery (Gemini ideation + Tavily search + AI scoring)
+# Phase 1: Topic Discovery (LLM ideation + Tavily search + AI scoring)
 python -m src.cli.autoshorts phase1-discover --template bar_chart
 
 # Phase 1: Data Extraction for a specific approved topic
@@ -277,7 +280,8 @@ python src/agents/phase3_audio/offline_e2e.py
 | Caption misalignment | Check segment names across `script.json`, `audio.order`, `timeline` | Match all 4 name lists |
 | FFmpeg error on render | Read the full stderr in the error message (`_run_ffmpeg` wrapper surfaces it) | Fix the specific FFmpeg filter issue |
 | Phase rerun does nothing | Check `cat jobs/<id>/.pipeline_state.json` | Delete the completed step key to force re-run |
-| ValidationError on import | `.env` file missing `TAVILY_API_KEY` or `GEMINI_API_KEY` | Add keys to `.env` |
+| ValidationError on import | `.env` file missing `TAVILY_API_KEY` | Add it to `.env` (see `.env.example`) |
+| `OPENAI_API_KEY is not set` at call time | LLM key absent | Add `OPENAI_API_KEY` to `.env` |
 | `job.json not found` | Verify path: `ls jobs/<id>/job.json` | Run `handoff` step or create manually |
 
 ---

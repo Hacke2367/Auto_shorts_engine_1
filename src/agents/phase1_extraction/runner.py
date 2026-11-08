@@ -19,6 +19,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import math
 import os
 import tempfile
 from pathlib import Path
@@ -39,8 +40,11 @@ from src.agents.core.models import (
     TemplateDataset,
     TemplateSpec,
     TEMPLATE_CAPACITIES,
+    TEMPLATE_CSV_HEADERS,
+    TEMPLATE_PRESENTATION_FIELDS,
     TEMPLATE_ROW_MAP,
     VALID_TEMPLATES,
+    validate_template_semantics,
 )
 from src.agents.phase1_extraction.graph import ExtractionState, build_extraction_graph
 
@@ -99,16 +103,33 @@ def _build_template_spec(template_name: str) -> TemplateSpec:
     )
 
 
+def _axis_ceiling(peak: float) -> str:
+    """Pick a clean axis maximum just above `peak` (~8% headroom, rounded up).
+
+    Returned as a string because it goes straight into the CSV meta header.
+    Keeps integers integral (11, 14, 850) so the on-screen axis stays readable.
+    """
+    if peak <= 0:
+        return "100"
+    target = peak * 1.08
+    # Round up on a 2-significant-figure grid (step = one tenth of the leading
+    # magnitude). Coarser steps overshoot badly on small peaks — a peak of 10
+    # on a half-decade grid lands at 15, leaving the top bar at only 67%.
+    exp = math.floor(math.log10(target))
+    step = 10.0 ** (exp - 1)
+    ceil = math.ceil(target / step) * step
+    return str(int(ceil)) if float(ceil).is_integer() else f"{ceil:.2f}"
+
+
 def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> None:
     """Export the TemplateDataset to CSV for the Manim engine (atomic write)."""
     if not dataset.rows:
         return
 
     static_tags = {
-        "bar_chart": {"MAX": "100", "SORT": "DESC", "TOP_N": "10"},
-        "scan_race": {"FEED": "FEED_RACE // LIVE", "FOOTER": "CONFIDENTIAL // VERIFIED", "TOPK": "5", "MAX_SERIES": "10"},
+        "scan_race": {"FEED": "FEED_RACE // LIVE", "FOOTER": "CONFIDENTIAL // VERIFIED"},
         "donut_breakdown": {"TOP": "8", "PANEL_TOP": "6", "OTHERS_MIN_PCT": "2", "MODE": "DONUT"},
-        "sort_card": {"FEED": "FEED_SORT // TRIBUNAL"},
+        "sort_card": {"FEED": "FEED_SORT // MARKET"},
         "vs_card": {"P1_IMG": "player1.png", "P2_IMG": "player2.png"},
     }
 
@@ -116,7 +137,50 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
     if dataset.template_name in static_tags:
         combined_meta.update(static_tags[dataset.template_name])
 
-    headers = list(dataset.rows[0].model_dump().keys())
+    # Data-derived meta tags. These were previously STATIC, which silently broke
+    # charts: bar_chart's renderer computes bar width as value/MAX and clamps to
+    # the track (bar_chart.py), so a hardcoded MAX=100 made every bar a sliver
+    # when values were small (goals: max 10 -> 10% width) and made every bar
+    # clip to FULL width when values exceeded 100 (net worth: 142..817 -> all 10
+    # bars identical). MAX must track the real data, so derive it here.
+    if dataset.template_name == "bar_chart":
+        values = [float(r.model_dump().get("value", 0.0) or 0.0) for r in dataset.rows]
+        peak = max(values) if values else 0.0
+        combined_meta.update({
+            # ~8% headroom so the top bar reads as near-full without touching the
+            # clamp, then round up to something human for the axis label.
+            "MAX": str(_axis_ceiling(peak)),
+            "SORT": "DESC",
+            "TOP_N": str(len(dataset.rows)),
+        })
+    elif dataset.template_name == "scan_race":
+        series_count = len(dataset.rows[0].model_dump().get("entities", {}) or {})
+        combined_meta.update({
+            "TOPK": str(max(1, series_count)),
+            "MAX_SERIES": str(max(1, series_count)),
+        })
+
+    # Map pydantic field names -> canonical CSV headers the renderer parses by
+    # exact name (e.g. sort_card image/category/reason -> Image/Category/Reason).
+    # Templates absent from the map keep their lowercase field names unchanged
+    # (their renderers are case-tolerant), so this is a no-op for them.
+    field_names = list(dataset.rows[0].model_dump().keys())
+    header_map = TEMPLATE_CSV_HEADERS.get(dataset.template_name, {})
+    headers = [header_map.get(fn, fn) for fn in field_names]
+
+    # scan_race carries a nested {entity: value} dict per row. csv.DictWriter
+    # would str() that dict into a single cell, and the renderer's loader
+    # (_load_race_df) runs pd.to_numeric over every column after the first —
+    # turning the stringified dict into NaN -> 0.0 and rendering a FLAT chart.
+    # The renderer wants a WIDE table: year + one numeric column per entity.
+    scan_race_series: list[str] = []
+    if dataset.template_name == "scan_race":
+        seen: dict[str, None] = {}
+        for r in dataset.rows:
+            for ent in (r.model_dump().get("entities", {}) or {}):
+                seen.setdefault(ent, None)
+        scan_race_series = list(seen)
+        headers = ["year"] + scan_race_series
 
     # Write to temp file then atomically replace
     fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
@@ -133,7 +197,16 @@ def _write_csv(dataset: TemplateDataset, path: Path, log: logging.Logger) -> Non
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             for row in dataset.rows:
-                writer.writerow(row.model_dump())
+                dump = row.model_dump()
+                if scan_race_series:
+                    ents = dump.get("entities", {}) or {}
+                    # Absent entity in a given year -> 0.0, matching the loader's
+                    # own fillna(0.0) so the series stays numeric and continuous.
+                    out = {"year": dump.get("year")}
+                    out.update({e: ents.get(e, 0.0) for e in scan_race_series})
+                    writer.writerow(out)
+                else:
+                    writer.writerow({header_map.get(k, k): v for k, v in dump.items()})
         os.replace(tmp_path, str(path))
     except BaseException:
         try:
@@ -165,12 +238,31 @@ def _validate_dataset_quality(
     if cap and len(dataset.rows) > cap.max:
         return False, f"Exceeds max capacity: {len(dataset.rows)} > {cap.max}."
 
-    # Check null / empty rate (numeric zero is explicitly VALID data)
+    # Per-template MINIMUM (HARD gate — rejects, does not just warn). Below `min`
+    # the template renders broken/sparse (e.g. a 2-row butterfly) and is unusable
+    # downstream, so accepting it would waste phase 2/3/4 credits on garbage. We
+    # REJECT instead: in auto/discovery mode this triggers the fallback template;
+    # in manual mode the operator is told to pick a richer topic/template.
+    # (Fabrication is blocked separately by the extraction prompt, so rejecting
+    # never pressures the model to invent rows.)
+    if cap and len(dataset.rows) < cap.min:
+        return False, (
+            f"Too few rows for {template_name}: {len(dataset.rows)} < min {cap.min} "
+            f"(ideal {cap.ideal}). Renders unusable — needs a richer topic/source/template."
+        )
+
+    # Check null / empty rate (numeric zero is explicitly VALID data).
+    # Presentation-only fields (e.g. sort_card 'image' slug) are decorative
+    # polish, not data content — a blank image is not a missing fact, so they
+    # are excluded from the gate to avoid false quality_failure rejections.
+    presentation_fields = TEMPLATE_PRESENTATION_FIELDS.get(template_name, set())
     total_fields = 0
     null_fields = 0
     for row in dataset.rows:
         dump = row.model_dump()
         for key, val in dump.items():
+            if key in presentation_fields:
+                continue
             total_fields += 1
             # Explicitly exclude numeric zero and floating point zero from being flagged as null
             if val is None or val == "":
@@ -179,6 +271,16 @@ def _validate_dataset_quality(
     null_rate = null_fields / total_fields if total_fields > 0 else 1.0
     if null_rate > MAX_NULL_RATE:
         return False, f"Null rate too high: {null_rate:.1%} > {MAX_NULL_RATE:.0%}."
+
+    # Renderer-contract check: values must match the SHAPE the renderer needs
+    # (e.g. sort_card 'category' = integer tier 1/2, vs_card 'winner' = 0/1/2),
+    # not merely be non-empty. This is the gate that stops wrong-shaped data from
+    # ever reaching the renderer; a failure here triggers re-extraction.
+    sem_ok, sem_reason = validate_template_semantics(
+        template_name, dataset.rows, dataset.meta
+    )
+    if not sem_ok:
+        return False, sem_reason
 
     log.info(
         "Dataset quality OK: %d rows, null_rate=%.1f%%.",
@@ -191,6 +293,7 @@ async def run_extraction(
     job_manager: JobManager,
     topic: str,
     output_dir: Path | None = None,
+    seed_urls: list[str] | None = None,
 ) -> TemplateDataset:
     """Execute the Phase 1B extraction workflow.
 
@@ -200,6 +303,9 @@ async def run_extraction(
         job_manager: Bound instance managing this specific job.
         topic: Approved topic to extract data for.
         output_dir: Optional override for output directory. Defaults to job_manager.data_dir.
+        seed_urls: Optional discovery evidence URLs (``candidate_sources``). When
+            supplied, the first extraction attempt scrapes these instead of running
+            a fresh search. Omitting them keeps the legacy search-every-attempt path.
 
     Returns:
         The validated extracted dataset.
@@ -241,9 +347,23 @@ async def run_extraction(
 
         json_path = target_dir / f"{actual_template}_dataset.json"
 
+        # This cache is keyed on the FILE EXISTING, not on which model produced it.
+        # After a provider/model change the old dataset is reused silently — use a
+        # fresh job dir (or delete the file) to force a genuine re-extraction.
         if json_path.exists():
             try:
                 raw = json.loads(json_path.read_text(encoding="utf-8"))
+                cached_route = (raw.get("_llm_route") if isinstance(raw, dict) else None)
+                current_route = (
+                    f"{APP_CONFIG.llm.extraction.provider}:"
+                    f"{APP_CONFIG.llm.extraction.model}"
+                )
+                if cached_route and cached_route != current_route:
+                    log.warning(
+                        "Cached dataset came from a DIFFERENT LLM route (%s), current is "
+                        "%s. Reusing it — delete %s to re-extract.",
+                        cached_route, current_route, json_path.name,
+                    )
                 return TemplateDataset.model_validate(raw)
             except Exception:
                 log.warning("Failed to parse cached dataset. Falling back to rerun extraction.")
@@ -297,6 +417,7 @@ async def run_extraction(
                     "session": session,
                     "log": log,
                     "attempt_number": idx,
+                    "seed_urls": list(seed_urls or []),
                 }
 
                 # -- 3. Execute LangGraph for this Attempt --
@@ -379,7 +500,12 @@ async def run_extraction(
                     "template_name": t_name,
                     "csv_relpath": f"{rel_dir}/{t_name}_data.csv",
                     "dataset_relpath": f"{rel_dir}/{t_name}_dataset.json",
-                    "audit_relpath": f"{rel_dir}/sources_audit.json"
+                    "audit_relpath": f"{rel_dir}/sources_audit.json",
+                    # Operator-facing sourcing notes for visual assets. Maps the
+                    # slug filename placed in the CSV 'Image' column to a
+                    # human-readable description so the operator can drop the
+                    # real asset into assets/images/. Renderer never reads this.
+                    "image_sourcing_guide": dict(dataset.image_sourcing_guide),
                 }
                 _write_data_manifest(job_manager, manifest)
 

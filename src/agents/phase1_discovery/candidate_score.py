@@ -27,82 +27,149 @@ from tenacity import (
     wait_exponential,
 )
 
-from src.agents.core.config import settings, APP_CONFIG
+from src.agents.core.config import APP_CONFIG
+from src.agents.core.llm_client import call_llm
+from src.agents.core.llm_errors import (
+    LLMIncompleteError,
+    LLMMalformedResponseError,
+    LLMRefusalError,
+)
+from src.agents.core.llm_schemas import SCORING_SCHEMA
 from src.agents.core.retry import standard_retry_policy, rate_limit_retry_policy
-from src.agents.core.logger import log_api_call
-from src.agents.core.models import TopicCandidate, VALID_TEMPLATES, TEMPLATE_FALLBACKS
+from src.agents.core.models import (
+    TopicCandidate,
+    VALID_TEMPLATES,
+    TEMPLATE_FALLBACKS,
+    TEMPLATE_CAPACITIES,
+    TEMPLATE_DESCRIPTIONS,
+)
 from src.agents.core.rate_limiter import TokenBucketRateLimiter
 
 logger = logging.getLogger(__name__)
 
 
-class GeminiRateLimitError(Exception):
-    """Raised when Gemini returns HTTP 429 Too Many Requests."""
-
-
 def _get_retry_policy() -> AsyncRetrying:
-    """Standard transient-error retry (config-driven, see APP_CONFIG.retry)."""
-    return standard_retry_policy()
+    """Patient transient-error retry for scoring (config-driven, see APP_CONFIG.retry).
+
+    Scoring runs ~10 calls concurrently; on flaky-503 days the default 3-attempt
+    profile drops candidates. These use the more patient ``scoring_*`` profile.
+    """
+    rc = APP_CONFIG.retry
+    return standard_retry_policy(
+        min_wait=rc.scoring_min_wait,
+        max_wait=rc.scoring_max_wait,
+        max_attempts=rc.scoring_max_attempts,
+    )
 
 
 def _get_429_retry_policy() -> AsyncRetrying:
     """Strict 429-aware retry (config-driven, see APP_CONFIG.retry)."""
-    return rate_limit_retry_policy(exceptions=(GeminiRateLimitError,))
+    return rate_limit_retry_policy()
 
 
 # ---------------------------------------------------------------------------
 # Gemini Structured Scoring
 # ---------------------------------------------------------------------------
 
-_SCORING_PROMPT_TEMPLATE = """You are the Lead Quality Assurer for AutoShorts.
+_SCORING_PROMPT_TEMPLATE = """You are the Lead Quality Assurer & Visual Director for AutoShorts.
 
-You are evaluating a proposed topic hypothesis and its validated search evidence.
-Your job is to strictly grade if this is a premium, highly engaging short-form video concept.
+Grade ONE topic hypothesis against its search evidence, then route it to the single visual
+template whose shape fits the data's NATURE.
 
 ## Available Visual Templates
 {template_list}
 
-## Evaluation Output Format
-Return a single JSON object with these exact fields:
+## Routing — Summary-First (MANDATORY: describe the data BEFORE naming a template)
+STEP 1 — From the evidence ONLY, state the data's nature (the data_summary).
+STEP 2 — Map that shape to a template:
+   ranked numeric list (5-8)          -> bar_chart
+   items split into 2 named groups (A vs B) -> sort_card
+   exactly 2 entities, many metrics     -> vs_card
+   two GROUPS mirrored on shared rows    -> butterfly_chart
+   parts of one whole (percentages)      -> donut_breakdown
+   change / race over time or stages      -> scan_race
+   values tied to countries               -> geo_universal
+STEP 3 — Check fit:
+   - Only 2-3 items? NOT bar_chart — use vs_card (if 2) or drop visual_fit hard.
+   - sort_card ONLY if the items genuinely split into TWO named groups on a binary axis.
+     A plain ranked list with NO 2-group split is NOT sort_card — route numeric -> bar_chart,
+     percentages -> donut_breakdown; if it fits none, drop visual_fit hard.
+STEP 4 — Faithfulness check (THE MOST IMPORTANT ROUTING RULE):
+   Use ONLY the structure the evidence LITERALLY presents. Do NOT invent groupings, splits,
+   or pairings that the sources do not already show. A ranked list of individual items
+   (cities, sectors, countries, factors) IS a ranked list -> bar_chart; do NOT bend it into
+   a 2-group template (vs_card / butterfly_chart / sort_card) just because you COULD construct
+   a grouping. The 2-group templates are valid ONLY when the evidence itself already names the
+   two groups. When two templates compete, pick the SIMPLEST shape the evidence directly
+   supports. Reframing a plain list into groups = forced fit -> visual_fit MUST be 1-3.
+
+## Routing examples (mimic this brevity; note the variety — do NOT default to bar_chart)
+- evidence: revenues of 8 banks            -> "Ranked revenues of 8 banks" -> bar_chart
+- evidence: top 10 cities by rental yield  -> "Ranked list of 10 cities" -> bar_chart (NOT butterfly — do not invent 2 regions)
+- evidence: Visa vs Mastercard, 6 metrics  -> "1v1 of 2 networks across 6 metrics" -> vs_card
+- evidence: one budget split into 5 buckets -> "One budget split into 5 parts" -> donut_breakdown
+- evidence: adoption rate per country       -> "Values tied to ~10 countries" -> geo_universal
+- evidence: market cap year by year         -> "One metric progressing across years" -> scan_race
+
+## Output — ONE JSON object, fields in THIS ORDER, OBEY the word limits
 {{
-  "rationale": "<deep 1-2 sentence breakdown of why this topic is highly interesting or novel>",
-  "validation_confidence": "<high|medium|low - based on if the evidence proves data is actually buildable>",
+  "data_summary": "<nature of the data, from evidence only — MAX 15 words>",
+  "template_reasoning": "<shape -> template, MAX 10 words, e.g. 'ranked list of 7 -> bar_chart'>",
+  "best_fit_template": "<one template name above>",
+  "rationale": "<why the topic is interesting / novel — MAX 20 words>",
+  "validation_confidence": "<high|medium|low>",
   "hook_potential_score": <int 1-10>,
   "novelty_score": <int 1-10>,
   "visual_fit_score": <int 1-10>,
   "data_feasibility_score": <int 1-10>,
   "freshness_score": <int 1-10>,
-  "best_fit_template": "<one of the template names above>",
-  "fit_reason": "<why this template visually suits the data>",
-  "source_hint": "<where reliable data likely comes from based on evidence>"
+  "source_hint": "<likely data source — MAX 8 words>"
 }}
 
-## Scoring Guide
-- hook_potential_score: Does the title naturally stop the scroll? 9-10=Instant curiosity, 1-2=Boring.
-- novelty_score: Is this a unique angle or overdone? 9-10=Fresh/surprising, 1-2=Cliché.
-- visual_fit_score: How beautifully does this map into the chosen template? 9-10=Perfect translation, 1-2=Forced.
-- data_feasibility_score: Based on the snippets, does structurable data actually exist? 9-10=Proven in evidence, 1-2=No evidence.
-- freshness_score: Is this incredibly timely/relevant right now? 9-10=Trending today, 1-2=Outdated content.
+## Score anchors (1-10)
+- hook_potential: stops the scroll? 9-10 instant curiosity, 1-2 boring.
+- novelty: fresh/surprising vs cliché.
+- visual_fit: how well the data maps to the routed template; forced fit (3-item bar, a
+  non-comparison shoved into vs_card) = 1-3.
+- data_feasibility: does ONE published source already hold this as a table/ranking/list?
+  9-10 pre-compiled table proven present; 5-6 figures scattered in prose; 1-3 none, OR derived.
+- freshness: timely now? 9-10 trending, 1-2 outdated.
+
+## Derived-metric rule (apply before data_feasibility)
+A metric is "derived" if no single source publishes it directly — it needs joining 2+ datasets
+or computing a ratio/per-unit/average/composite (words: per, ratio, vs, adjusted, ROI). Raw
+ingredients existing separately is IRRELEVANT. Any derived metric not shown pre-computed in one
+source -> data_feasibility MUST be <= 3.
 
 ## Rules
-- Do NOT inflate scores for boring corporate data unless it has a viral angle.
-- If data_feasibility_score is < 5, validation_confidence MUST be low.
-- Return pure JSON only. No markdown formatting wraps.
+- A hook NEVER rescues weak feasibility; score the two axes independently.
+- data_feasibility < 5 -> validation_confidence MUST be low.
+- Pure JSON only. No markdown.
 
 ## Hypothesis & Evidence
 Topic: {title}
-Evidence: 
+Evidence:
 {snippet}
 """
 
 
 def _build_template_list() -> str:
-    """Build a human-readable template list for the LLM prompt."""
+    """Build a data-shape-aware template menu for the LLM prompt.
+
+    Each line carries the template's NATURE (what data shape it renders) and its
+    ideal/max item count — so the model routes by the data's shape (Summary-First)
+    rather than defaulting to a familiar name.
+
+    NOTE: fallbacks are intentionally NOT shown to the LLM. They are computed
+    deterministically in Python (`TEMPLATE_FALLBACKS`) from the chosen best_fit,
+    so spending prompt tokens on them is dead weight.
+    """
     lines = []
     for t in sorted(VALID_TEMPLATES):
-        fallbacks = TEMPLATE_FALLBACKS.get(t, [])
-        fb_str = ", ".join(fallbacks) if fallbacks else "none"
-        lines.append(f"- {t} (fallbacks: {fb_str})")
+        desc = TEMPLATE_DESCRIPTIONS.get(t, "")
+        cap = TEMPLATE_CAPACITIES.get(t)
+        cap_str = f" (ideal {cap.ideal}, max {cap.max})" if cap else ""
+        lines.append(f"- {t} — {desc}{cap_str}.")
     return "\n".join(lines)
 
 
@@ -199,6 +266,15 @@ def _parse_scoring_response(
     norm = topic_title.lower().strip()
     norm = re.sub(r"\s+", " ", norm)
 
+    # Summary-First routing bridge. New prompt emits `data_summary` +
+    # `template_reasoning`; tolerate the legacy `fit_reason` key too so an
+    # in-flight response from the old prompt never crashes the batch.
+    data_summary = data.get("data_summary")
+    data_summary = str(data_summary).strip() if data_summary is not None else None
+    template_reasoning = str(
+        data.get("template_reasoning") or data.get("fit_reason") or ""
+    ).strip()
+
     candidate = TopicCandidate(
         topic=topic_title,
         normalized_topic=norm,
@@ -217,10 +293,11 @@ def _parse_scoring_response(
         visual_potential_score=vfit,
         source_quality_score=novelty,
         fallback_strength_score=freshness,
-        
+
         best_fit_template=best_fit,
         fallback_template=fallback,
-        fit_reason=str(data.get("fit_reason", "")),
+        fit_reason=template_reasoning,
+        data_summary=data_summary,
         source_hint=data.get("source_hint"),
         candidate_sources=[],
     )
@@ -251,14 +328,7 @@ async def score_single_candidate(
     Returns:
         A TopicCandidate with all scores computed, or None if scoring failed.
     """
-    key = settings.gemini_api_key.get_secret_value()
     cfg = APP_CONFIG.llm.discovery_scoring
-    model_name = cfg.model
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model_name}:generateContent"
-    )
-    _gemini_headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
 
     template_list = _build_template_list()
     prompt = _SCORING_PROMPT_TEMPLATE.format(
@@ -267,65 +337,39 @@ async def score_single_candidate(
         snippet=snippet[:2000],
     )
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "temperature": cfg.temperature,
-            "maxOutputTokens": cfg.max_output_tokens,
-        },
-    }
+    async def _penalize() -> None:
+        """A 429 here means the whole batch is over quota, not just this call."""
+        log.warning("429 rate-limited scoring '%s'. Backing off 60s globally.", title)
+        await limiter.apply_penalty(60.0)
 
-    async for rate_attempt in _get_429_retry_policy():
-        with rate_attempt:
-            async for attempt in _get_retry_policy():
-                with attempt:
-                    t0 = time.perf_counter()
-                    async with session.post(url, json=payload, headers=_gemini_headers) as resp:
-                        elapsed = (time.perf_counter() - t0) * 1000
-                        log_api_call(
-                            log,
-                            service="gemini.score",
-                            status_code=resp.status,
-                            retry_count=attempt.retry_state.attempt_number - 1,
-                            duration_ms=elapsed,
-                        )
+    try:
+        raw_text = await call_llm(
+            None,  # no system prompt — the rubric is the user prompt
+            prompt,
+            session,
+            log,
+            cfg,
+            "scoring",
+            expect_json=True,
+            json_schema=SCORING_SCHEMA if cfg.provider == "openai" else None,
+            retry_policy=_get_retry_policy,
+            rate_limit_policy=_get_429_retry_policy,
+            service_tag="llm.score",
+            on_rate_limit=_penalize,
+            cache_key="as-scoring-v1",
+        )
+    except (LLMRefusalError, LLMIncompleteError, LLMMalformedResponseError) as exc:
+        # A single unusable reply must shrink the batch, never abort the run.
+        log.warning("Dropping candidate '%s': %s", title, exc)
+        return None
 
-                        if resp.status == 429:
-                            log.warning(
-                                "Gemini 429 rate-limited for '%s'. Will backoff 60s.",
-                                title,
-                            )
-                            await limiter.apply_penalty(60.0)
-                            raise GeminiRateLimitError(
-                                f"429 rate limit hit for '{title}'"
-                            )
-
-                        resp.raise_for_status()
-                        data = await resp.json()
-
-                        try:
-                            candidate_data = data["candidates"][0]
-                            # Handle Safety or other Finish Reasons first
-                            if candidate_data.get("finishReason") == "SAFETY":
-                                log.warning("Gemini blocked topic '%s' due to SAFETY filters.", title)
-                                return None
-
-                            raw_text = candidate_data["content"]["parts"][0]["text"]
-                        except (KeyError, IndexError):
-                            log.error("Malformed or blocked Gemini response for '%s': %s", title, data)
-                            return None
-
-                        candidate = _parse_scoring_response(raw_text, title, snippet)
-                        if candidate:
-                            log.info(
-                                "Scored '%s': final=%.2f, template=%s",
-                                title, candidate.final_score, candidate.best_fit_template,
-                            )
-                        return candidate
-
-    log.error("Exhausted all retries scoring '%s'.", title)
-    return None
+    candidate = _parse_scoring_response(raw_text, title, snippet)
+    if candidate:
+        log.info(
+            "Scored '%s': final=%.2f, template=%s",
+            title, candidate.final_score, candidate.best_fit_template,
+        )
+    return candidate
 
 
 async def score_candidates_batch(

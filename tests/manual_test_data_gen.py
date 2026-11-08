@@ -2,7 +2,7 @@
 AutoShorts — Manual Data Generation Test
 =========================================
 Isolated test that bypasses Tavily search/scrape and directly invokes
-gemini_extract() with synthetic SourceAudit context for all 7 templates.
+extract_dataset() with synthetic SourceAudit context for all 7 templates.
 
 Usage:
     python tests/manual_test_data_gen.py
@@ -34,7 +34,7 @@ from src.agents.core.models import (
     VALID_TEMPLATES,
 )
 from src.agents.core.rate_limiter import TokenBucketRateLimiter
-from src.agents.phase1_extraction.api_clients import gemini_extract
+from src.agents.phase1_extraction.api_clients import extract_dataset
 from src.agents.phase1_extraction.runner import _build_template_spec
 
 # ---------------------------------------------------------------------------
@@ -297,7 +297,7 @@ async def run_all_tests() -> None:
             await limiter.acquire()
 
             try:
-                dataset: TemplateDataset = await gemini_extract(
+                dataset: TemplateDataset = await extract_dataset(
                     topic=topic,
                     context=context,
                     template_name=template,
@@ -306,7 +306,7 @@ async def run_all_tests() -> None:
                     log=log,
                 )
 
-                # If we got here, Pydantic validation already passed inside gemini_extract
+                # If we got here, Pydantic validation already passed inside extract_dataset
                 row_count = len(dataset.rows)
                 cap = TEMPLATE_CAPACITIES[template]
 

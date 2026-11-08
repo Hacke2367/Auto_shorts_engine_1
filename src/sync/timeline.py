@@ -1,5 +1,6 @@
 # src/sync/timeline.py
 from __future__ import annotations
+import re
 import warnings
 from dataclasses import dataclass, field
 from typing import Dict, Any
@@ -23,6 +24,28 @@ def clamp(v: float, lo: float, hi: float) -> float:
     if v > hi:
         return hi
     return v
+
+
+_NUMBERED_SEG_RE = re.compile(r"^([A-Za-z]+)_?(\d+)$")
+
+
+def numbered_segments(order: list | None, base: str) -> list[str]:
+    """Numbered segments for `base` taken from audio.order, in play order.
+
+    Two spellings reach the renderer: hand-made jobs and test fixtures use
+    "item_1", while final_handoff.tag_to_engine_name emits "item1" (same for
+    slice / node / card). A template that matches only one spelling misses
+    every timeline entry, falls back to default durations, and its visuals
+    drift off the narration. Names are returned exactly as audio.order has them.
+    """
+    out: list[str] = []
+    base = base.lower()
+    for s in order or []:
+        name = str(s).strip()
+        m = _NUMBERED_SEG_RE.match(name)
+        if m and m.group(1).lower() == base:
+            out.append(name)
+    return out
 
 
 @dataclass
@@ -85,3 +108,27 @@ class Timeline:
         rem = self.remaining(name)
         self.consume(name, rem)
         return rem
+
+    # ------------------------------------------------------------------
+    # Absolute-clock anchoring (drift-free sync)
+    # ------------------------------------------------------------------
+    # The per-segment consume()/remaining() pattern drifts when a template plays
+    # animations that escape its accounting (intros, inter-segment transitions):
+    # those add wall-time that no segment budgets, so the visual falls behind the
+    # audio cumulatively. schedule() + target_elapsed() let a scene anchor each
+    # segment's END to an ABSOLUTE time on the master clock, so any overrun is
+    # absorbed at the next boundary instead of accumulating.
+    def schedule(self, order: list[str]) -> None:
+        """Precompute the absolute end-time (seconds since scene start) of every
+        segment, in play order. Call once after from_dict()."""
+        cum: Dict[str, float] = {}
+        acc = 0.0
+        for n in order:
+            acc += self.seg_total(str(n), 0.0)
+            cum[str(n)] = acc
+        self._cum_end = cum
+
+    def target_elapsed(self, name: str) -> float:
+        """Absolute elapsed time (since scene start) at which `name` should END.
+        Requires schedule() to have been called; 0.0 if unknown."""
+        return float(getattr(self, "_cum_end", {}).get(str(name), 0.0))

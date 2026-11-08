@@ -5,8 +5,9 @@
 #   manim -pqh sort_card.py SortCardTribunalFinal
 #
 # CSV format (meta in first line):
-#   # TITLE=TIER 1 vs TIER 2, SUB=AI TRIBUNAL SORT TEST
-#   Image,Category,Reason
+#   # TITLE=GroupA vs GroupB, SUB=..., UNIT=x, SOURCE=...
+#   Image,Category,Reason[,Value]
+#   TITLE's two names label the two bins; optional Value (number) counts up on the card.
 #
 # Images:
 #   assets/images/<Image>
@@ -34,13 +35,17 @@ try:
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
     sys.path.append(project_root)
 
-    from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme  # type: ignore
-    from src.utils import IntroManager, get_branding_border, make_floating_particles  # type: ignore
+    from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY  # type: ignore
+    from src.utils import IntroManager, get_branding_border, make_floating_particles, add_cinematic_background  # type: ignore
+    from src.utils import fmt_value  # type: ignore
 except Exception:
+    def fmt_value(v, unit="", currency="", numfmt="intl", decimals=None):
+        return f"{currency}{float(v):g}{unit}"
     project_root = os.getcwd()
     DATA_DIR = os.path.join(project_root, "data")
     ASSETS_DIR = os.path.join(project_root, "assets")
     BACKGROUND_COLOR = "#050505"
+    FONT_DISPLAY = "Montserrat"
 
     class Theme:
         NEON_BLUE = "#2DD4FF"
@@ -59,13 +64,16 @@ except Exception:
     def make_floating_particles(*args, **kwargs):
         return VGroup()
 
+    def add_cinematic_background(*args, **kwargs):
+        return None
+
     class IntroManager:
         @staticmethod
         def play_intro(
             scene,
             brand_title="BIGDATA LEAK",
             brand_sub="SYSTEM BREACH DETECTED",
-            feed_text="FEED_SORT // TRIBUNAL",
+            feed_text="FEED_SORT // MARKET",
             footer_text="CONFIDENTIAL // VERIFIED",
         ):
             rec = Text("● REC", font="Consolas", font_size=16, color=RED).to_corner(UL).shift(
@@ -74,8 +82,9 @@ except Exception:
             hdr = Text(feed_text, font="Consolas", font_size=14, color=Theme.TEXT_SUB).to_corner(UR).shift(
                 DOWN * 0.2 + LEFT * 0.2
             )
-            t1 = Text(brand_title, font="Montserrat", font_size=42, weight=BOLD, color=Theme.TEXT_MAIN).move_to(UP * 0.6)
-            t2 = Text(brand_sub, font="Montserrat", font_size=18, color=Theme.TEXT_SUB).next_to(t1, DOWN, buff=0.2)
+            t1 = Text(brand_title, font=FONT_DISPLAY, font_size=54, weight=BOLD).move_to(UP * 0.6)
+            t1.set_color_by_gradient(Theme.NEON_BLUE, Theme.TEXT_MAIN)
+            t2 = Text(f"> {brand_sub}", font="Consolas", font_size=22, color=Theme.NEON_PINK).next_to(t1, DOWN, buff=0.2)
             foot = Text(footer_text, font="Consolas", font_size=12, color=Theme.TEXT_SUB).to_edge(DOWN, buff=0.35)
             scene.play(
                 FadeIn(rec),
@@ -96,13 +105,18 @@ except Exception:
             return rec, hdr
 
 # --- SYNC HELPERS ---
-from src.sync.job import load_job
-from src.sync.timeline import Timeline, clamp as _tl_clamp
+from src.sync.job import load_job, resolve_job_csv
+from src.sync.timeline import Timeline, clamp as _tl_clamp, numbered_segments
 from src.sfx.engine import SFXEngine
+from src.fx import count_up
 try:
-    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_sort_card
 except Exception:
+    def sync_hold(scene, tl, name, t0, **kw):
+        rem = float(tl.target_elapsed(name)) - (float(scene.time) - float(t0))
+        if rem > 0:
+            scene.wait(rem)
     def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
         if seconds > 0:
             scene.wait(seconds)
@@ -118,7 +132,9 @@ except Exception:
 # ============================================================
 # HELPERS
 # ============================================================
-_META_RE = re.compile(r"([A-Za-z_]+)\s*=\s*([^,]+)")
+# Keys may contain digits after the first char (e.g. GROUP1_NAME). `[A-Za-z_]+`
+# would stop at the digit; this keeps such keys intact (matches the vs_card fix).
+_META_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^,]+)")
 
 
 def safe_text(
@@ -146,7 +162,7 @@ def clamp(x: float, a: float, b: float) -> float:
 
 
 def load_csv_with_meta(csv_path: str) -> Tuple[Dict[str, str], pd.DataFrame]:
-    meta = {"TITLE": "TIER 1 vs TIER 2", "SUB": "AI TRIBUNAL SORT TEST"}
+    meta = {"TITLE": "GROUP A vs GROUP B", "SUB": ""}
     if not os.path.exists(csv_path):
         df = pd.DataFrame(
             {
@@ -183,9 +199,24 @@ def load_csv_with_meta(csv_path: str) -> Tuple[Dict[str, str], pd.DataFrame]:
             return 2
 
     df["Category"] = df["Category"].apply(_cat)
-    df["Reason"] = df["Reason"].astype(str).fillna("UNKNOWN")
-    df["Image"] = df["Image"].astype(str).fillna("")
+    # astype(str) turns NaN into the literal "nan" BEFORE fillna runs, so the
+    # fillna default never applied -> empty cells showed "nan" (Reason text) or
+    # tried to load assets/images/nan (Image). Strip "nan" explicitly.
+    df["Reason"] = df["Reason"].astype(str).str.strip().replace(
+        {"nan": "UNKNOWN", "NAN": "UNKNOWN", "": "UNKNOWN"}
+    )
+    df["Image"] = df["Image"].astype(str).str.strip().replace({"nan": "", "NAN": ""})
+    # Optional numeric Value; blank / non-numeric -> NaN -> the card shows no number.
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce") if "Value" in df.columns else np.nan
     return meta, df
+
+
+def bin_names(meta: Dict[str, str]) -> Tuple[str, str]:
+    """The two group names from TITLE ("Gold vs Silver"); they label the header and the bins."""
+    parts = [x.strip() for x in re.split(r"\s+vs\s+", str(meta.get("TITLE", "") or ""), flags=re.IGNORECASE)]
+    if len(parts) == 2 and parts[0] and parts[1]:
+        return parts[0], parts[1]
+    return "GROUP A", "GROUP B"
 
 
 # ============================================================
@@ -251,25 +282,20 @@ def build_header(meta_title: str, meta_sub: str) -> Dict[str, Mobject]:
     blue = Theme.NEON_BLUE
     pink = Theme.NEON_PINK
 
-    raw = (meta_title or "TIER 1 vs TIER 2").strip()
-    parts = re.split(r"\s+vs\s+", raw, flags=re.IGNORECASE)
+    left_txt, right_txt = bin_names({"TITLE": meta_title})
 
-    left_txt = "TIER 1"
-    right_txt = "TIER 2"
-    if len(parts) == 2:
-        left_txt = parts[0].strip() or "TIER 1"
-        right_txt = parts[1].strip() or "TIER 2"
-
-    left = safe_text(left_txt.upper(), font_size=46, color=blue, weight=BOLD)
-    vs = safe_text("vs", font_size=30, color=GREY_B, weight=BOLD)
-    right = safe_text(right_txt.upper(), font_size=46, color=pink, weight=BOLD)
+    left = safe_text(left_txt.upper(), font=FONT_DISPLAY, font_size=42, color=blue, weight=BOLD)
+    vs = safe_text("vs", font_size=28, color=GREY_B, weight=BOLD)
+    right = safe_text(right_txt.upper(), font=FONT_DISPLAY, font_size=42, color=pink, weight=BOLD)
     title = VGroup(left, vs, right).arrange(RIGHT, buff=0.22)
 
     try:
         title.set_z_index(500)
     except Exception:
         pass
-    title.to_edge(UP, buff=0.78).shift(DOWN * 0.12)
+    # Clear the REC / timer HUD row: at buff 0.78 the title's top edge sat on it and
+    # the intro slide-in ran straight across "REC" and "00:02".
+    title.to_edge(UP, buff=1.12).shift(DOWN * 0.12)
 
     sub = safe_text(meta_sub, font_size=18, color=Theme.TEXT_SUB, weight=BOLD)
     try:
@@ -330,7 +356,7 @@ def build_evidence_box(center: np.ndarray) -> Dict[str, Mobject]:
     inner.set_stroke(blue, 2.0, 0.28)
     inner.move_to(center + UP * 0.06)
 
-    label = safe_text("evidence intake", font="Consolas", font_size=12, color=Theme.TEXT_SUB)
+    label = safe_text("next up", font="Consolas", font_size=16, color=Theme.TEXT_SUB)
     label.set_opacity(0.9)
     label.next_to(outer, DOWN, buff=0.12)
 
@@ -409,8 +435,8 @@ def build_scanner(center: np.ndarray) -> Dict[str, Mobject]:
         d.set_opacity(float(rng.uniform(0.03, 0.08)))
         sparks.add(d)
 
-    t_top = safe_text("AI TRIBUNAL", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD)
-    t_main = safe_text("SCANNING", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD)
+    t_top = safe_text("SORTING", font="Consolas", font_size=14, color=Theme.TEXT_SUB, weight=BOLD)
+    t_main = safe_text("CHECKING", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD)
 
     d1 = safe_text(".", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD).set_opacity(0.0)
     d2 = safe_text(".", font="Montserrat", font_size=20, color=Theme.TEXT_MAIN, weight=BOLD).set_opacity(0.0)
@@ -419,7 +445,7 @@ def build_scanner(center: np.ndarray) -> Dict[str, Mobject]:
     scan_line = VGroup(t_main, dots).arrange(RIGHT, buff=0.06)
 
     # Single readable log line (fits inside panel)
-    log1 = safe_text(">> awaiting evidence…", font="Consolas", font_size=11, color=Theme.TEXT_SUB, weight=BOLD)
+    log1 = safe_text(">> loading…", font="Consolas",font_size=11, color=Theme.TEXT_SUB, weight=BOLD)
     log1.set_opacity(0.95)
 
     text_group = VGroup(t_top, scan_line, log1).arrange(DOWN, buff=0.07)
@@ -613,7 +639,10 @@ def build_container(center: np.ndarray, accent: str, label: str) -> Dict[str, Mo
     tab.set_stroke(accent, 2.3, 0.82)
     tab.move_to(outer.get_top() + DOWN * 0.26)
 
-    lbl = safe_text(label.upper(), font_size=20, color=WHITE, weight=BOLD).move_to(tab.get_center())
+    lbl = safe_text(label.upper(), font_size=20, color=WHITE, weight=BOLD)
+    if lbl.width > tab.width - 0.24:  # long group names ("ALREADY MAINSTREAM")
+        lbl.scale_to_fit_width(tab.width - 0.24)
+    lbl.move_to(tab.get_center())
 
     grp = VGroup(glow, outer, inner, inner_lines, brackets, tab, lbl)
     try:
@@ -642,10 +671,80 @@ def build_container(center: np.ndarray, accent: str, label: str) -> Dict[str, Mo
 
 
 # ============================================================
+# SMART IMAGE RESOLVER (CSV Image -> assets/images)
+# ============================================================
+def resolve_card_image_path(img_filename: str) -> str:
+    """Smart resolver for assets/images (mirrors the vs_card resolver, minus the
+    positional fallback which makes no sense for an N-card sort):
+      1. exact match
+      2. same basename with a different common extension (python.png -> python.jpg)
+      3. case-insensitive exact match
+      4. fuzzy basename "contains" match
+    Returns "" when nothing matches so the card falls back to its letter glyph
+    (instead of trying to load a missing/wrong-extension file).
+    """
+    if not img_filename:
+        return ""
+    images_dir = os.path.join(ASSETS_DIR, "images")
+    if not os.path.isdir(images_dir):
+        return ""
+
+    def exists(p: str) -> bool:
+        try:
+            return bool(p) and os.path.exists(p)
+        except Exception:
+            return False
+
+    # 1) exact
+    p = os.path.join(images_dir, img_filename)
+    if exists(p):
+        return p
+
+    base, _ext = os.path.splitext(img_filename)
+
+    # 2) same basename + common extensions
+    if base:
+        for e in (".png", ".jpg", ".jpeg", ".webp"):
+            p2 = os.path.join(images_dir, base + e)
+            if exists(p2):
+                return p2
+
+    # 3) case-insensitive exact match
+    low = img_filename.lower()
+    try:
+        for fn in os.listdir(images_dir):
+            if fn.lower() == low:
+                p3 = os.path.join(images_dir, fn)
+                if exists(p3):
+                    return p3
+    except Exception:
+        pass
+
+    # 4) fuzzy contains match (basename)
+    lowb = base.lower().strip() if base else ""
+    if lowb:
+        try:
+            for fn in os.listdir(images_dir):
+                if lowb in fn.lower():
+                    p4 = os.path.join(images_dir, fn)
+                    if exists(p4):
+                        return p4
+        except Exception:
+            pass
+
+    return ""
+
+
+# ============================================================
 # CARD
 # ============================================================
+CARD_W, CARD_H = 1.85, 1.25
+# Image is fitted INSIDE this box, leaving the plate visible as a border.
+CARD_IMG_MAX_W, CARD_IMG_MAX_H = 1.18, 1.05
+
+
 def build_card(img_path: str, accent: str, fallback_label: str) -> Group:
-    plate = RoundedRectangle(width=1.85, height=1.25, corner_radius=0.18)
+    plate = RoundedRectangle(width=CARD_W, height=CARD_H, corner_radius=0.18)
     plate.set_fill("#070A0C", 0.92)
     plate.set_stroke(accent, 2.6, 0.82)
 
@@ -654,18 +753,32 @@ def build_card(img_path: str, accent: str, fallback_label: str) -> Group:
 
     if img_path and os.path.exists(img_path):
         im = ImageMobject(img_path)
-        im.scale_to_fit_width(1.18)
+        # Fit INSIDE the box on BOTH axes, preserving aspect ratio. Scaling on
+        # width alone let any portrait source (a movie poster at 2:3 renders
+        # 1.77 tall against a 1.25 plate) spill out the top and bottom of the
+        # card. Width first, then clamp height if the result is still too tall.
+        im.scale_to_fit_width(CARD_IMG_MAX_W)
+        if im.height > CARD_IMG_MAX_H:
+            im.scale_to_fit_height(CARD_IMG_MAX_H)
     else:
         im = safe_text((fallback_label[:1] or "?").upper(), font_size=64, color=WHITE, weight=BOLD)
 
     im.move_to(plate.get_center())
 
-    grp = Group(shadow, glow, plate, im)
+    # Name the item under its card. A logo alone (a washed-out Python mark, a dim Java
+    # cup) left viewers guessing what was being sorted.
+    name = safe_text((fallback_label or "?").replace("_", " ").upper(), font_size=18, color=WHITE, weight=BOLD)
+    if name.width > CARD_W:
+        name.scale_to_fit_width(CARD_W)
+    name.next_to(plate, DOWN, buff=0.08)
+
+    grp = Group(shadow, glow, plate, im, name)
     try:
         grp.set_z_index(380)
         glow.set_z_index(376)
         plate.set_z_index(377)
         im.set_z_index(378)
+        name.set_z_index(378)
     except Exception:
         pass
     return grp
@@ -708,6 +821,7 @@ def pack_positions(inner_rect: Mobject, n: int, cols: int = 3) -> List[np.ndarra
 class SortCardTribunalFinal(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=getattr(Theme, "NEON_BLUE", "#00F0FF"))
 
         # ✅ Phase 2 Sync Standard: The 0.0s Intro Rule
         global_start_t0 = float(self.time)
@@ -722,7 +836,7 @@ class SortCardTribunalFinal(Scene):
                 self,
                 brand_title="BIGDATA LEAK",
                 brand_sub="SYSTEM BREACH DETECTED",
-                feed_text="FEED_SORT // TRIBUNAL",
+                feed_text="FEED_SORT // MARKET",
                 footer_text="CONFIDENTIAL // VERIFIED",
             )
         except Exception:
@@ -777,9 +891,15 @@ class SortCardTribunalFinal(Scene):
         except Exception:
             pass
 
-        # geo_data
-        csv_path = os.path.join(DATA_DIR, "sort_data.csv")
+        # Read THIS job's data CSV (job.json -> data_csv), not a hardcoded global
+        # file. Falls back to job_dir/data/sort_data.csv, then legacy DATA_DIR.
+        csv_path = resolve_job_csv("sort_data.csv", DATA_DIR)
         meta, df = load_csv_with_meta(csv_path)
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
+        _left_name, _right_name = bin_names(meta)
+        _unit = str(meta.get("UNIT", "") or "").strip()
+        _cur = str(meta.get("CURRENCY", "") or "").strip()
+        _numfmt = str(meta.get("NUMFMT", "intl") or "intl").strip().lower()
 
         # ============================================================
         # JOB DATA & TIMELINE INJECTION (Audio Sync Pattern A)
@@ -805,7 +925,13 @@ class SortCardTribunalFinal(Scene):
         audio_timings = job_data.get("timeline", {})
         
         n_items = max(1, len(df))
-        item_segments = [f"card_{i+1}" for i in range(n_items)]
+        _audio_cfg = job_data.get("audio") if isinstance(job_data, dict) else {}
+        _audio_order = _audio_cfg.get("order", []) if isinstance(_audio_cfg, dict) else []
+        _card_segs_audio = numbered_segments(_audio_order, "card")  # card_1 or card1
+        item_segments = [
+            _card_segs_audio[i] if i < len(_card_segs_audio) else f"card_{i+1}"
+            for i in range(max(n_items, len(_card_segs_audio)))
+        ]
         
         defaults = {
             "hook": 3.2,
@@ -817,14 +943,19 @@ class SortCardTribunalFinal(Scene):
             defaults[seg] = 5.0
             
         TL = Timeline.from_dict(audio_timings, defaults=defaults)
-        
+        # D-5: segment ends anchor to the master clock (sync_hold), so an overrun
+        # is absorbed at the next boundary instead of drifting every later card.
+        TL.schedule(_audio_order or (["hook", "setup"] + item_segments + ["winner", "outro"]))
+
         hook_seg = "hook"
         setup_seg = "setup"
         winner_seg = "winner"
         outro_seg = "outro"
 
         # Blueprint positions (locked)
-        UI_DY = 0.28
+        # 0.28 -> 0.56: the header now starts lower (clear of the REC/timer row), so the
+        # evidence box + reason pill shift down with it instead of crowding the underline.
+        UI_DY = 0.56
         shift_vec = DOWN * UI_DY
 
         evidence_center = (np.array([0.0, H / 2 - 3.45, 0]) + shift_vec)
@@ -834,12 +965,13 @@ class SortCardTribunalFinal(Scene):
         left_counter_pos = np.array([-W / 2 + 1.55, counters_y, 0])
         right_counter_pos = np.array([W / 2 - 1.55, counters_y, 0])
 
-        bins_y = -H / 2 + 2.05
+        # +0.35: the bins' lower edge ran through the "CONFIDENTIAL // VERIFIED" footer.
+        bins_y = -H / 2 + 2.40
         left_bin_pos = np.array([-2.25, bins_y, 0])
         right_bin_pos = np.array([2.25, bins_y, 0])
 
         # Build UI blocks
-        header = build_header(meta.get("TITLE", "TIER 1 vs TIER 2"), meta.get("SUB", "AI TRIBUNAL SORT TEST"))
+        header = build_header(meta.get("TITLE", ""), meta.get("SUB", ""))
         title = header["title"]
         sub = header["sub"]
         underline = header["underline"]
@@ -850,8 +982,8 @@ class SortCardTribunalFinal(Scene):
         scanner = build_scanner(scanner_center)
         left_counter = build_counter(left_counter_pos, Theme.NEON_BLUE)
         right_counter = build_counter(right_counter_pos, Theme.NEON_PINK)
-        left_bin = build_container(left_bin_pos, Theme.NEON_BLUE, "Tier 1")
-        right_bin = build_container(right_bin_pos, Theme.NEON_PINK, "Tier 2")
+        left_bin = build_container(left_bin_pos, Theme.NEON_BLUE, _left_name)
+        right_bin = build_container(right_bin_pos, Theme.NEON_PINK, _right_name)
 
         # Connector lines (subtle baseline)
         line_ev = Line(evidence_center + DOWN * 0.05, scanner_center + UP * 1.55).set_stroke(Theme.NEON_BLUE, 2.2, 0.10)
@@ -940,8 +1072,6 @@ class SortCardTribunalFinal(Scene):
         hook_total = TL.seg_total(hook_seg, 3.2)
         hook_act = clamp(hook_total * 0.85, 1.25, 3.2)
         
-        # ✅ FIX: Hook Delta Anchor
-        hook_t0 = global_start_t0
 
         sfx.mark("ui_pop", gain_db=-10, meta={"segment": hook_seg, "at": "title_in"})
         self.play(
@@ -982,14 +1112,11 @@ class SortCardTribunalFinal(Scene):
         )
         
         # ✅ FIX: Hook Delta Math
-        TL.consume(hook_seg, float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining(hook_seg), focus=title, text="INITIALIZING SORT MATRICES")
+        sync_hold(self, TL, hook_seg, global_start_t0, focus=title)
 
         setup_total = TL.seg_total(setup_seg, 2.8)
         setup_act = clamp(setup_total * 0.60, 0.40, 1.20)
         
-        # ✅ FIX: Setup Delta Anchor
-        setup_t0 = float(self.time)
         
         sfx.mark("scan_tick", gain_db=-14, meta={"segment": setup_seg, "at": "dot_travel"})
 
@@ -998,10 +1125,32 @@ class SortCardTribunalFinal(Scene):
             run_time=setup_act,
             rate_func=rf.ease_in_out_sine,
         )
+
+        # Line up the items to be judged inside the evidence box for the setup
+        # narration. It used to sit empty for the first ~17s of the video.
+        queue_cards = Group()
+        for _, _row in df.iterrows():
+            _img = str(_row.get("Image", "")).strip()
+            queue_cards.add(
+                build_card(resolve_card_image_path(_img), Theme.NEON_BLUE, _img.split(".")[0] if _img else "?")
+            )
+        if len(queue_cards):
+            queue_cards.arrange(RIGHT, buff=0.30)
+            _box = evidence["outer"]
+            _fit = min(
+                1.0,
+                (_box.width - 0.60) / max(queue_cards.width, 1e-6),
+                (_box.height - 0.20) / max(queue_cards.height, 1e-6),
+            )
+            queue_cards.scale(_fit).move_to(_box.get_center())
+            items_layer.add(queue_cards)
+            self.play(
+                LaggedStart(*[FadeIn(c, shift=UP * 0.08) for c in queue_cards], lag_ratio=0.12),
+                run_time=clamp(setup_act, 0.40, 1.00),
+            )
         
         # ✅ FIX: Setup Delta Math
-        TL.consume(setup_seg, float(self.time) - setup_t0)
-        hold_breathing(self, TL.remaining(setup_seg), focus=underline, text="CALIBRATING EVIDENCE INTAKE")
+        sync_hold(self, TL, setup_seg, global_start_t0, focus=underline)
 
         # Save baseline states for route glow restore
         line_lc.save_state()
@@ -1022,7 +1171,11 @@ class SortCardTribunalFinal(Scene):
         c1, c2 = 0, 0
 
         def set_log(mobj: Mobject, text: str, color=Theme.TEXT_SUB):
-            new = safe_text(text, font="Consolas", font_size=11, color=color, weight=BOLD).move_to(mobj.get_center())
+            # 15pt fitted to the scanner pill (3.3 wide); at 11pt the log was unreadable.
+            new = safe_text(text, font="Consolas", font_size=15, color=color, weight=BOLD)
+            if new.width > 2.90:
+                new.scale_to_fit_width(2.90)
+            new.move_to(mobj.get_center())
             mobj.become(new)
 
         def counter_pop(counter: Dict[str, Mobject], value: int, accent: str):
@@ -1083,20 +1236,11 @@ class SortCardTribunalFinal(Scene):
 
         # Short, readable logs only (big logs intentionally avoided)
         scan_log_pool = [
-            "hashing evidence…",
-            "syncing tribunal cores…",
-            "decrypting vibes…",
-            "checking plot armor…",
-            "running sarcasm check…",
-            "validating inputs…",
-            "mapping to tier grid…",
-            "building verdict packet…",
-            "cross-checking signals…",
-            "verifying consistency…",
-            "indexing proof…",
-            "locking decision path…",
-            "sanity-check complete…",
-            "scanning noise floor…",
+            "reading the numbers…",
+            "checking the source…",
+            "comparing both groups…",
+            "matching the metric…",
+            "picking a side…",
         ]
 
         def pick_short_log(max_len: int = 34) -> str:
@@ -1120,6 +1264,8 @@ class SortCardTribunalFinal(Scene):
 
             img_name = str(row.get("Image", "")).strip()
             reason = str(row.get("Reason", "UNKNOWN")).strip()
+            _v = row.get("Value", np.nan)
+            val_s = fmt_value(float(_v), _unit, _cur, _numfmt) if pd.notna(_v) else ""
             try:
                 cat = int(row.get("Category", 2))
             except Exception:
@@ -1129,7 +1275,12 @@ class SortCardTribunalFinal(Scene):
             accent = Theme.NEON_BLUE if is_left else Theme.NEON_PINK
             bin_ref = left_bin if is_left else right_bin
 
-            img_path = os.path.join(ASSETS_DIR, "images", img_name)
+            if idx == 0 and len(queue_cards):
+                # Clear the setup line-up before the first item is judged.
+                self.play(FadeOut(queue_cards), run_time=0.25)
+                items_layer.remove(queue_cards)
+
+            img_path = resolve_card_image_path(img_name)
             fallback_label = img_name.split(".")[0] if img_name else "X"
 
             # Create card
@@ -1151,24 +1302,47 @@ class SortCardTribunalFinal(Scene):
 
             # Reason pill
             pill_w = min(W * 0.72, 5.4)
-            pill_bg = RoundedRectangle(width=pill_w, height=0.74, corner_radius=0.18)
+            # Fit the pill into the real gap between the header underline and the
+            # intake box; a fixed offset ran its top edge over the underline.
+            _gap_top = float(underline.get_bottom()[1]) - 0.08
+            _gap_bot = float(evidence["outer"].get_top()[1]) + 0.08
+            pill_h = max(0.50, min(0.92 if val_s else 0.74, _gap_top - _gap_bot))
+            pill_bg = RoundedRectangle(width=pill_w, height=pill_h, corner_radius=0.18)
             pill_bg.set_fill("#05080B", 0.88)
             pill_bg.set_stroke(accent, 2.3, 0.75)
-            pill_bg.move_to(evidence["outer"].get_top() + UP * 0.62)
+            pill_bg.move_to([0.0, (_gap_top + _gap_bot) / 2, 0])
 
-            pill_t = safe_text("REASON", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD)
+            if val_s:  # the number on top, counted up; the reason under it
+                pill_t = safe_text(val_s, font_size=30, color=WHITE, weight=BOLD)
+            else:
+                pill_t = safe_text("WHY", font="Consolas", font_size=12, color=Theme.TEXT_SUB, weight=BOLD)
             pill_m = safe_text(ellipsize(reason.upper(), 30), font_size=22, color=accent, weight=BOLD)
-            pill_txt = VGroup(pill_t, pill_m).arrange(DOWN, buff=0.06).move_to(pill_bg.get_center())
+            pill_txt = VGroup(pill_t, pill_m).arrange(DOWN, buff=0.06)
+            if pill_txt.height > pill_h - 0.10:
+                pill_txt.scale_to_fit_height(pill_h - 0.10)
+            pill_txt.move_to(pill_bg.get_center())
             pill = VGroup(pill_bg, pill_txt)
             try:
                 pill.set_z_index(620)
+                # Above its bg: play() re-adds pill_bg (DrawBorderThenFill) on top at equal z.
+                pill_txt.set_z_index(621)
             except Exception:
                 pass
             ui_layer.add(pill)
             
             sfx.mark("ui_pop", gain_db=-14, meta={"segment": seg_name, "action": "pill_reveal"})
             act_pill = clamp(r_total * 0.10, 0.15, 0.35)
-            self.play(DrawBorderThenFill(pill_bg), Write(pill_txt), run_time=act_pill, rate_func=rf.ease_out_cubic)
+            if val_s:
+                _vc = pill_t.get_center()
+                _vk = pill_t.height / max(1e-6, safe_text(val_s, font_size=30, color=WHITE, weight=BOLD).height)
+
+                def _mk_val(t, _c=_vc, _k=_vk):
+                    return safe_text(t, font_size=30, color=WHITE, weight=BOLD).scale(_k).move_to(_c)
+
+                self.play(DrawBorderThenFill(pill_bg), Write(pill_m), count_up(pill_t, val_s, _mk_val),
+                          run_time=clamp(r_total * 0.12, 0.40, 0.60), rate_func=rf.ease_out_cubic)
+            else:
+                self.play(DrawBorderThenFill(pill_bg), Write(pill_txt), run_time=act_pill, rate_func=rf.ease_out_cubic)
 
             # -----------------------------
             # SCAN START (scanner never turns off)
@@ -1197,15 +1371,19 @@ class SortCardTribunalFinal(Scene):
             # SCAN DWELL (readable log rotation based on remaining segment time)
             # -----------------------------
             used_so_far = float(self.time) - card_t0
-            remaining_for_dwell = r_total - used_so_far - 1.50 # Reserve 1.5s for the routing & packaging exit anims
-            dwell_total = clamp(remaining_for_dwell, 0.8, 3.5)
+            # Reserve the real exit: hide + route + move + restore (same clamps as below)
+            # + repack 0.35 + counter_pop 0.42. A flat 1.5 s undercounted it.
+            exit_reserve = (clamp(r_total * 0.05, 0.12, 0.25) + clamp(r_total * 0.08, 0.15, 0.30)
+                            + clamp(r_total * 0.25, 0.60, 1.40) + clamp(r_total * 0.08, 0.15, 0.35) + 0.77)
+            remaining_for_dwell = r_total - used_so_far - exit_reserve
+            dwell_total = clamp(remaining_for_dwell, 0.3, 3.5)
             
             hold = 0.95  # readable
             n_steps = max(1, int(dwell_total / hold))
 
             for i in range(n_steps):
                 set_log(scanner["log1"], pick_short_log(), color=Theme.TEXT_SUB)
-                self.wait(hold)
+                self.wait(dwell_total / n_steps)
 
             # Hide pill 
             act_hide = clamp(r_total * 0.05, 0.12, 0.25)
@@ -1223,7 +1401,7 @@ class SortCardTribunalFinal(Scene):
             sfx.mark("ui_tick", gain_db=-10, meta={"segment": seg_name, "action": "route_glow"})
             self.play(*glow_route(is_left), run_time=act_route, rate_func=rf.ease_out_cubic)
 
-            set_log(scanner["log1"], ">> routing packet…", color=Theme.TEXT_SUB)
+            set_log(scanner["log1"], ">> sorting…", color=Theme.TEXT_SUB)
 
             # Move to container
             inner = bin_ref["inner"]
@@ -1262,28 +1440,24 @@ class SortCardTribunalFinal(Scene):
                 c2 += 1
                 counter_pop(right_counter, c2, Theme.NEON_PINK)
 
-            used = float(self.time) - card_t0
-            TL.consume(seg_name, used)
-            
-            # Pad any strictly missing fractional timeline block up to seg target limits
-            hold_breathing(self, TL.remaining(seg_name), focus=scanner["group"], text="VERDICT CONFIRMED")
+            sync_hold(self, TL, seg_name, global_start_t0, focus=scanner["group"], text="SORTED")
 
         # Ghost Padding Loop 
         for ghost_i in range(len(df), len(item_segments)):
-            seg_key = item_segments[ghost_i]
-            g_t0 = float(self.time)
-            TL.consume(seg_key, float(self.time) - g_t0)
-            hold_breathing(self, TL.remaining(seg_key))
+            sync_hold(self, TL, item_segments[ghost_i], global_start_t0)
 
         # =====================================================
         # OUTRO / WINNER LOGIC
         # =====================================================
         w_total = TL.seg_total(winner_seg, 3.5)
         
-        # ✅ FIX: Winner Delta Anchor
-        winner_t0 = float(self.time)
         
         act_fade = clamp(w_total * 0.30, 0.50, 1.2)
+        # Stop the scanner's breathing/sweep updaters first: they re-set ring, dash and
+        # panel opacities every frame (clipped to >= 0.06), so a plain fade left its
+        # rings and pill outline behind "SORT COMPLETE".
+        for _mob in (scanner["group"], scanner["text_group"], evidence["group"]):
+            _mob.clear_updaters()
         sfx.mark("outro_swipe", gain_db=-10, meta={"segment": winner_seg})
         self.play(
             hud_layer.animate.set_opacity(0.0),
@@ -1293,26 +1467,33 @@ class SortCardTribunalFinal(Scene):
             dot.animate.set_opacity(0.0),
             left_counter["group"].animate.set_opacity(0.0),
             right_counter["group"].animate.set_opacity(0.0),
+            # The scanner pill sits exactly where the end title lands; left visible,
+            # its "AI TRIBUNAL / SCANNING" letters showed through "SORT COMPLETE".
+            scanner["group"].animate.set_opacity(0.0),
+            scanner["text_group"].animate.set_opacity(0.0),
+            evidence["group"].animate.set_opacity(0.0),
             run_time=act_fade,
             rate_func=rf.ease_in_out_sine,
         )
-        
-        final_txt = safe_text("SORT COMPLETE", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
-        final_txt.set_z_index(600)
+
+        # Shared result card: the same end treatment as every other template, and it
+        # finally states the verdict (how the items split between the two tiers).
+        try:
+            from src.utils import build_result_banner
+            final_txt = build_result_banner(
+                "SORT COMPLETE", f"{_left_name.upper()}: {c1}   ·   {_right_name.upper()}: {c2}", z=600
+            )
+        except Exception:
+            final_txt = safe_text("SORT COMPLETE", font="Montserrat", font_size=58, color=WHITE, weight=BOLD)
+            final_txt.set_z_index(600)
         
         act_end = clamp(w_total * 0.35, 0.60, 1.40)
         sfx.mark("ui_pop", gain_db=-8, meta={"segment": winner_seg})
         self.play(FadeIn(final_txt, shift=UP * 0.15), run_time=act_end, rate_func=rf.ease_out_cubic)
         self.play(Flash(final_txt, color=Theme.NEON_BLUE, line_length=0.7, num_lines=12), run_time=0.35)
         
-        # ✅ FIX: Winner Delta Math
-        TL.consume(winner_seg, float(self.time) - winner_t0)
-        hold_breathing(self, TL.remaining(winner_seg), focus=final_txt, text="FINALIZING RESULTS")
-        
-        # ✅ FIX: Outro implementation missing proper tracking
-        outro_t0 = float(self.time)
-        hold_breathing(self, TL.seg_total(outro_seg, 2.5), focus=final_txt, text="SYSTEM SHUTDOWN")
-        TL.consume(outro_seg, float(self.time) - outro_t0)
+        sync_hold(self, TL, winner_seg, global_start_t0, focus=final_txt)
+        sync_hold(self, TL, outro_seg, global_start_t0, focus=final_txt)
         
         try:
             sfx.flush()

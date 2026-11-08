@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _TIMING_REGISTRY_PATH = _PROJECT_ROOT / ".agent" / "context" / "template_timing_registry.yaml"
 
-_ENGINE_VERSION = "1.0"
+_ENGINE_VERSION = "1.1"
 
 
 def _validate_phase3_inputs(script_payload: dict[str, Any], script_path: Path) -> None:
@@ -137,6 +137,8 @@ async def _process_segment(
     timing_registry: dict[str, Any],
     is_offline: bool,
     skip_underrun: bool,
+    previous_text: str | None = None,
+    next_text: str | None = None,
 ) -> AudioSegment:
     """Lifecycle of one segment: synthesize -> trim -> duration -> persist -> underrun gate."""
     tag = seg_dict["tag"]
@@ -155,7 +157,10 @@ async def _process_segment(
             if session is None:
                 raise RuntimeError("HTTP session is required for online TTS mode.")
             logger.info("[%s] Synthesizing via ElevenLabs API...", tag)
-            raw_bytes = await synthesize(text, tts_settings, session)
+            raw_bytes = await synthesize(
+                text, tts_settings, session,
+                previous_text=previous_text, next_text=next_text,
+            )
 
     trimmed_bytes = trim_silence(raw_bytes)
     # Decode once — avoids two separate ffmpeg passes per segment.
@@ -309,7 +314,11 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
     else:
         timeout = aiohttp.ClientTimeout(total=APP_CONFIG.api_timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            for s_dict in segments_data:
+            for i, s_dict in enumerate(segments_data):
+                # Neighbour text gives ElevenLabs continuity context so prosody
+                # flows across segments (segments_data is fully in memory here).
+                prev_text = segments_data[i - 1]["text"] if i > 0 else None
+                next_text = segments_data[i + 1]["text"] if i < len(segments_data) - 1 else None
                 tasks.append(
                     _process_segment(
                         s_dict,
@@ -321,6 +330,8 @@ async def run_phase3(job_dir: Path | str, tts_settings: AudioSynthesisSettings) 
                         timing_registry,
                         False,
                         skip_underrun,
+                        previous_text=prev_text,
+                        next_text=next_text,
                     )
                 )
             results = await asyncio.gather(*tasks, return_exceptions=True)

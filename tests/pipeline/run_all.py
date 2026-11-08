@@ -6,6 +6,13 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
+# Running this file directly puts tests/pipeline/ on sys.path, not the repo root,
+# so the `tests.pipeline.*` imports below would fail. Put the root on the path.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
 def main():
     test_dir = Path(__file__).resolve().parent
     test_files = [f.stem for f in test_dir.glob("test_*.py") if f.is_file()]

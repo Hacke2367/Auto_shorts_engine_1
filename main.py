@@ -16,6 +16,7 @@ from src.captions import run_captions_pipeline
 # Single source of truth for the voice silence-trim filter (shared with captions
 # timing so subtitles match the trimmed voice track exactly).
 from src.sync.audio_trim import SILENCE_TRIM_FILTER
+from src.sync.audio_normalize import normalize_voice_segments
 
 
 # Built-in fallback registry — used when templates.json is absent or unreadable.
@@ -474,7 +475,18 @@ def build_bgm_track_ffmpeg(
         p = Path(rel_or_abs)
         if p.is_absolute():
             return p
-        return (lib_root / p).resolve()
+        # 1) per-job library first — existing jobs (audio/bgm/) keep working unchanged
+        job_local = (lib_root / p).resolve()
+        if job_local.exists():
+            return job_local
+        # 2) fall back to the global shared library at <project>/assets/bgm so a single
+        #    track can be reused across jobs without copying it into each job folder
+        global_local = (Path(__file__).resolve().parent / "assets" / "bgm" / p).resolve()
+        if global_local.exists():
+            return global_local
+        # nothing found anywhere: return the job-local path so the existing
+        # "BGM file missing -> skipping" warning fires downstream with a sensible path
+        return job_local
 
     # Build segment start times from timeline
     starts = []
@@ -707,6 +719,8 @@ def mix_voice_sfx_bgm_ffmpeg(
     filters.append(
         "".join(mix_inputs) +
         f"amix=inputs={len(mix_inputs)}:duration=longest:dropout_transition=0:normalize=0,"
+        # Shorts plays at ~-14 LUFS; the raw mix measured -21 (sounded quiet).
+        f"loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100,"
         f"alimiter=limit=0.97[m]"
     )
 
@@ -736,13 +750,21 @@ def mux_av_ffmpeg(ffmpeg: str, video_path: Path, audio_path: Path, out_path: Pat
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # The VIDEO is the authority on length, never the audio. `-shortest` alone
+    # would cut the render down to whatever the audio happened to measure, which
+    # silently amputated the tail of every job (jobs/sort_job lost 6.3s -- the
+    # winner tail and the whole outro). `apad` extends the audio with silence so
+    # `-shortest` can only ever land on the video's own end.
     cmd = [
         ffmpeg, "-y",
         "-i", str(video_path),
         "-i", str(audio_path),
+        "-map", "0:v:0",
+        "-map", "1:a:0",
         "-c:v", "copy",
         "-c:a", "aac",
         "-b:a", "192k",
+        "-af", "apad",
         "-shortest",
         str(out_path),
     ]
@@ -767,8 +789,14 @@ def main():
                          "Overrides job.json template_id.")
     ap.add_argument("-q", "--quality", default="h", help="manim quality: l/m/h/p (like manim -qh)")
     ap.add_argument("--open", action="store_true", help="open final video after render")
-    ap.add_argument("--no_sfx", action="store_true", help="disable sfx mixing even if marks exist")
+    # D-4: captions + SFX come from the owner's separate system, so both are opt-in.
+    ap.add_argument("--sfx", action="store_true", help="mix SFX from sfx_marks.json (off by default)")
+    ap.add_argument("--captions", action="store_true", help="build + burn captions (off by default)")
+    ap.add_argument("--no_sfx", action="store_true", help="kept for old commands; SFX is already off by default")
     ap.add_argument("--no-trim-silence", action="store_true", help="disable silence trim on voice segments before concat")
+    ap.add_argument("--no-normalize-audio", action="store_true",
+                    help="skip the pre-render silence trim (leaves timeline as-is; "
+                         "the render will not match the audio)")
     ap.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg binary (default: ffmpeg)")
     ap.add_argument("--keep-intermediates", action="store_true",
                     help="keep Manim media/ renders and audio intermediate files after mux")
@@ -824,6 +852,24 @@ def main():
 
     if not scene_file.exists():
         raise FileNotFoundError(f"Template file not found: {scene_file}")
+
+    # --- Normalize voice BEFORE rendering -------------------------------------
+    # Ordering matters more than the trim itself. The concat trims each segment,
+    # so if the scene is rendered against the untrimmed timeline the two lengths
+    # disagree and the mux resolves it by cutting the video. Baking the trim in
+    # here -- and rewriting job["timeline"] to the real durations -- means the
+    # scene is built against the audio that will actually be heard.
+    if not args.no_normalize_audio:
+        try:
+            changed, lines = normalize_voice_segments(args.ffmpeg, job_dir, job, job_json)
+            for ln in lines:
+                print(ln)
+            if changed:
+                # The scene reads timings from job.json via JOB_JSON_PATH, so the
+                # freshly written timeline is what Manim will render against.
+                print("[OK] timeline rewritten to trimmed audio durations")
+        except Exception as e:
+            print(f"[WARN] audio normalize skipped: {e}")
 
     # --- Media dir for manim output ---
     media_dir.mkdir(parents=True, exist_ok=True)
@@ -909,7 +955,10 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     voice_aac = out_dir / "_voice.aac"
-    concat_audio_ffmpeg(ffmpeg, audio_paths, voice_aac, trim_silence=(not args.no_trim_silence))
+    # Already trimmed in place above -- trimming twice would shorten the voice
+    # again and reintroduce the mismatch this fix removes.
+    _concat_trim = (not args.no_trim_silence) and args.no_normalize_audio
+    concat_audio_ffmpeg(ffmpeg, audio_paths, voice_aac, trim_silence=_concat_trim)
     print(f"[OK] Voice concat: {voice_aac}")
 
     # -----------------------------
@@ -932,7 +981,7 @@ def main():
     # 4) Build SFX (optional)
     # -----------------------------
     sfx_cfg = job.get("sfx") if isinstance(job.get("sfx"), dict) else {}
-    sfx_enabled = bool(sfx_cfg.get("enabled", True)) and (not args.no_sfx)
+    sfx_enabled = args.sfx and bool(sfx_cfg.get("enabled", True)) and (not args.no_sfx)
 
     sfx_aac: Optional[Path] = None
     # sfx_marks path is already resolved from job["paths"]["sfx_marks"] above
@@ -951,8 +1000,8 @@ def main():
         )
         print(f"[OK] SFX mix: {sfx_aac}")
     else:
-        if args.no_sfx:
-            print("[NOTE] --no_sfx enabled -> skipping SFX.")
+        if not args.sfx or args.no_sfx:
+            print("[NOTE] SFX off (pass --sfx to mix) -> skipping SFX.")
         else:
             print("[NOTE] No sfx_marks.json or sfx disabled -> skipping SFX.")
 
@@ -1062,14 +1111,14 @@ def main():
     # -----------------------------
     captioned_video: Optional[str] = None
     cap_cfg = job.get("captions") if isinstance(job.get("captions"), dict) else {}
-    if isinstance(cap_cfg, dict) and bool(cap_cfg.get("enabled", False)):
+    if args.captions and isinstance(cap_cfg, dict) and bool(cap_cfg.get("enabled", False)):
         try:
             cap_res = run_captions_pipeline(
                 job=job,
                 job_dir=job_dir,
                 ffmpeg=ffmpeg,
                 video_in=out_path,  # burn-in needs final muxed video
-                trim_silence=(not args.no_trim_silence),  # match the trimmed voice track
+                trim_silence=_concat_trim,  # match the trimmed voice track
             )
             if isinstance(cap_res, dict):
                 if cap_res.get("ass_path"):
@@ -1087,7 +1136,7 @@ def main():
         except Exception as e:
             print(f"[WARN] Captions failed (ignored): {e}")
     else:
-        print("[NOTE] Captions disabled -> skipping captions.")
+        print("[NOTE] Captions off (pass --captions to burn) -> skipping captions.")
 
     # -----------------------------
     # 9) Open output (optional)

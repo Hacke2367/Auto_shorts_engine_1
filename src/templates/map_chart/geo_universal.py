@@ -12,19 +12,25 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 sys.path.append(project_root)
 
-from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme
-from src.utils import IntroManager, get_safe_frame, make_floating_particles
+from src.config import DATA_DIR, ASSETS_DIR, BACKGROUND_COLOR, Theme, FONT_DISPLAY
+from src.utils import IntroManager, get_safe_frame, make_floating_particles, add_cinematic_background, fmt_value, fit_text
+from src.fx import count_up, count_text
 from src.geo_data.map_coords import COORDINATES
 from src.sync.job import load_job
-from src.sync.timeline import Timeline, clamp
+from src.sync.timeline import Timeline, clamp, numbered_segments
 from src.sfx.engine import SFXEngine
 try:
-    from src.sync.retention import hold_breathing, banner_scan_hold, register_template_accent
+    from src.sync.retention import hold_breathing, sync_hold, banner_scan_hold, register_template_accent
     from src.sync.retention_accents import retain_accent_geo
 except Exception:
     def hold_breathing(scene, seconds: float, focus=None, text: str = ""):
         if seconds > 0:
             scene.wait(seconds)
+    def sync_hold(scene, tl, name, t0, **kw):
+        target = float(tl.target_elapsed(name)) if hasattr(tl, "target_elapsed") else 0.0
+        wait = target - (float(scene.time) - float(t0))
+        if wait > 0:
+            scene.wait(wait)
     def register_template_accent(scene, fn):
         pass
     def retain_accent_geo(scene, focus, seconds, **kw):
@@ -74,7 +80,8 @@ def _parse_meta_first_line(path: str) -> dict:
     return meta
 
 
-def _safe_int(x, default=None):
+def _safe_num(x, default=None):
+    # Float, not int: rounding turned 33.5% into "34%" on screen (a wrong number).
     try:
         if x is None:
             return default
@@ -82,7 +89,7 @@ def _safe_int(x, default=None):
             return default
         if pd.isna(x):
             return default
-        return int(round(float(x)))
+        return float(x)
     except Exception:
         return default
 
@@ -146,7 +153,7 @@ def _extract_geo_segments(job: dict, audio_order: list[str] | None = None):
     setup = "setup" if "setup" in clean_order else (clean_order[1] if len(clean_order) > 1 else hook)
     winner = "winner" if "winner" in clean_order else (clean_order[-2] if len(clean_order) >= 2 else hook)
     outro = "outro" if "outro" in clean_order else (clean_order[-1] if clean_order else hook)
-    node_segments = [s for s in clean_order if s.startswith("node_")]
+    node_segments = numbered_segments(clean_order, "node")
     if not node_segments:
         node_segments = [f"node_{i}" for i in range(1, 9)]
     return hook, setup, node_segments, winner, outro
@@ -166,12 +173,15 @@ def _timeline_defaults(hook: str, setup: str, node_segments: list, winner: str, 
 class GeoUniversalMap(Scene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
+        add_cinematic_background(self, accent=getattr(Theme, "NEON_BLUE", "#00F0FF"))
         job_dir = _resolve_job_dir()
         job = load_job(default={"template_id": "geo_universal", "timeline": {}, "audio": {"order": []}})
         audio_order = _extract_audio_order(job)
         hook_seg, setup_seg, node_segments, winner_seg, outro_seg = _extract_geo_segments(job, audio_order=audio_order)
         timeline_src = job.get("timeline", {}) if isinstance(job.get("timeline"), dict) else {}
         TL = Timeline.from_dict(timeline_src, defaults=_timeline_defaults(hook_seg, setup_seg, node_segments, winner_seg, outro_seg))
+        # Absolute-clock schedule -> drift-free segment anchoring via sync_hold.
+        TL.schedule(audio_order)
 
         sfx = SFXEngine(self, str(job_dir) if job_dir else str(Path.cwd()))
 
@@ -266,6 +276,7 @@ class GeoUniversalMap(Scene):
         mode = (meta.get("MODE") or "ALLIANCE").strip().upper()
         metric_name = (meta.get("METRIC") or "METRIC").strip()
         unit = (meta.get("UNIT") or "").strip()
+        getattr(IntroManager, "set_source", lambda *a, **k: None)(self, meta.get("SOURCE", ""))
 
         max_items = int(len(node_segments))
         if max_items <= 0:
@@ -285,14 +296,20 @@ class GeoUniversalMap(Scene):
             df["Value"] = np.nan
 
         df["Country"] = df["Country"].astype(str).str.strip()
-        df["Group"] = df["Group"].astype(str).str.strip()
+        # Empty Group cells become the literal "nan" via astype(str); coerce them
+        # to "Global" so no "nan" alliance leaks into the map/legend.
+        df["Group"] = df["Group"].astype(str).str.strip().replace(
+            {"nan": "Global", "NAN": "Global", "None": "Global", "": "Global"}
+        )
 
         df = df[df["Country"].isin(COORDINATES.keys())].copy()
         df = df.head(max_items).reset_index(drop=True)
 
         unique_groups = list(df["Group"].unique())
         group_color_map = {g: GROUP_FALLBACK[i % len(GROUP_FALLBACK)] for i, g in enumerate(unique_groups)}
-        is_alliance_mode = len(unique_groups) > 1
+        # Only an explicit ALLIANCE job gets alliance traffic. A choropleth of US states
+        # also has many distinct groups (one per state), but they are not alliances.
+        is_alliance_mode = mode == "ALLIANCE" and len(unique_groups) > 1
 
         compare_a, compare_b = _pick_compare_cols(df)
 
@@ -301,7 +318,7 @@ class GeoUniversalMap(Scene):
         # ===========================
         title = Text(
             meta.get("TITLE", "GLOBAL ALLIANCE MAP"),
-            font="Montserrat",
+            font=FONT_DISPLAY,
             weight=BOLD,
             font_size=42,
             color=Theme.TEXT_MAIN,
@@ -348,7 +365,7 @@ class GeoUniversalMap(Scene):
         if len(metric_short) > 16:
             metric_short = metric_short[:16] + "…"
 
-        feed_label = Text("FEED_MAP // GEO", font="Consolas", font_size=13, color=Theme.TEXT_MAIN).set_z_index(112)
+        feed_label = Text("DATA MAP", font="Consolas",font_size=13, color=Theme.TEXT_MAIN).set_z_index(112)
         feed_label.set_opacity(0.95)
 
         live_dot = Dot(radius=0.035, color=Theme.NEON_GREEN).set_z_index(112)
@@ -380,16 +397,15 @@ class GeoUniversalMap(Scene):
             _ticker_chip("MAX", str(max_items), Theme.NEON_YELLOW),
         ).arrange(RIGHT, buff=0.18).set_z_index(112)
 
-        if mode == "ALLIANCE":
-            initial_msg = "Boot sequence: links scanning…"
-        elif mode == "COMPARE":
-            initial_msg = "Compare scan: deltas priming…"
-        else:
-            initial_msg = "Metric scan: indexing nodes…"
+        # The feed line is read as copy: it names the metric, never boot-log filler
+        # ("Metric scan: indexing nodes…").
+        initial_msg = metric_name if metric_name.upper() != "METRIC" else (meta.get("SUB") or meta.get("TITLE") or " ")
 
         feed_text = Text(initial_msg, font="Consolas", font_size=14, color=Theme.TEXT_MAIN).set_z_index(112)
 
-        ticker = VGroup(ticker_bg, ticker_accent, feed_label, chips, right_block, feed_text).set_z_index(110)
+        # chips (MODE / METRIC / MAX) are built for layout math but not shown: at phone
+        # size they render as unreadable ~10px debug labels.
+        ticker = VGroup(ticker_bg, ticker_accent, feed_label, right_block, feed_text).set_z_index(110)
         ticker.move_to([sf["cx"], sub.get_bottom()[1] - ticker_h / 2 - 0.18, 0])
 
         feed_label.move_to(ticker_bg.get_left() + RIGHT * (pad_x + feed_label.width / 2)).shift(UP * 0.02)
@@ -401,7 +417,7 @@ class GeoUniversalMap(Scene):
         chips.move_to(ticker_bg.get_center() + UP * 0.06)
 
         feed_available = ticker_bg.width - 0.85
-        feed_text.scale_to_fit_width(feed_available)
+        fit_text(feed_text, feed_available)  # shrink only: short copy was blown up past the box
         feed_text.move_to(ticker_bg.get_center() + DOWN * 0.22)
 
         ticker_sweep = Rectangle(width=ticker_w * 0.18, height=ticker_h * 0.70).set_z_index(109)
@@ -411,7 +427,7 @@ class GeoUniversalMap(Scene):
 
         def ticker_set(msg: str, animate: bool = True):
             new_mob = Text(str(msg), font="Consolas", font_size=14, color=Theme.TEXT_MAIN).set_z_index(112)
-            new_mob.scale_to_fit_width(feed_available)
+            fit_text(new_mob, feed_available)
             new_mob.move_to(feed_text.get_center())
             if animate:
                 self.play(Transform(feed_text, new_mob), run_time=0.32, rate_func=rf.ease_out_cubic)
@@ -492,10 +508,12 @@ class GeoUniversalMap(Scene):
         left_items = [it for it in items if it[4] < 0]
         right_items = [it for it in items if it[4] >= 0]
 
+        # Rebalance from the tail but keep data order: pop()+append reversed the moved
+        # rows, so the right column read 8,7,6,5 against a narration going 5,6,7,8.
         while len(left_items) > slots_per_side and len(right_items) < slots_per_side:
-            right_items.append(left_items.pop())
+            right_items.insert(0, left_items.pop())
         while len(right_items) > slots_per_side and len(left_items) < slots_per_side:
-            left_items.append(right_items.pop())
+            left_items.append(right_items.pop(0))
 
         left_items.sort(key=lambda x: x[3], reverse=True)
         right_items.sort(key=lambda x: x[3], reverse=True)
@@ -509,6 +527,10 @@ class GeoUniversalMap(Scene):
         for i, it in enumerate(right_items[:slots_per_side]):
             placed.append((it, "R", np.array([0, right_slots_y[i], 0])))
 
+        # Reveal in CSV row order — node1..nodeN narrate the rows in that order, while
+        # the placement above goes column by column.
+        placed.sort(key=lambda p: int(p[0][5].name))
+
         # ===========================
         # CARD FACTORY
         # ===========================
@@ -517,22 +539,37 @@ class GeoUniversalMap(Scene):
         vmax = max(1.0, vmax)
 
         def _format_value(row_obj, value):
-            iv = _safe_int(value, default=None)
+            iv = _safe_num(value, default=None)
             if mode == "COMPARE" and compare_a and compare_b:
-                a = _safe_int(row_obj.get(compare_a), default=None)
-                b = _safe_int(row_obj.get(compare_b), default=None)
+                a = _safe_num(row_obj.get(compare_a), default=None)
+                b = _safe_num(row_obj.get(compare_b), default=None)
                 if a is None and b is None:
                     return "–"
                 a = a if a is not None else 0
                 b = b if b is not None else 0
-                return f"{a}|{b}"
+                return f"{fmt_value(a)}|{fmt_value(b)}"
             if iv is None:
                 return "–"
-            return f"{iv}{unit}" if unit else f"{iv}"
+            # Shared number format (keeps 33.5, compacts 126500 -> 126.5K);
+            # currency symbols lead: "$126.5K", not "126.5K$".
+            num = fmt_value(iv)
+            if unit in ("$", "€", "£", "₹", "¥"):
+                return f"{unit}{num}"
+            return f"{num}{unit}" if unit else num
+
+        # One-country datasets (US states, Indian states...) carry the real place name
+        # in Group. Headline that — "USA" on every card was noise, the state was tiny.
+        single_country = df["Country"].nunique() == 1
+
+        def _card_title(country, group):
+            if single_country and str(group).strip() and str(group) != "Global":
+                return str(group), str(country).upper()
+            return str(country).upper(), str(group)
 
         def make_card(country, group, value, col, side, row_obj):
-            name = Text(str(country).upper(), font="Montserrat", weight=BOLD, font_size=18, color=WHITE)
-            grp = Text(str(group), font="Montserrat", font_size=12, color=Theme.TEXT_SUB)
+            title_str, sub_str = _card_title(country, group)
+            name = Text(title_str, font="Montserrat", weight=BOLD, font_size=18, color=WHITE)
+            grp = Text(sub_str, font="Montserrat", font_size=12, color=Theme.TEXT_SUB)
 
             val_str = _format_value(row_obj, value)
 
@@ -576,7 +613,7 @@ class GeoUniversalMap(Scene):
             meter_fill = RoundedRectangle(width=meter_w, height=meter_h, corner_radius=0.04)
             meter_fill.set_fill(color=col, opacity=0.70).set_stroke(width=0)
 
-            iv = _safe_int(value, default=None)
+            iv = _safe_num(value, default=None)
             if iv is None:
                 frac = 0.08
             else:
@@ -593,6 +630,15 @@ class GeoUniversalMap(Scene):
             max_w = 3.65
             if card.width > max_w:
                 card.scale_to_fit_width(max_w)
+
+            # Count-up source: same face/size/scale as the final label, centred on the
+            # label's CURRENT spot (the card is moved into its lane after this).
+            _k = val_txt.height / max(1e-6, Text(val_str, font="Montserrat", weight=BOLD, font_size=16).height)
+
+            def _mk_val(t, _k=_k, _v=val_txt, _col=col):
+                return Text(t, font="Montserrat", weight=BOLD, font_size=16, color=_col).scale(_k).move_to(_v.get_center()).set_z_index(90)
+
+            card.val_txt, card.val_str, card.mk_val = val_txt, val_str, _mk_val
 
             scale_factor = meter_bg.width / meter_w if meter_w != 0 else 1.0
             card.meter_final_width = max(0.01, float(final_w * scale_factor))
@@ -694,7 +740,6 @@ class GeoUniversalMap(Scene):
         self.play(live_dot.animate.scale(1.35), run_time=0.12, rate_func=rf.ease_out_cubic)
         self.play(live_dot.animate.scale(1.00), run_time=0.18, rate_func=rf.ease_in_out_sine)
 
-        ticker_set("Boot complete: acquiring world map…", animate=True)
 
         scan = Line(LEFT * 6, RIGHT * 6).set_z_index(60)
         scan.set_stroke(color=Theme.NEON_BLUE, width=4, opacity=0.85)
@@ -711,15 +756,29 @@ class GeoUniversalMap(Scene):
         )
         self.remove(scan)
 
+        # Motion during long holds: a faint band sweeps the map top -> bottom every
+        # 4 s. It never moves pins or cards, so the data stays put.
+        map_sweep = Rectangle(width=map_panel.width * 0.96, height=0.30).set_stroke(width=0)
+        map_sweep.set_fill(Theme.NEON_BLUE, 0.06).set_z_index(11)
+        _sw_top = map_panel.get_top()[1] - 0.20
+        _sw_bot = map_panel.get_bottom()[1] + 0.20
+        map_sweep._t = 0.0
+
+        def _sweep(m, dt):
+            m._t = (m._t + dt / 4.0) % 1.0
+            m.set_y(_sw_top + (_sw_bot - _sw_top) * m._t)
+
+        map_sweep.add_updater(_sweep)
+        self.add(map_sweep)
+
         self.play(
             ticker_bg.animate.set_stroke(width=3.0, opacity=0.95),
             run_time=0.35,
             rate_func=rf.there_and_back,
         )
         
-        # ✅ FIX: Delta Time Hook
-        TL.consume(hook_seg, float(self.time) - hook_t0)
-        hold_breathing(self, TL.remaining(hook_seg), focus=ticker_bg, text="SYNCING INTRO")
+        # Drift-free anchor: end hook exactly on the master clock.
+        sync_hold(self, TL, hook_seg, global_start_t0, focus=ticker_bg, text="SYNCING INTRO")
 
         # =====================================================
         # ✅ STEP 2: DATA REVEAL
@@ -728,7 +787,6 @@ class GeoUniversalMap(Scene):
         setup_t0 = float(self.time)
         act_setup = clamp(t_setup * 0.40, 0.80, 1.40)
         
-        ticker_set("Signal sweep: deploying nodes…", animate=True)
 
         self.play(
             LaggedStart(*[FadeIn(d, scale=0.70) for d in all_dots], lag_ratio=0.08),
@@ -736,9 +794,8 @@ class GeoUniversalMap(Scene):
             rate_func=rf.ease_out_cubic,
         )
         
-        # ✅ FIX: Delta Time Setup
-        TL.consume(setup_seg, float(self.time) - setup_t0)
-        hold_breathing(self, TL.remaining(setup_seg), focus=world, text="CALIBRATING MAP FEED")
+        # Drift-free anchor: end setup exactly on the master clock.
+        sync_hold(self, TL, setup_seg, global_start_t0, focus=world, text="CALIBRATING MAP FEED")
 
         for i, (dot, ln, card, (cname, gname, col)) in enumerate(zip(all_dots, all_lines, all_cards, meta_items), start=1):
             seg_name = node_segments[i - 1] if i - 1 < len(node_segments) else f"node_{i}"
@@ -753,23 +810,31 @@ class GeoUniversalMap(Scene):
             sfx.mark("node_reveal", meta={"segment": seg_name, "node": i})
             glow, core = ln[0], ln[1]
 
-            ping = Circle(radius=0.12).move_to(dot[2].get_center()).set_z_index(72)
-            ping.set_stroke(color=col, width=6, opacity=0.35)
-            self.add(ping)
+            # One-country data (states of one country) has a single map pin, so every
+            # route line converged on the same dot. Skip pin pings and routes there;
+            # the cards carry the data and sync_hold keeps the node on time.
+            if not single_country:
+                ping = Circle(radius=0.12).move_to(dot[2].get_center()).set_z_index(72)
+                ping.set_stroke(color=col, width=6, opacity=0.35)
+                self.add(ping)
 
-            self.play(
-                Flash(dot[2].get_center(), color=col, flash_radius=0.22, time_width=0.25),
-                dot.animate.scale(1.12),
-                ping.animate.scale(2.4).set_opacity(0),
-                run_time=act_ping,
-                rate_func=rf.ease_out_cubic,
-            )
-            self.remove(ping)
-            self.play(dot.animate.scale(1.00), run_time=0.12, rate_func=rf.ease_out_cubic)
+                self.play(
+                    Flash(dot[2].get_center(), color=col, flash_radius=0.22, time_width=0.25),
+                    dot.animate.scale(1.12),
+                    ping.animate.scale(2.4).set_opacity(0),
+                    run_time=act_ping,
+                    rate_func=rf.ease_out_cubic,
+                )
+                self.remove(ping)
+                self.play(dot.animate.scale(1.00), run_time=0.12, rate_func=rf.ease_out_cubic)
 
-            self.play(Create(core, rate_func=rf.linear), run_time=act_line)
-            self.play(FadeIn(glow), run_time=0.12)
+                self.play(Create(core, rate_func=rf.linear), run_time=act_line)
+                self.play(FadeIn(glow), run_time=0.12)
 
+            # COMPARE shows "a|b"; an odometer would roll only the first number.
+            _count = mode != "COMPARE"
+            if _count:
+                card.val_txt.become(card.mk_val(count_text(card.val_str)))
             self.play(
                 FadeIn(card, shift=UP * 0.12, scale=0.985),
                 run_time=act_card,
@@ -780,9 +845,11 @@ class GeoUniversalMap(Scene):
                 meter_bg = card[4][0]
                 meter_fill = card[4][1]
                 final_w = getattr(card, "meter_final_width", meter_fill.width)
+                _roll = [count_up(card.val_txt, card.val_str, card.mk_val)] if _count else []
                 self.play(
                     meter_fill.animate.stretch_to_fit_width(max(0.01, final_w)).align_to(meter_bg, LEFT),
-                    run_time=act_meter,
+                    *_roll,
+                    run_time=max(act_meter, 0.45) if _count else act_meter,
                     rate_func=rf.ease_out_cubic,
                 )
             except Exception:
@@ -798,9 +865,8 @@ class GeoUniversalMap(Scene):
             except Exception:
                 pass
 
-            # ✅ FIX: Delta Time Node
-            TL.consume(seg_name, float(self.time) - node_t0)
-            hold_breathing(self, TL.remaining(seg_name), focus=card, text="PROCESSING NODE DATA")
+            # Drift-free anchor: end this node exactly on the master clock.
+            sync_hold(self, TL, seg_name, global_start_t0, focus=card, text="PROCESSING NODE DATA")
 
         # =====================================================
         # ✅ CRITICAL FIX 2: GHOST PADDING
@@ -808,9 +874,7 @@ class GeoUniversalMap(Scene):
         # Absorb the unused audio segments (e.g., node_4 to node_8) if CSV data is shorter than audio.
         for ghost_i in range(len(all_dots) + 1, len(node_segments) + 1):
             ghost_seg = node_segments[ghost_i - 1]
-            g_t0 = float(self.time)
-            TL.consume(ghost_seg, float(self.time) - g_t0)
-            hold_breathing(self, TL.remaining(ghost_seg), focus=world, text="AWAITING SIGNAL...")
+            sync_hold(self, TL, ghost_seg, global_start_t0, focus=world, text="AWAITING SIGNAL...")
 
         # =====================================================
         # ✅ STEP 3: ALLIANCE TRAFFIC / ENDING + WINNER
@@ -847,7 +911,7 @@ class GeoUniversalMap(Scene):
             return max(counts, key=counts.get) if counts else None
 
         if is_alliance_mode:
-            ticker_set("Alliance traffic: routing packets…", animate=True)
+            ticker_set("Comparing groups", animate=True)
 
             connections = VGroup().set_z_index(65)
             travel_paths = []
@@ -915,7 +979,9 @@ class GeoUniversalMap(Scene):
                                 break
 
             if winner_idx is not None and 0 <= winner_idx < len(all_cards):
-                ticker_set("Top signal detected: highlighting node…", animate=True)
+                (w_country, w_group, w_value, _, _, w_row), _, _ = placed[winner_idx]
+                w_title, _ = _card_title(w_country, w_group)
+                ticker_set(f"Top: {w_title}  ·  {_format_value(w_row, w_value)}", animate=True)
                 sfx.mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
 
                 winner = all_cards[winner_idx]
@@ -939,9 +1005,14 @@ class GeoUniversalMap(Scene):
                 self.play(winner.animate.scale(1.00), run_time=0.15)
 
         else:
-            ticker_set("Final scan: computing top node…", animate=True)
-
             winner_idx = _winner_compare_index() if mode == "COMPARE" else _winner_metric_index()
+            # Name the winner in the feed instead of "Final scan: computing top node…".
+            # placed is in CSV row order, so it lines up with winner_idx and all_cards.
+            if winner_idx is not None and 0 <= winner_idx < len(placed):
+                (w_country, w_group, w_value, _, _, w_row), _, _ = placed[winner_idx]
+                w_title, _ = _card_title(w_country, w_group)
+                w_label = "Biggest gap" if mode == "COMPARE" else "Highest"
+                ticker_set(f"{w_label}: {w_title}  ·  {_format_value(w_row, w_value)}", animate=True)
             if winner_idx is not None and 0 <= winner_idx < len(all_cards):
                 sfx.mark("winner_sting", meta={"segment": winner_seg, "winner_index": int(winner_idx)})
                 winner = all_cards[winner_idx]
@@ -964,9 +1035,23 @@ class GeoUniversalMap(Scene):
                     pass
                 self.play(winner.animate.scale(1.00), run_time=0.15)
                 
-        # ✅ FIX: Delta Time Winner
-        TL.consume(winner_seg, float(self.time) - winner_t0)
-        hold_breathing(self, TL.remaining(winner_seg), focus=ticker_bg, text="LOCKING WINNER SIGNAL")
+        # Shared result card over a dim — same end treatment as the other templates,
+        # instead of ending on a still map with no stated result.
+        if winner_idx is not None and 0 <= winner_idx < len(placed):
+            try:
+                from src.utils import build_result_banner
+                (b_country, b_group, b_value, _, _, b_row), _, _ = placed[winner_idx]
+                b_title, _ = _card_title(b_country, b_group)
+                b_label = "BIGGEST GAP" if mode == "COMPARE" else "HIGHEST"
+                geo_dim = Rectangle(width=60, height=60).set_fill(BLACK, 0.55).set_stroke(width=0).set_z_index(190)
+                win_banner = build_result_banner(b_label, str(b_title).upper(), _format_value(b_row, b_value), z=200)
+                win_banner.move_to([sf["cx"], (lane_top + lane_bottom) / 2, 0])
+                self.play(FadeIn(geo_dim), FadeIn(win_banner, shift=UP * 0.10), run_time=0.45, rate_func=rf.ease_out_cubic)
+            except Exception:
+                pass
+
+        # Drift-free anchor: end winner exactly on the master clock.
+        sync_hold(self, TL, winner_seg, global_start_t0, focus=ticker_bg, text="LOCKING WINNER SIGNAL")
 
         # OUTRO
         outro_t0 = float(self.time)
@@ -978,12 +1063,12 @@ class GeoUniversalMap(Scene):
             rate_func=rf.there_and_back,
         )
 
-        # ✅ FIX: Delta Time Outro
-        TL.consume(outro_seg, float(self.time) - outro_t0)
-        hold_breathing(self, TL.remaining(outro_seg), focus=ticker_bg, text="FINALIZING MAP OUTPUT")
+        # Drift-free anchor: end outro exactly on the master clock.
+        sync_hold(self, TL, outro_seg, global_start_t0, focus=ticker_bg, text="FINALIZING MAP OUTPUT")
 
         try:
             live_dot.remove_updater(_pulse)
+            map_sweep.remove_updater(_sweep)
         except Exception:
             pass
         try:

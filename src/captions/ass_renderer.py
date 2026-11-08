@@ -10,6 +10,25 @@ from .aligner import word_karaoke_equal_split, split_words, pack_words_into_chun
 
 _log = logging.getLogger(__name__)
 
+# Bottom margin (px on a 1920-tall frame) per template when the job doesn't set
+# captions.render.style.safe_margin_px. vs_card's free band is 1265-1395px from the
+# top (between the player cards and the decision terminal), i.e. a 2-line caption
+# whose bottom edge sits 525px above the frame bottom.
+# 2026-11 finance skin: vs_card's decision terminal is hidden, so its band
+# (scoreboard top ~230px to the value boxes ~500px) is the caption band.
+# Others sit just above each template's bottom panel; tuned by -q l probes.
+_TEMPLATE_CAPTION_MARGIN_V: Dict[str, int] = {
+    # One line, bottom edge ~1560px: above the Shorts title/channel overlay and
+    # below each chart body. vs_card sits in the band the hidden terminal freed.
+    "vs_card": 420,
+    "bar_chart": 360,
+    "donut_breakdown": 360,
+    "scan_race": 360,
+    "butterfly_chart": 360,
+    "geo_universal": 360,
+    "sort_card": 360,
+}
+
 
 def _ass_time(t: float) -> str:
     """
@@ -232,6 +251,11 @@ def render_ass(
     preset_name = str(style_cfg.get("preset", "modern_clean"))
     preset_key = preset_name.strip().lower()
     safe_margin_px = int(style_cfg.get("safe_margin_px", 80))
+    # Template-aware minimum for the BOTTOM margin only. vs_card fills its bottom
+    # 520px with terminal, status and scoreboard, so bottom captions printed on top
+    # of the scoreboard. Applied as a floor on MarginV (jobs already carry
+    # safe_margin_px=80) and never to MarginL/R, which also use safe_margin_px.
+    template_margin_v = _TEMPLATE_CAPTION_MARGIN_V.get(str(job.get("template_id", "")), 0)
     max_lines = int(style_cfg.get("max_lines", 2))
 
     video_cfg = job.get("video") if isinstance(job.get("video"), dict) else {}
@@ -268,8 +292,8 @@ def render_ass(
     def margin_for_pos(pos: str) -> int:
         pos = (pos or "bottom").strip().lower()
         if pos == "above_bottom":
-            return safe_margin_px + 130
-        return safe_margin_px
+            return max(safe_margin_px + 130, template_margin_v)
+        return max(safe_margin_px, template_margin_v)
 
     style_names_by_track: List[str] = []
     for i, tr in enumerate(tracks):

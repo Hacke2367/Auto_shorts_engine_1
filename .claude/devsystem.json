@@ -1,0 +1,20 @@
+{
+  "tier": "standard",
+  "gate": {
+    "commands": [
+      ".venv/Scripts/python.exe -m pytest tests/core -q",
+      ".venv/Scripts/python.exe -m pytest tests/phase1 -q",
+      ".venv/Scripts/python.exe -m pytest tests/phase2_scripting -q",
+      ".venv/Scripts/python.exe tests/pipeline/run_all.py"
+    ],
+    "foregroundOnly": true
+  },
+  "redLines": [
+    "No wrong or unsourced number ever appears in a video",
+    "No paid API call (OpenAI, Tavily, ElevenLabs) without telling the owner first",
+    "No captions, SFX or BGM added in this repo (owner's separate system)",
+    "No local render heavy enough to crash the laptop (one render at a time, watch RAM)",
+    "No hacker/leak look"
+  ],
+  "language": { "ownerFacing": "hinglish", "docs": "english" }
+}
