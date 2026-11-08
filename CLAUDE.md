@@ -125,3 +125,10 @@ LangGraph is used in `phase1_extraction/graph.py` to model the extract-validate-
 - "OPENAI_API_KEY is not set" at call time → add it to `.env`, or point the route at a provider you have a key for.
 - Cost looks wrong / zero → run `python scripts/llm_smoke.py` and check the raw `usage` block against `_openai_usage` in `core/llm_client.py`.
 - "Phase rerun does nothing" → `.pipeline_state.json` has the step marked complete; delete the relevant key or use the CLI's force flag.
+
+## ALWAYS FOLLOW THIS RULES
+
+1. **Think Before Coding:** State your assumptions clearly. Never guess or hide confusion; ask questions if requirements or tradeoffs are unclear.
+2. **Simplicity First:** Write the absolute minimum code needed. Strictly avoid extra features, unnecessary flexibility, or over-engineering.
+3. **Surgical Changes:** Modify only what is strictly necessary. Match the existing style, avoid unrelated refactoring, and clean up only the dead code your changes create.
+4. **Goal-Driven Execution:** Define verifiable success criteria (like tests) first. Work through multi-step tasks using a clear, step-by-step testable plan.
